@@ -16,7 +16,6 @@ $anios = $pdo->query("SELECT DISTINCT Anio FROM T_CONSOLIDADO_NUEVA_TRAMA_HISMIN
 $establecimientos = $pdo->query("SELECT DISTINCT Nombre_Establecimiento FROM T_CONSOLIDADO_NUEVA_TRAMA_HISMINSA_DETALLADO WHERE Nombre_Establecimiento IS NOT NULL ORDER BY Nombre_Establecimiento")->fetchAll(PDO::FETCH_COLUMN);
 $gruposEdad = ['01 a 29 dias', '01 a 11 meses', '01 a 04 anos', '05 a 11 anos', '12 a 17 anos', '18 a 29 anos', '30 a 59 anos', '60 anos a mas'];
 $tiposDiagnostico = $pdo->query("SELECT DISTINCT Tipo_Diagnostico FROM T_CONSOLIDADO_NUEVA_TRAMA_HISMINSA_DETALLADO WHERE Tipo_Diagnostico IS NOT NULL ORDER BY Tipo_Diagnostico")->fetchAll(PDO::FETCH_COLUMN);
-$valoresLab = $pdo->query("SELECT DISTINCT Valor_Lab FROM T_CONSOLIDADO_NUEVA_TRAMA_HISMINSA_DETALLADO WHERE Valor_Lab IS NOT NULL ORDER BY Valor_Lab")->fetchAll(PDO::FETCH_COLUMN);
 
 // Filtros recibidos
 $fAnio = $_GET['anio'] ?? '';
@@ -51,15 +50,15 @@ if ($fGrupoEdad !== '') {
 }
 if ($fCodigoItem !== '') {
     $where .= " AND Codigo_Item LIKE :codigo_item";
-    $params[':codigo_item'] = '%' . $fCodigoItem . '%';
+    $params[':codigo_item'] = $fCodigoItem;
 }
 if ($fTipoDiagnostico !== '') {
     $where .= " AND Tipo_Diagnostico = :tipo_diagnostico";
     $params[':tipo_diagnostico'] = $fTipoDiagnostico;
 }
 if ($fValorLab !== '') {
-    $where .= " AND Valor_Lab = :valor_lab";
-    $params[':valor_lab'] = $fValorLab;
+    $where .= " AND Valor_Lab LIKE :valor_lab";
+    $params[':valor_lab'] = '%' . $fValorLab . '%';
 }
 if ($fDocPersonal !== '') {
     $where .= " AND Numero_Documento_Personal LIKE :doc_personal";
@@ -179,10 +178,8 @@ include 'includes/header.php';
                     <label class="form-label fw-semibold">Mes</label>
                     <select name="mes" class="form-select form-select-sm">
                         <option value="">-- Todos --</option>
-                        <?php for ($m = 1; $m <= 12; $m++): 
-                            $mStr = str_pad($m, 2, '0', STR_PAD_LEFT);
-                        ?>
-                            <option value="<?= $mStr ?>" <?= $fMes === $mStr ? 'selected' : '' ?>><?= getNombreMes($mStr) ?></option>
+                        <?php for ($m = 1; $m <= 12; $m++): ?>
+                            <option value="<?= $m ?>" <?= $fMes === (string)$m ? 'selected' : '' ?>><?= getNombreMes($m) ?></option>
                         <?php endfor; ?>
                     </select>
                 </div>
@@ -220,12 +217,8 @@ include 'includes/header.php';
                 </div>
                 <div class="col-lg-3 col-md-4 col-sm-6">
                     <label class="form-label fw-semibold">Valor Lab</label>
-                    <select name="valor_lab" class="form-select form-select-sm">
-                        <option value="">-- Todos --</option>
-                        <?php foreach ($valoresLab as $vl): ?>
-                            <option value="<?= htmlspecialchars($vl) ?>" <?= $fValorLab === $vl ? 'selected' : '' ?>><?= htmlspecialchars($vl) ?></option>
-                        <?php endforeach; ?>
-                    </select>
+                    <input type="text" name="valor_lab" class="form-control form-control-sm" 
+                           placeholder="Ingrese valor lab" value="<?= htmlspecialchars($fValorLab) ?>">
                 </div>
                 <div class="col-lg-3 col-md-4 col-sm-6">
                     <label class="form-label fw-semibold">Doc. Personal</label>
