@@ -3,7 +3,7 @@
 -- https://www.phpmyadmin.net/
 --
 -- Servidor: sql102.infinityfree.com
--- Tiempo de generación: 14-06-2026 a las 19:17:32
+-- Tiempo de generación: 15-06-2026 a las 20:46:40
 -- Versión del servidor: 11.4.12-MariaDB
 -- Versión de PHP: 7.2.22
 
@@ -161,22 +161,6 @@ CREATE TABLE `MAESTRO_HIS_CONDICION_CONTRATO` (
   `Id_Condicion` int(11) NOT NULL,
   `Descripcion_Condicion` varchar(500) DEFAULT NULL
 ) ENGINE=MyISAM DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
-
---
--- Volcado de datos para la tabla `MAESTRO_HIS_CONDICION_CONTRATO`
---
-
-INSERT INTO `MAESTRO_HIS_CONDICION_CONTRATO` (`Id_Condicion`, `Descripcion_Condicion`) VALUES
-(1, 'NOMBRADO'),
-(10, 'OTRA ENTIDAD'),
-(2, 'CONTRATADO'),
-(3, 'SERUM'),
-(4, 'RESIDENTE'),
-(5, 'INTERNO'),
-(6, 'ALUMNO'),
-(7, 'AGENTE COMUNITARIO'),
-(8, 'OTROS'),
-(9, 'DESTACADO');
 
 -- --------------------------------------------------------
 
@@ -609,7 +593,7 @@ CREATE TABLE `USUARIOS` (
 --
 
 INSERT INTO `USUARIOS` (`id_usuario`, `usuario`, `password`, `nombre_completo`, `rol`, `estado`, `fecha_creacion`, `ultimo_acceso`) VALUES
-(1, 'admin', '$2a$12$oyHlo6Q4WLAz05diONMFx.D93QR915rs.iVOZx7K1wUpgiTI7CtB.', 'Administrador del Sistema', 'admin', 1, '2026-06-14 12:35:48', '2026-06-14 16:09:07');
+(1, 'admin', '$2a$12$oyHlo6Q4WLAz05diONMFx.D93QR915rs.iVOZx7K1wUpgiTI7CtB.', 'Administrador del Sistema', 'admin', 1, '2026-06-14 12:35:48', '2026-06-15 06:26:58');
 
 --
 -- Índices para tablas volcadas
