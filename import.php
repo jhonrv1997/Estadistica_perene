@@ -122,8 +122,8 @@ function procesarImportacion($file, $post) {
                 $pdo->exec("DELETE FROM `{$fileInfo['tabla']}`");
             } else {
                 // Eliminar solo datos del periodo seleccionado
-                $stmt = $pdo->prepare("DELETE FROM `{$fileInfo['tabla']}` WHERE Anio = ? AND Mes = ?");
-                $stmt->execute([$periodoAnio, $periodoMes]);
+                $stmt = $pdo->prepare("DELETE FROM `{$fileInfo['tabla']}` WHERE Anio = ? AND CAST(TRIM(Mes) AS UNSIGNED) = ?");
+                $stmt->execute([$periodoAnio, intval($periodoMes)]);
             }
             
             // Insertar datos del CSV
@@ -318,7 +318,7 @@ $counts = [
 ];
 
 // Obtener periodos disponibles en NOMINAL_TRAMA
-$periodos = $pdo->query("SELECT DISTINCT TRIM(Anio) as Anio, TRIM(Mes) as Mes FROM NOMINAL_TRAMA_NUEVO WHERE Anio IS NOT NULL AND Anio != '' AND Mes IS NOT NULL AND Mes != '' ORDER BY Anio DESC, Mes DESC")->fetchAll();
+$periodos = $pdo->query("SELECT DISTINCT TRIM(Anio) as Anio, TRIM(Mes) as Mes FROM NOMINAL_TRAMA_NUEVO WHERE Anio IS NOT NULL AND Anio != '' AND Mes IS NOT NULL AND Mes != '' ORDER BY Anio DESC, CAST(TRIM(Mes) AS UNSIGNED) DESC")->fetchAll();
 
 // Obtener estado de importacion de los 4 archivos
 $importEstado = obtenerEstadoImportacion();
@@ -445,10 +445,8 @@ include 'includes/header.php';
                             </label>
                             <select name="periodo_mes" id="periodo_mes" class="form-select">
                                 <option value="">-- Seleccionar Mes --</option>
-                                <?php for ($m = 1; $m <= 12; $m++):
-                                    $mStr = str_pad($m, 2, '0', STR_PAD_LEFT);
-                                ?>
-                                    <option value="<?= $mStr ?>"><?= getNombreMes($mStr) ?></option>
+                                <?php for ($m = 1; $m <= 12; $m++): ?>
+                                    <option value="<?= $m ?>"><?= getNombreMes($m) ?></option>
                                 <?php endfor; ?>
                             </select>
                         </div>
@@ -657,10 +655,8 @@ include 'includes/header.php';
                             <div class="col-6">
                                 <select name="proc_mes" class="form-select form-select-sm">
                                     <option value="">Todos</option>
-                                    <?php for ($m = 1; $m <= 12; $m++):
-                                        $mStr = str_pad($m, 2, '0', STR_PAD_LEFT);
-                                    ?>
-                                        <option value="<?= $mStr ?>"><?= getNombreMes($mStr) ?></option>
+                                    <?php for ($m = 1; $m <= 12; $m++): ?>
+                                        <option value="<?= $m ?>"><?= getNombreMes($m) ?></option>
                                     <?php endfor; ?>
                                 </select>
                             </div>

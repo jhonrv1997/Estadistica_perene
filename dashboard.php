@@ -37,8 +37,8 @@ if ($fAnio !== '') {
     $params[':anio'] = $fAnio;
 }
 if ($fMes !== '') {
-    $where .= " AND Mes = :mes";
-    $params[':mes'] = $fMes;
+    $where .= " AND CAST(TRIM(Mes) AS UNSIGNED) = :mes";
+    $params[':mes'] = intval($fMes);
 }
 if ($fEstablecimiento !== '') {
     $where .= " AND Nombre_Establecimiento = :establecimiento";
