@@ -55,16 +55,12 @@ function formatDateTime($datetime) {
  */
 function getNombreMes($mes) {
     $meses = [
-        '01' => 'Enero', '02' => 'Febrero', '03' => 'Marzo',
-        '04' => 'Abril', '05' => 'Mayo', '06' => 'Junio',
-        '07' => 'Julio', '08' => 'Agosto', '09' => 'Septiembre',
-        '10' => 'Octubre', '11' => 'Noviembre', '12' => 'Diciembre',
-        '1' => 'Enero', '2' => 'Febrero', '3' => 'Marzo',
-        '4' => 'Abril', '5' => 'Mayo', '6' => 'Junio',
-        '7' => 'Julio', '8' => 'Agosto', '9' => 'Septiembre',
-        '10' => 'Octubre', '11' => 'Noviembre', '12' => 'Diciembre'
+        1 => 'Enero', 2 => 'Febrero', 3 => 'Marzo',
+        4 => 'Abril', 5 => 'Mayo', 6 => 'Junio',
+        7 => 'Julio', 8 => 'Agosto', 9 => 'Septiembre',
+        10 => 'Octubre', 11 => 'Noviembre', 12 => 'Diciembre'
     ];
-    return $meses[$mes] ?? $mes;
+    return $meses[intval($mes)] ?? $mes;
 }
 
 /**
@@ -416,9 +412,9 @@ function asegurarIndicesConsolidacion() {
  */
 function construirSQLConsolidacion($whereClause = '') {
     return "
-	SET SQL_BIG_SELECTS=1; 
-	
-	INSERT INTO T_CONSOLIDADO_NUEVA_TRAMA_HISMINSA_DETALLADO
+        SET SQL_BIG_SELECTS=1; 
+        
+        INSERT INTO T_CONSOLIDADO_NUEVA_TRAMA_HISMINSA_DETALLADO
     (Id_Cita, Anio, Mes, Dia, Fecha_Atencion, Lote, Num_Pag, Num_Reg,
      Id_Ups, Descripcion_Ups, Id_AplicacionOrigen, Alerta, Id_Institucion_Edu,
      Id_Establecimiento, Codigo_Sector, Descripcion_Sector, Codigo_Disa, Descripcion_Disa,
@@ -571,7 +567,7 @@ function construirSQLConsolidacion($whereClause = '') {
     LEFT JOIN MAESTRO_HIS_COLEGIO MHC ON MHC.Id_Colegio=MP.Id_Colegio
     LEFT JOIN MAESTRO_HIS_PROFESION MHPR ON MHPR.Id_Profesion=MP.Id_Profesion
     LEFT JOIN MAESTRO_HIS_UPS MHU ON MHU.Id_Ups=NTN.Id_Ups
-    LEFT JOIN ZSPERENE MHES ON MHES.Id_Establecimiento=NTN.Id_Establecimiento
+    INNER JOIN ZSPERENE MHES ON MHES.Id_Establecimiento=NTN.Id_Establecimiento
     LEFT JOIN MAESTRO_HIS_CONDICION_CONTRATO MHCC ON MHCC.Id_Condicion=MP.Id_Condicion
     LEFT JOIN MAESTRO_HIS_CENTRO_POBLADO MHCP ON MHCP.Id_Centro_Poblado=NTN.Id_Centro_Poblado
     LEFT JOIN MAESTRO_HIS_PAIS MHP ON MHP.Id_Pais=MPA.Id_Pais"
@@ -665,13 +661,13 @@ function ejecutarProcesamiento($anio = null, $mes = null) {
             // --- PROCESAMIENTO POR PERIODO ESPECIFICO ---
             
             // Verificar que existan datos para el periodo seleccionado
-            $stmtCheck = $pdo->prepare("SELECT COUNT(*) FROM NOMINAL_TRAMA_NUEVO WHERE TRIM(Anio) = ? AND LPAD(TRIM(Mes), 2, '0') = ?");
-            $stmtCheck->execute([$anio, $mes]);
+            $stmtCheck = $pdo->prepare("SELECT COUNT(*) FROM NOMINAL_TRAMA_NUEVO WHERE TRIM(Anio) = ? AND CAST(TRIM(Mes) AS UNSIGNED) = ?");
+            $stmtCheck->execute([$anio, intval($mes)]);
             $countPeriodo = (int)$stmtCheck->fetchColumn();
             
             if ($countPeriodo === 0) {
                 // Mostrar periodos disponibles en la tabla
-                $periodosDisponibles = $pdo->query("SELECT DISTINCT TRIM(Anio) as Anio, TRIM(Mes) as Mes FROM NOMINAL_TRAMA_NUEVO WHERE Anio IS NOT NULL AND Anio != '' AND Mes IS NOT NULL AND Mes != '' ORDER BY Anio DESC, Mes DESC LIMIT 20")->fetchAll();
+                $periodosDisponibles = $pdo->query("SELECT DISTINCT TRIM(Anio) as Anio, TRIM(Mes) as Mes FROM NOMINAL_TRAMA_NUEVO WHERE Anio IS NOT NULL AND Anio != '' AND Mes IS NOT NULL AND Mes != '' ORDER BY Anio DESC, CAST(TRIM(Mes) AS UNSIGNED) DESC LIMIT 20")->fetchAll();
                 $periodosTxt = [];
                 foreach ($periodosDisponibles as $p) {
                     $periodosTxt[] = trim($p['Mes']) . '/' . trim($p['Anio']);
@@ -685,16 +681,16 @@ function ejecutarProcesamiento($anio = null, $mes = null) {
             }
             
             // Eliminar periodo existente del consolidado
-            $stmt = $pdo->prepare("DELETE FROM T_CONSOLIDADO_NUEVA_TRAMA_HISMINSA_DETALLADO WHERE TRIM(Anio) = ? AND LPAD(TRIM(Mes), 2, '0') = ?");
-            $stmt->execute([$anio, $mes]);
+            $stmt = $pdo->prepare("DELETE FROM T_CONSOLIDADO_NUEVA_TRAMA_HISMINSA_DETALLADO WHERE TRIM(Anio) = ? AND CAST(TRIM(Mes) AS UNSIGNED) = ?");
+            $stmt->execute([$anio, intval($mes)]);
             
             // Construir y ejecutar INSERT con filtro de periodo
-            $wherePeriodo = " WHERE TRIM(NTN.Anio) = " . $pdo->quote($anio) . " AND LPAD(TRIM(NTN.Mes), 2, '0') = " . $pdo->quote($mes);
+            $wherePeriodo = " WHERE TRIM(NTN.Anio) = " . $pdo->quote($anio) . " AND CAST(TRIM(NTN.Mes) AS UNSIGNED) = " . $pdo->quote(intval($mes));
             $sql = construirSQLConsolidacion($wherePeriodo);
             $pdo->exec($sql);
             
             // Contar registros insertados
-            $countSql = "SELECT COUNT(*) FROM T_CONSOLIDADO_NUEVA_TRAMA_HISMINSA_DETALLADO WHERE TRIM(Anio) = " . $pdo->quote($anio) . " AND LPAD(TRIM(Mes), 2, '0') = " . $pdo->quote($mes);
+            $countSql = "SELECT COUNT(*) FROM T_CONSOLIDADO_NUEVA_TRAMA_HISMINSA_DETALLADO WHERE TRIM(Anio) = " . $pdo->quote($anio) . " AND CAST(TRIM(Mes) AS UNSIGNED) = " . $pdo->quote(intval($mes));
             $registrosProcesados = (int)$pdo->query($countSql)->fetchColumn();
             
         } else {
@@ -710,7 +706,7 @@ function ejecutarProcesamiento($anio = null, $mes = null) {
                 "SELECT DISTINCT TRIM(Anio) as Anio, TRIM(Mes) as Mes 
                  FROM NOMINAL_TRAMA_NUEVO 
                  WHERE Anio IS NOT NULL AND Anio != '' AND Mes IS NOT NULL AND Mes != '' 
-                 ORDER BY Anio ASC, Mes ASC"
+                 ORDER BY Anio ASC, CAST(TRIM(Mes) AS UNSIGNED) ASC"
             )->fetchAll();
             
             if (empty($periodos)) {
@@ -727,15 +723,15 @@ function ejecutarProcesamiento($anio = null, $mes = null) {
                     $pAnio = trim($periodo['Anio']);
                     $pMes = trim($periodo['Mes']);
                     
-                    $whereP = " WHERE TRIM(NTN.Anio) = " . $pdo->quote($pAnio) . " AND LPAD(TRIM(NTN.Mes), 2, '0') = " . $pdo->quote(str_pad($pMes, 2, '0', STR_PAD_LEFT));
+                    $whereP = " WHERE TRIM(NTN.Anio) = " . $pdo->quote($pAnio) . " AND CAST(TRIM(NTN.Mes) AS UNSIGNED) = " . $pdo->quote(intval($pMes));
                     $sql = construirSQLConsolidacion($whereP);
                     
                     try {
                         $pdo->exec($sql);
                         
                         // Contar registros insertados para este periodo
-                        $countP = $pdo->prepare("SELECT COUNT(*) FROM T_CONSOLIDADO_NUEVA_TRAMA_HISMINSA_DETALLADO WHERE TRIM(Anio) = ? AND LPAD(TRIM(Mes), 2, '0') = ?");
-                        $countP->execute([$pAnio, str_pad($pMes, 2, '0', STR_PAD_LEFT)]);
+                        $countP = $pdo->prepare("SELECT COUNT(*) FROM T_CONSOLIDADO_NUEVA_TRAMA_HISMINSA_DETALLADO WHERE TRIM(Anio) = ? AND CAST(TRIM(Mes) AS UNSIGNED) = ?");
+                        $countP->execute([$pAnio, intval($pMes)]);
                         $regsP = (int)$countP->fetchColumn();
                         $registrosPorPeriodo[] = $pMes . '/' . $pAnio . ': ' . number_format($regsP);
                         $registrosProcesados += $regsP;
@@ -816,7 +812,7 @@ function obtenerPeriodosDisponibles() {
             "SELECT DISTINCT TRIM(Anio) as Anio, TRIM(Mes) as Mes 
              FROM NOMINAL_TRAMA_NUEVO 
              WHERE Anio IS NOT NULL AND Anio != '' AND Mes IS NOT NULL AND Mes != '' 
-             ORDER BY Anio DESC, Mes DESC"
+             ORDER BY Anio DESC, CAST(TRIM(Mes) AS UNSIGNED) DESC"
         );
         return $stmt->fetchAll();
     } catch (Exception $e) {
