@@ -819,3 +819,43 @@ function obtenerPeriodosDisponibles() {
         return [];
     }
 }
+
+/**
+ * Obtener estado de consolidacion por periodo
+ * Compara periodos en NOMINAL_TRAMA_NUEVO vs T_CONSOLIDADO para identificar
+ * cuales ya fueron procesados y cuales estan pendientes.
+ * Retorna array: [{Anio, Mes, registros_trama, registros_consolidado, estado}]
+ * estado: 'consolidado' | 'pendiente'
+ */
+function obtenerEstadoConsolidacionPorPeriodo() {
+    $pdo = getDBConnection();
+    try {
+        $sql = "
+            SELECT 
+                t.Anio, 
+                t.Mes, 
+                t.regs_trama,
+                COALESCE(c.regs_consolidado, 0) as regs_consolidado,
+                CASE WHEN c.regs_consolidado > 0 THEN 'consolidado' ELSE 'pendiente' END as estado
+            FROM (
+                SELECT DISTINCT TRIM(Anio) as Anio, TRIM(Mes) as Mes,
+                       COUNT(*) as regs_trama
+                FROM NOMINAL_TRAMA_NUEVO 
+                WHERE Anio IS NOT NULL AND Anio != '' AND Mes IS NOT NULL AND Mes != '' 
+                GROUP BY TRIM(Anio), TRIM(Mes)
+            ) t
+            LEFT JOIN (
+                SELECT DISTINCT TRIM(Anio) as Anio, TRIM(Mes) as Mes,
+                       COUNT(*) as regs_consolidado
+                FROM T_CONSOLIDADO_NUEVA_TRAMA_HISMINSA_DETALLADO
+                WHERE Anio IS NOT NULL AND Anio != '' AND Mes IS NOT NULL AND Mes != '' 
+                GROUP BY TRIM(Anio), TRIM(Mes)
+            ) c ON TRIM(t.Anio) = TRIM(c.Anio) AND CAST(TRIM(t.Mes) AS UNSIGNED) = CAST(TRIM(c.Mes) AS UNSIGNED)
+            ORDER BY t.Anio DESC, CAST(TRIM(t.Mes) AS UNSIGNED) DESC
+        ";
+        $stmt = $pdo->query($sql);
+        return $stmt->fetchAll();
+    } catch (Exception $e) {
+        return [];
+    }
+}
