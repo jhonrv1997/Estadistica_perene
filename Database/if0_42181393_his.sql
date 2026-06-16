@@ -3,7 +3,7 @@
 -- https://www.phpmyadmin.net/
 --
 -- Servidor: sql102.infinityfree.com
--- Tiempo de generación: 15-06-2026 a las 20:46:40
+-- Tiempo de generación: 15-06-2026 a las 22:02:05
 -- Versión del servidor: 11.4.12-MariaDB
 -- Versión de PHP: 7.2.22
 
@@ -77,40 +77,12 @@ CREATE TABLE `LOG_IMPORTACION` (
 --
 
 INSERT INTO `LOG_IMPORTACION` (`id_log`, `tipo_operacion`, `tipo_archivo`, `nombre_archivo`, `tabla_destino`, `periodo_mes`, `periodo_anio`, `registros_procesados`, `modo_importacion`, `fecha_operacion`, `usuario`, `estado`, `mensaje`, `duracion_segundos`) VALUES
-(1, 'IMPORT', 'MaestroRegistrador', 'MaestroRegistrador1029391.zip', 'MAESTRO_REGISTRADOR', NULL, NULL, 0, 'REEMPLAZO', '2026-06-14 13:39:13', 'admin', 'ERROR', 'There is no active transaction', '0.03'),
-(2, 'IMPORT', 'MaestroRegistrador', 'MaestroRegistrador1029391.zip', 'MAESTRO_REGISTRADOR', NULL, NULL, 0, 'REEMPLAZO', '2026-06-14 13:59:31', 'admin', 'ERROR', 'There is no active transaction', '0.04'),
-(3, 'IMPORT', 'MaestroRegistrador', 'MaestroRegistrador1029391.zip', 'MAESTRO_REGISTRADOR', NULL, NULL, 1249, 'REEMPLAZO', '2026-06-14 14:07:27', 'admin', 'EXITO', 'Se importaron 1249 registros correctamente', '0.05'),
-(4, 'IMPORT', 'MaestroPersonal', 'MaestroPersonal1029684.zip', 'MAESTRO_PERSONAL', NULL, NULL, 3472, 'REEMPLAZO', '2026-06-14 14:07:52', 'admin', 'EXITO', 'Se importaron 3472 registros correctamente', '0.18'),
-(5, 'IMPORT', 'MaestroPaciente', 'MaestroPaciente102638.zip', 'MAESTRO_PACIENTE', NULL, NULL, 229509, 'REEMPLAZO', '2026-06-14 14:09:11', 'admin', 'EXITO', 'Se importaron 229509 registros correctamente', '13.14'),
-(6, 'IMPORT', 'NominalTrama', 'NominalTrama14062026_102833.zip', 'NOMINAL_TRAMA_NUEVO', '05', '2026', 84489, 'PERIODO', '2026-06-14 14:10:53', 'admin', 'EXITO', 'Se importaron 84489 registros correctamente', '7.72'),
-(7, 'PROCESS', 'CONSOLIDADO', NULL, 'T_CONSOLIDADO_NUEVA_TRAMA_HISMINSA_DETALLADO', NULL, NULL, 0, NULL, '2026-06-14 14:11:21', 'admin', 'ERROR', 'SQLSTATE[21S01]: Insert value list does not match column list: 1136 Column count doesn\'t match value count at row 1', '0.00'),
-(8, 'PROCESS', 'CONSOLIDADO', NULL, 'T_CONSOLIDADO_NUEVA_TRAMA_HISMINSA_DETALLADO', '05', '2026', 0, NULL, '2026-06-14 14:14:44', 'admin', 'ERROR', 'SQLSTATE[21S01]: Insert value list does not match column list: 1136 Column count doesn\'t match value count at row 1', '0.00'),
-(9, 'PROCESS', 'CONSOLIDADO', NULL, 'T_CONSOLIDADO_NUEVA_TRAMA_HISMINSA_DETALLADO', NULL, NULL, 0, NULL, '2026-06-14 14:32:17', 'admin', 'ERROR', 'SQLSTATE[21S01]: Insert value list does not match column list: 1136 Column count doesn\'t match value count at row 1', '0.00'),
-(10, 'PROCESS', 'CONSOLIDADO', NULL, 'T_CONSOLIDADO_NUEVA_TRAMA_HISMINSA_DETALLADO', '05', '2026', 0, NULL, '2026-06-14 14:33:41', 'admin', 'ERROR', 'SQLSTATE[21S01]: Insert value list does not match column list: 1136 Column count doesn\'t match value count at row 1', '0.00'),
-(11, 'PROCESS', 'CONSOLIDADO', NULL, 'T_CONSOLIDADO_NUEVA_TRAMA_HISMINSA_DETALLADO', '05', '2026', 0, 'PERIODO', '2026-06-14 14:46:59', 'admin', 'EXITO', 'Procesamiento de consolidacion ejecutado correctamente (PERIODO)', '0.07'),
-(12, 'IMPORT', 'MaestroRegistrador', 'MaestroRegistrador1029391.zip', 'MAESTRO_REGISTRADOR', NULL, NULL, 1249, 'REEMPLAZO', '2026-06-14 14:58:28', 'admin', 'EXITO', 'Se importaron 1249 registros correctamente', '0.04'),
-(13, 'IMPORT', 'MaestroPersonal', 'MaestroPersonal1029684.zip', 'MAESTRO_PERSONAL', NULL, NULL, 3472, 'REEMPLAZO', '2026-06-14 14:58:40', 'admin', 'EXITO', 'Se importaron 3472 registros correctamente', '0.18'),
-(14, 'IMPORT', 'MaestroPaciente', 'MaestroPaciente102638.zip', 'MAESTRO_PACIENTE', NULL, NULL, 229509, 'REEMPLAZO', '2026-06-14 14:59:11', 'admin', 'EXITO', 'Se importaron 229509 registros correctamente', '14.18'),
-(15, 'IMPORT', 'NominalTrama', 'NominalTrama14062026_102833.zip', 'NOMINAL_TRAMA_NUEVO', '05', '2026', 84489, 'PERIODO', '2026-06-14 14:59:51', 'admin', 'EXITO', 'Se importaron 84489 registros correctamente', '17.42'),
-(16, 'PROCESS', 'CONSOLIDADO', NULL, 'T_CONSOLIDADO_NUEVA_TRAMA_HISMINSA_DETALLADO', '05', '2026', 0, NULL, '2026-06-14 15:00:04', 'admin', 'ERROR', 'SQLSTATE[42000]: Syntax error or access violation: 1104 The SELECT would examine more than MAX_JOIN_SIZE rows; check your WHERE and use SET SQL_BIG_SELECTS=1 or SET MAX_JOIN_SIZE=# if the SELECT is okay', '0.07'),
-(17, 'PROCESS', 'CONSOLIDADO', NULL, 'T_CONSOLIDADO_NUEVA_TRAMA_HISMINSA_DETALLADO', '05', '2026', 0, NULL, '2026-06-14 15:03:02', 'admin', 'ERROR', 'SQLSTATE[42000]: Syntax error or access violation: 1064 You have an error in your SQL syntax; check the manual that corresponds to your MariaDB server version for the right syntax to use near \'INSERT INTO T_CONSOLIDADO_NUEVA_TRAMA_HISMINSA_DETALLADO\n        (Id_Cita, An...\' at line 3', '0.00'),
-(18, 'PROCESS', 'CONSOLIDADO', NULL, 'T_CONSOLIDADO_NUEVA_TRAMA_HISMINSA_DETALLADO', '05', '2026', 0, 'PERIODO', '2026-06-14 15:08:56', 'admin', 'EXITO', 'Procesamiento de consolidacion ejecutado correctamente', '0.12'),
-(19, 'IMPORT', 'MaestroRegistrador', 'MaestroRegistrador1029391.zip', 'MAESTRO_REGISTRADOR', NULL, NULL, 1249, 'REEMPLAZO', '2026-06-14 15:24:18', 'admin', 'EXITO', 'Se importaron 1249 registros correctamente', '0.04'),
-(20, 'IMPORT', 'MaestroPersonal', 'MaestroPersonal1029684.zip', 'MAESTRO_PERSONAL', NULL, NULL, 3472, 'REEMPLAZO', '2026-06-14 15:24:28', 'admin', 'EXITO', 'Se importaron 3472 registros correctamente', '0.19'),
-(21, 'IMPORT', 'MaestroPaciente', 'MaestroPaciente102638.zip', 'MAESTRO_PACIENTE', NULL, NULL, 229509, 'REEMPLAZO', '2026-06-14 15:24:55', 'admin', 'EXITO', 'Se importaron 229509 registros correctamente', '15.88'),
-(22, 'IMPORT', 'NominalTrama', 'NominalTrama14062026_102833.zip', 'NOMINAL_TRAMA_NUEVO', '05', '2026', 84489, 'PERIODO', '2026-06-14 15:25:31', 'admin', 'EXITO', 'Se importaron 84489 registros correctamente', '15.87'),
-(23, 'PROCESS', 'CONSOLIDADO', NULL, 'T_CONSOLIDADO_NUEVA_TRAMA_HISMINSA_DETALLADO', '05', '2026', 0, 'PERIODO', '2026-06-14 15:25:41', 'admin', 'EXITO', 'Procesamiento de consolidacion ejecutado correctamente', '0.06'),
-(24, 'IMPORT', 'MaestroRegistrador', 'MaestroRegistrador1029391.zip', 'MAESTRO_REGISTRADOR', NULL, NULL, 1249, 'REEMPLAZO', '2026-06-14 15:30:26', 'admin', 'EXITO', 'Se importaron 1249 registros correctamente', '0.04'),
-(25, 'IMPORT', 'MaestroPersonal', 'MaestroPersonal1029684.zip', 'MAESTRO_PERSONAL', NULL, NULL, 3472, 'REEMPLAZO', '2026-06-14 15:30:34', 'admin', 'EXITO', 'Se importaron 3472 registros correctamente', '0.16'),
-(26, 'IMPORT', 'MaestroPaciente', 'MaestroPaciente102638.zip', 'MAESTRO_PACIENTE', NULL, NULL, 229509, 'REEMPLAZO', '2026-06-14 15:30:58', 'admin', 'EXITO', 'Se importaron 229509 registros correctamente', '14.71'),
-(27, 'IMPORT', 'NominalTrama', 'NominalTrama14062026_102833.zip', 'NOMINAL_TRAMA_NUEVO', '05', '2026', 84489, 'PERIODO', '2026-06-14 15:31:56', 'admin', 'EXITO', 'Se importaron 84489 registros correctamente', '16.60'),
-(28, 'PROCESS', 'CONSOLIDADO', NULL, 'T_CONSOLIDADO_NUEVA_TRAMA_HISMINSA_DETALLADO', '05', '2026', 0, 'PERIODO', '2026-06-14 15:33:10', 'admin', 'EXITO', 'Procesamiento de consolidacion ejecutado correctamente', '0.08'),
-(29, 'IMPORT', 'MaestroRegistrador', 'MaestroRegistrador1029391.zip', 'MAESTRO_REGISTRADOR', NULL, NULL, 1249, 'REEMPLAZO', '2026-06-14 15:46:43', 'admin', 'EXITO', 'Se importaron 1249 registros correctamente', '0.06'),
-(30, 'IMPORT', 'MaestroPersonal', 'MaestroPersonal1029684.zip', 'MAESTRO_PERSONAL', NULL, NULL, 3472, 'REEMPLAZO', '2026-06-14 15:46:55', 'admin', 'EXITO', 'Se importaron 3472 registros correctamente', '0.16'),
-(31, 'IMPORT', 'MaestroPaciente', 'MaestroPaciente102638.zip', 'MAESTRO_PACIENTE', NULL, NULL, 229509, 'REEMPLAZO', '2026-06-14 15:47:22', 'admin', 'EXITO', 'Se importaron 229509 registros correctamente', '16.70'),
-(32, 'IMPORT', 'NominalTrama', 'NominalTrama14062026_102833.zip', 'NOMINAL_TRAMA_NUEVO', '05', '2026', 84489, 'PERIODO', '2026-06-14 15:48:05', 'admin', 'EXITO', 'Se importaron 84489 registros correctamente', '17.71'),
-(33, 'PROCESS', 'CONSOLIDADO', NULL, 'T_CONSOLIDADO_NUEVA_TRAMA_HISMINSA_DETALLADO', NULL, NULL, 0, NULL, '2026-06-14 15:48:20', 'admin', 'ERROR', 'SQLSTATE[70100]: <<Unknown error>>: 1969 Query execution was interrupted (max_statement_time exceeded)', '4.01'),
-(34, 'PROCESS', 'CONSOLIDADO', NULL, 'T_CONSOLIDADO_NUEVA_TRAMA_HISMINSA_DETALLADO', NULL, NULL, 84489, 'COMPLETO', '2026-06-14 16:09:25', 'admin', 'EXITO', 'Procesamiento ejecutado. Tablas fuente: Trama=84,489, Personal=3,472, Paciente=229,509, Registrador=1,249 | Periodos procesados (1): 5/2026: 84,489. Registros consolidados: 84489', '8.50');
+(1, 'IMPORT', 'MaestroPersonal', 'MaestroPersonal207149.zip', 'MAESTRO_PERSONAL', NULL, NULL, 3475, 'REEMPLAZO', '2026-06-15 18:28:04', 'admin', 'EXITO', 'Se importaron 3475 registros correctamente', '0.30'),
+(2, 'IMPORT', 'MaestroRegistrador', 'MaestroRegistrador2011418.zip', 'MAESTRO_REGISTRADOR', NULL, NULL, 1251, 'REEMPLAZO', '2026-06-15 18:28:24', 'admin', 'EXITO', 'Se importaron 1251 registros correctamente', '0.05'),
+(3, 'IMPORT', 'MaestroPaciente', 'MaestroPaciente2011644.zip', 'MAESTRO_PACIENTE', NULL, NULL, 229559, 'REEMPLAZO', '2026-06-15 18:29:24', 'admin', 'EXITO', 'Se importaron 229559 registros correctamente', '28.25'),
+(4, 'IMPORT', 'NominalTrama', 'NominalTrama15052026_201222.zip', 'NOMINAL_TRAMA_NUEVO', '05', '2026', 84489, 'PERIODO', '2026-06-15 18:30:25', 'admin', 'EXITO', 'Se importaron 84489 registros correctamente', '25.34'),
+(5, 'IMPORT', 'NominalTrama', 'NominalTrama15062026_201415.zip', 'NOMINAL_TRAMA_NUEVO', '06', '2026', 20969, 'PERIODO', '2026-06-15 18:31:03', 'admin', 'EXITO', 'Se importaron 20969 registros correctamente', '7.30'),
+(6, 'PROCESS', 'CONSOLIDADO', NULL, 'T_CONSOLIDADO_NUEVA_TRAMA_HISMINSA_DETALLADO', NULL, NULL, 105458, 'COMPLETO', '2026-06-15 18:31:37', 'admin', 'EXITO', 'Procesamiento ejecutado. Tablas fuente: Trama=105,458, Personal=3,475, Paciente=229,559, Registrador=1,251 | Periodos procesados (2): 5/2026: 84,489, 6/2026: 20,969. Registros consolidados: 105458', '10.21');
 
 -- --------------------------------------------------------
 
@@ -161,6 +133,22 @@ CREATE TABLE `MAESTRO_HIS_CONDICION_CONTRATO` (
   `Id_Condicion` int(11) NOT NULL,
   `Descripcion_Condicion` varchar(500) DEFAULT NULL
 ) ENGINE=MyISAM DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+--
+-- Volcado de datos para la tabla `MAESTRO_HIS_CONDICION_CONTRATO`
+--
+
+INSERT INTO `MAESTRO_HIS_CONDICION_CONTRATO` (`Id_Condicion`, `Descripcion_Condicion`) VALUES
+(1, 'NOMBRADO'),
+(10, 'OTRA ENTIDAD'),
+(2, 'CONTRATADO'),
+(3, 'SERUM'),
+(4, 'RESIDENTE'),
+(5, 'INTERNO'),
+(6, 'ALUMNO'),
+(7, 'AGENTE COMUNITARIO'),
+(8, 'OTROS'),
+(9, 'DESTACADO');
 
 -- --------------------------------------------------------
 
@@ -593,7 +581,32 @@ CREATE TABLE `USUARIOS` (
 --
 
 INSERT INTO `USUARIOS` (`id_usuario`, `usuario`, `password`, `nombre_completo`, `rol`, `estado`, `fecha_creacion`, `ultimo_acceso`) VALUES
-(1, 'admin', '$2a$12$oyHlo6Q4WLAz05diONMFx.D93QR915rs.iVOZx7K1wUpgiTI7CtB.', 'Administrador del Sistema', 'admin', 1, '2026-06-14 12:35:48', '2026-06-15 06:26:58');
+(1, 'admin', '$2a$12$oyHlo6Q4WLAz05diONMFx.D93QR915rs.iVOZx7K1wUpgiTI7CtB.', 'Administrador del Sistema', 'admin', 1, '2026-06-14 12:35:48', '2026-06-15 18:27:21');
+
+-- --------------------------------------------------------
+
+--
+-- Estructura de tabla para la tabla `ZSPERENE`
+--
+
+CREATE TABLE `ZSPERENE` (
+  `Id_Establecimiento` int(11) NOT NULL,
+  `Nombre_Establecimiento` varchar(100) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `Ubigueo_Establecimiento` char(6) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `Codigo_Disa` int(11) DEFAULT NULL,
+  `Disa` varchar(80) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `Codigo_Red` char(2) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `Red` varchar(70) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `Codigo_MicroRed` char(2) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `MicroRed` varchar(70) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `Codigo_Unico` varchar(9) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL,
+  `Codigo_Sector` int(11) DEFAULT NULL,
+  `Descripcion_Sector` varchar(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `Departamento` varchar(150) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `Provincia` varchar(150) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `Distrito` varchar(150) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `Categoria_Establecimiento` varchar(10) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL
+) ENGINE=MyISAM DEFAULT CHARSET=latin1 COLLATE=latin1_swedish_ci;
 
 --
 -- Índices para tablas volcadas
@@ -760,6 +773,13 @@ ALTER TABLE `USUARIOS`
   ADD UNIQUE KEY `uk_usuario` (`usuario`);
 
 --
+-- Indices de la tabla `ZSPERENE`
+--
+ALTER TABLE `ZSPERENE`
+  ADD PRIMARY KEY (`Codigo_Unico`),
+  ADD KEY `Id_Establecimiento` (`Id_Establecimiento`);
+
+--
 -- AUTO_INCREMENT de las tablas volcadas
 --
 
@@ -767,13 +787,13 @@ ALTER TABLE `USUARIOS`
 -- AUTO_INCREMENT de la tabla `IMPORT_ESTADO`
 --
 ALTER TABLE `IMPORT_ESTADO`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=25;
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=30;
 
 --
 -- AUTO_INCREMENT de la tabla `LOG_IMPORTACION`
 --
 ALTER TABLE `LOG_IMPORTACION`
-  MODIFY `id_log` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=35;
+  MODIFY `id_log` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=7;
 
 --
 -- AUTO_INCREMENT de la tabla `NOMINAL_TRAMA_PERIODOS`
