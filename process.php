@@ -66,14 +66,15 @@ if ($accion === 'procesar' || $accion === 'procesar_completo') {
     }
     
     if ($resultado['success']) {
-        // Reiniciar estado de importacion despues de procesar exitosamente
-        reiniciarEstadoImportacion();
+        // No reiniciar estado de importacion automaticamente.
+        // Esto permite procesar multiples periodos sin re-importar los 4 archivos.
+        // El usuario puede reiniciar manualmente con el boton "Resetear Estado".
         
         if ($resultado['registros'] > 0) {
-            $_SESSION['mensaje'] = $resultado['mensaje'] . '. Estado de importacion reiniciado.';
+            $_SESSION['mensaje'] = $resultado['mensaje'];
             $_SESSION['tipo_mensaje'] = 'success';
         } else {
-            $_SESSION['mensaje'] = $resultado['mensaje'] . '. Estado de importacion reiniciado.';
+            $_SESSION['mensaje'] = $resultado['mensaje'];
             $_SESSION['tipo_mensaje'] = 'warning';
         }
     } else {

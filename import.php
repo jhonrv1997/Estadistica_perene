@@ -326,6 +326,12 @@ $todosImportados = verificarTodosImportados();
 $archivosFaltantes = obtenerArchivosFaltantes();
 $ultimoPeriodoTrama = obtenerUltimoPeriodoTrama();
 
+// Obtener estado de consolidacion por periodo (compara trama vs consolidado)
+$estadoConsolidacion = obtenerEstadoConsolidacionPorPeriodo();
+$periodosPendientes = array_filter($estadoConsolidacion, function($p) { return $p['estado'] === 'pendiente'; });
+$periodosConsolidados = array_filter($estadoConsolidacion, function($p) { return $p['estado'] === 'consolidado'; });
+$hayPeriodosPendientes = count($periodosPendientes) > 0;
+
 // Obtener ultimos 16 registros del log de importacion
 $ultimosLogs = $pdo->query("SELECT * FROM LOG_IMPORTACION ORDER BY fecha_operacion DESC LIMIT 16")->fetchAll();
 
@@ -404,6 +410,67 @@ include 'includes/header.php';
         </div>
     </div>
 </div>
+
+<!-- Panel de Estado de Consolidacion por Periodo -->
+<?php if (!empty($estadoConsolidacion)): ?>
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="card shadow-sm <?= $hayPeriodosPendientes ? 'border-warning' : 'border-success' ?>">
+            <div class="card-header bg-white d-flex justify-content-between align-items-center">
+                <h6 class="mb-0 fw-bold">
+                    <i class="fas fa-layer-group me-2 text-primary"></i>Estado de Consolidacion por Periodo
+                </h6>
+                <div>
+                    <?php if (count($periodosConsolidados) > 0): ?>
+                        <span class="badge bg-success me-1"><i class="fas fa-check me-1"></i><?= count($periodosConsolidados) ?> Consolidado<?= count($periodosConsolidados) > 1 ? 's' : '' ?></span>
+                    <?php endif; ?>
+                    <?php if ($hayPeriodosPendientes): ?>
+                        <span class="badge bg-warning text-dark"><i class="fas fa-clock me-1"></i><?= count($periodosPendientes) ?> Pendiente<?= count($periodosPendientes) > 1 ? 's' : '' ?></span>
+                    <?php else: ?>
+                        <span class="badge bg-success"><i class="fas fa-check-double me-1"></i>Todos consolidados</span>
+                    <?php endif; ?>
+                </div>
+            </div>
+            <div class="card-body py-2">
+                <div class="table-responsive">
+                    <table class="table table-sm table-hover mb-0">
+                        <thead class="table-light">
+                            <tr>
+                                <th>Periodo</th>
+                                <th class="text-end">Regs. Trama</th>
+                                <th class="text-end">Regs. Consolidado</th>
+                                <th class="text-center">Estado</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <?php foreach ($estadoConsolidacion as $ep): ?>
+                            <tr class="<?= $ep['estado'] === 'pendiente' ? 'table-warning' : '' ?>">
+                                <td class="fw-semibold"><?= getNombreMes(trim($ep['Mes'])) ?> <?= trim($ep['Anio']) ?></td>
+                                <td class="text-end"><?= number_format($ep['regs_trama']) ?></td>
+                                <td class="text-end"><?= number_format($ep['regs_consolidado']) ?></td>
+                                <td class="text-center">
+                                    <?php if ($ep['estado'] === 'consolidado'): ?>
+                                        <span class="badge bg-success"><i class="fas fa-check me-1"></i>Consolidado</span>
+                                    <?php else: ?>
+                                        <span class="badge bg-warning text-dark"><i class="fas fa-clock me-1"></i>Pendiente</span>
+                                    <?php endif; ?>
+                                </td>
+                            </tr>
+                            <?php endforeach; ?>
+                        </tbody>
+                    </table>
+                </div>
+                <?php if ($hayPeriodosPendientes && $todosImportados): ?>
+                <div class="alert alert-info mt-2 mb-0 py-2">
+                    <i class="fas fa-info-circle me-1"></i>
+                    <small>Los periodos <strong>pendientes</strong> pueden ser procesados usando "Procesar por Periodo" en el panel de Consolidacion.</small>
+                </div>
+                <?php endif; ?>
+            </div>
+        </div>
+    </div>
+</div>
+<?php endif; ?>
 
 <!-- Mensaje de resultado -->
 <?php if ($mensaje): ?>
@@ -626,8 +693,34 @@ include 'includes/header.php';
                         <strong>Los 4 archivos estan listos.</strong> Puede ejecutar la consolidacion.
                     </div>
                     
-                    <?php if ($ultimoPeriodoTrama): ?>
-                    <!-- Opcion 1: Procesar periodo de NominalTrama importado -->
+                    <?php if ($hayPeriodosPendientes): ?>
+                    <!-- Botones rapidos para periodos pendientes -->
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold small text-warning mb-1">
+                            <i class="fas fa-clock me-1"></i>Periodos pendientes de consolidar:
+                        </label>
+                        <?php foreach ($periodosPendientes as $pp): ?>
+                        <form method="POST" action="process.php" class="mb-1">
+                            <input type="hidden" name="csrf_token" value="<?= generateCSRFToken() ?>">
+                            <input type="hidden" name="accion" value="procesar">
+                            <input type="hidden" name="proc_anio" value="<?= htmlspecialchars(trim($pp['Anio'])) ?>">
+                            <input type="hidden" name="proc_mes" value="<?= htmlspecialchars(trim($pp['Mes'])) ?>">
+                            <button type="submit" class="btn btn-warning btn-sm w-100 text-start">
+                                <i class="fas fa-play me-1"></i> Procesar: <?= getNombreMes(trim($pp['Mes'])) ?> <?= trim($pp['Anio']) ?>
+                                <span class="badge bg-dark ms-1"><?= number_format($pp['regs_trama']) ?> regs.</span>
+                            </button>
+                        </form>
+                        <?php endforeach; ?>
+                    </div>
+                    <?php elseif (!empty($estadoConsolidacion)): ?>
+                    <div class="alert alert-success py-2 mb-3">
+                        <i class="fas fa-check-double me-1"></i>
+                        <small>Todos los periodos han sido consolidados.</small>
+                    </div>
+                    <?php endif; ?>
+                    
+                    <?php if ($ultimoPeriodoTrama && !$hayPeriodosPendientes): ?>
+                    <!-- Opcion 1: Procesar periodo de NominalTrama importado (solo si no hay pendientes auto-detectados) -->
                     <form method="POST" action="process.php" class="mb-3">
                         <input type="hidden" name="csrf_token" value="<?= generateCSRFToken() ?>">
                         <input type="hidden" name="accion" value="procesar">
@@ -639,7 +732,7 @@ include 'includes/header.php';
                     </form>
                     <?php endif; ?>
                     
-                    <!-- Opcion 2: Procesar por periodo seleccionado -->
+                    <!-- Opcion 2: Procesar por periodo seleccionado manualmente -->
                     <form method="POST" action="process.php" class="mb-3">
                         <input type="hidden" name="csrf_token" value="<?= generateCSRFToken() ?>">
                         <input type="hidden" name="accion" value="procesar">
@@ -681,7 +774,8 @@ include 'includes/header.php';
                     <form method="POST" action="process.php">
                         <input type="hidden" name="csrf_token" value="<?= generateCSRFToken() ?>">
                         <input type="hidden" name="accion" value="resetear">
-                        <button type="submit" class="btn btn-outline-secondary btn-sm w-100">
+                        <button type="submit" class="btn btn-outline-secondary btn-sm w-100"
+                                onclick="return confirm('Se reiniciara el estado de importacion. Debera importar los 4 archivos nuevamente antes de procesar. Desea continuar?')">
                             <i class="fas fa-redo me-1"></i> Resetear Estado de Importacion
                         </button>
                     </form>
