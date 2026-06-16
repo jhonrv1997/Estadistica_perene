@@ -326,6 +326,9 @@ $todosImportados = verificarTodosImportados();
 $archivosFaltantes = obtenerArchivosFaltantes();
 $ultimoPeriodoTrama = obtenerUltimoPeriodoTrama();
 
+// Obtener ultimos 16 registros del log de importacion
+$ultimosLogs = $pdo->query("SELECT * FROM LOG_IMPORTACION ORDER BY fecha_operacion DESC LIMIT 16")->fetchAll();
+
 // Procesar mensajes de sesion (desde process.php)
 if (isset($_SESSION['mensaje'])) {
     $mensaje = $_SESSION['mensaje'];
@@ -411,9 +414,10 @@ include 'includes/header.php';
 </div>
 <?php endif; ?>
 
-<!-- Formulario de Importacion -->
+<!-- Formulario de Importacion y Log de Auditoria -->
 <div class="row">
     <div class="col-lg-8">
+        <!-- Formulario ZIP -->
         <div class="card shadow-sm">
             <div class="card-header bg-white">
                 <h6 class="mb-0 fw-bold"><i class="fas fa-file-import me-2 text-primary"></i>Importar Archivo ZIP</h6>
@@ -482,6 +486,95 @@ include 'includes/header.php';
                         </button>
                     </div>
                 </form>
+            </div>
+        </div>
+
+        <!-- Ultimos 16 registros del Log de Auditoria -->
+        <div class="card shadow-sm mt-3">
+            <div class="card-header bg-white d-flex justify-content-between align-items-center">
+                <h6 class="mb-0 fw-bold"><i class="fas fa-clipboard-list me-2 text-primary"></i>Ultimos Registros del Log de Auditoria</h6>
+                <a href="log.php" class="btn btn-sm btn-outline-primary"><i class="fas fa-external-link-alt me-1"></i> Ver Log Completo</a>
+            </div>
+            <div class="card-body p-0">
+                <?php if (empty($ultimosLogs)): ?>
+                    <div class="text-center py-4">
+                        <i class="fas fa-inbox fa-2x text-muted mb-2"></i>
+                        <p class="text-muted mb-0 small">No se encontraron registros en el log</p>
+                    </div>
+                <?php else: ?>
+                    <div class="table-responsive">
+                        <table class="table table-hover table-sm mb-0">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>#</th>
+                                    <th>Fecha</th>
+                                    <th>Tipo</th>
+                                    <th>Archivo</th>
+                                    <th>Tabla Destino</th>
+                                    <th>Periodo</th>
+                                    <th>Registros</th>
+                                    <th>Modo</th>
+                                    <th>Usuario</th>
+                                    <th>Estado</th>
+                                    <th>Duracion</th>
+                                    <th>Mensaje</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <?php foreach ($ultimosLogs as $log): ?>
+                                <tr>
+                                    <td class="text-muted"><?= $log['id_log'] ?></td>
+                                    <td><?= formatDateTime($log['fecha_operacion']) ?></td>
+                                    <td>
+                                        <?php if ($log['tipo_operacion'] === 'IMPORT'): ?>
+                                            <span class="badge bg-primary"><i class="fas fa-file-import me-1"></i>Import</span>
+                                        <?php else: ?>
+                                            <span class="badge bg-info text-dark"><i class="fas fa-cogs me-1"></i>Process</span>
+                                        <?php endif; ?>
+                                    </td>
+                                    <td title="<?= clean($log['nombre_archivo']) ?>">
+                                        <?= clean(mb_strimwidth($log['nombre_archivo'] ?? '-', 0, 25, '...')) ?>
+                                    </td>
+                                    <td><code><?= clean($log['tabla_destino'] ?? '-') ?></code></td>
+                                    <td>
+                                        <?php if ($log['periodo_anio'] && $log['periodo_mes']): ?>
+                                            <?= getNombreMes($log['periodo_mes']) ?> <?= $log['periodo_anio'] ?>
+                                        <?php else: ?>
+                                            -
+                                        <?php endif; ?>
+                                    </td>
+                                    <td class="text-end"><?= number_format($log['registros_procesados']) ?></td>
+                                    <td>
+                                        <?php if ($log['modo_importacion'] === 'REEMPLAZO'): ?>
+                                            <span class="badge bg-danger">Reemplazo</span>
+                                        <?php elseif ($log['modo_importacion'] === 'PERIODO'): ?>
+                                            <span class="badge bg-warning text-dark">Periodo</span>
+                                        <?php elseif ($log['modo_importacion'] === 'COMPLETO'): ?>
+                                            <span class="badge bg-info text-dark">Completo</span>
+                                        <?php else: ?>
+                                            -
+                                        <?php endif; ?>
+                                    </td>
+                                    <td><?= clean($log['usuario']) ?></td>
+                                    <td>
+                                        <?php if ($log['estado'] === 'EXITO'): ?>
+                                            <span class="badge bg-success"><i class="fas fa-check me-1"></i>Exito</span>
+                                        <?php elseif ($log['estado'] === 'ERROR'): ?>
+                                            <span class="badge bg-danger"><i class="fas fa-times me-1"></i>Error</span>
+                                        <?php else: ?>
+                                            <span class="badge bg-warning text-dark">Parcial</span>
+                                        <?php endif; ?>
+                                    </td>
+                                    <td><?= $log['duracion_segundos'] ? $log['duracion_segundos'] . 's' : '-' ?></td>
+                                    <td title="<?= clean($log['mensaje']) ?>">
+                                        <?= clean(mb_strimwidth($log['mensaje'] ?? '-', 0, 40, '...')) ?>
+                                    </td>
+                                </tr>
+                                <?php endforeach; ?>
+                            </tbody>
+                        </table>
+                    </div>
+                <?php endif; ?>
             </div>
         </div>
     </div>
