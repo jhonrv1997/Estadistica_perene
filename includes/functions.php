@@ -693,6 +693,91 @@ function ejecutarProcesamiento($anio = null, $mes = null) {
             $countSql = "SELECT COUNT(*) FROM T_CONSOLIDADO_NUEVA_TRAMA_HISMINSA_DETALLADO WHERE TRIM(Anio) = " . $pdo->quote($anio) . " AND CAST(TRIM(Mes) AS UNSIGNED) = " . $pdo->quote(intval($mes));
             $registrosProcesados = (int)$pdo->query($countSql)->fetchColumn();
             
+        } elseif ($anio || $mes) {
+            // --- PROCESAMIENTO FILTRADO (solo anio o solo mes) ---
+            // Antes este caso caia en el branch de RECONSTRUCCION COMPLETA
+            // que hacia TRUNCATE de TODO el consolidado y procesaba TODOS
+            // los periodos de TODOS los anios, ignorando el filtro. Esto
+            // provocaba que "no se procesaran todos los datos" porque los
+            // periodos del filtro se reemplazaban pero los demas se
+            // borraban y habia que re-procesarlos tambien (sometidos a
+            // timeout por consulta).
+            //
+            // Ahora: NO se hace TRUNCATE global. Se identifican los
+            // periodos coincidentes con el filtro, se eliminan del
+            // consolidado UNO POR UNO y se reinsertan. Los periodos NO
+            // coincidentes se preservan intactos.
+            $whereParts = [];
+            $params = [];
+            if ($anio) {
+                $whereParts[] = "TRIM(Anio) = ?";
+                $params[] = $anio;
+            }
+            if ($mes) {
+                $whereParts[] = "CAST(TRIM(Mes) AS UNSIGNED) = ?";
+                $params[] = intval($mes);
+            }
+            $whereFilter = implode(' AND ', $whereParts);
+            
+            // Obtener periodos a procesar (los que coinciden con el filtro)
+            $sqlPeriodos = "SELECT DISTINCT TRIM(Anio) as Anio, TRIM(Mes) as Mes 
+                            FROM NOMINAL_TRAMA_NUEVO 
+                            WHERE Anio IS NOT NULL AND Anio != '' AND Mes IS NOT NULL AND Mes != '' 
+                            AND " . $whereFilter . " 
+                            ORDER BY Anio ASC, CAST(TRIM(Mes) AS UNSIGNED) ASC";
+            $stmtP = $pdo->prepare($sqlPeriodos);
+            $stmtP->execute($params);
+            $periodos = $stmtP->fetchAll();
+            
+            if (empty($periodos)) {
+                $filtroDesc = '';
+                if ($anio && $mes) $filtroDesc = $mes . '/' . $anio;
+                elseif ($anio) $filtroDesc = 'Anio ' . $anio;
+                elseif ($mes) $filtroDesc = 'Mes ' . $mes;
+                return [
+                    'success' => false,
+                    'registros' => 0,
+                    'duracion' => round(microtime(true) - $startTime, 2),
+                    'mensaje' => 'No hay datos en NOMINAL_TRAMA_NUEVO que coincidan con el filtro seleccionado (' . $filtroDesc . ').'
+                ];
+            }
+            
+            $totalPeriodos = count($periodos);
+            $registrosPorPeriodo = [];
+            $erroresPorPeriodo = [];
+            
+            foreach ($periodos as $periodo) {
+                $pAnio = trim($periodo['Anio']);
+                $pMes = trim($periodo['Mes']);
+                
+                // Eliminar periodo existente del consolidado (solo este periodo)
+                $stmtDel = $pdo->prepare("DELETE FROM T_CONSOLIDADO_NUEVA_TRAMA_HISMINSA_DETALLADO WHERE TRIM(Anio) = ? AND CAST(TRIM(Mes) AS UNSIGNED) = ?");
+                $stmtDel->execute([$pAnio, intval($pMes)]);
+                
+                // Insertar periodo en el consolidado
+                $whereP = " WHERE TRIM(NTN.Anio) = " . $pdo->quote($pAnio) . " AND CAST(TRIM(NTN.Mes) AS UNSIGNED) = " . $pdo->quote(intval($pMes));
+                $sql = construirSQLConsolidacion($whereP);
+                
+                try {
+                    $pdo->exec($sql);
+                    
+                    $countP = $pdo->prepare("SELECT COUNT(*) FROM T_CONSOLIDADO_NUEVA_TRAMA_HISMINSA_DETALLADO WHERE TRIM(Anio) = ? AND CAST(TRIM(Mes) AS UNSIGNED) = ?");
+                    $countP->execute([$pAnio, intval($pMes)]);
+                    $regsP = (int)$countP->fetchColumn();
+                    $registrosPorPeriodo[] = $pMes . '/' . $pAnio . ': ' . number_format($regsP);
+                    $registrosProcesados += $regsP;
+                } catch (Exception $ePeriodo) {
+                    $erroresPorPeriodo[] = $pMes . '/' . $pAnio . ' (' . $ePeriodo->getMessage() . ')';
+                }
+            }
+            
+            if (!empty($registrosPorPeriodo)) {
+                $detalles[] = 'Periodos procesados OK (' . count($registrosPorPeriodo) . ' de ' . $totalPeriodos . '): ' . implode(', ', $registrosPorPeriodo);
+            }
+            if (!empty($erroresPorPeriodo)) {
+                $detalles[] = 'Periodos con ERROR (' . count($erroresPorPeriodo) . ' de ' . $totalPeriodos . '): ' . implode('; ', $erroresPorPeriodo);
+            }
+            
         } else {
             // --- RECONSTRUCCION COMPLETA (POR PERIODOS / BATCH) ---
             // En lugar de un solo INSERT masivo que puede agotar el timeout,
