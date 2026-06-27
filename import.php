@@ -41,6 +41,24 @@ function procesarImportacion($file, $post) {
     @ignore_user_abort(true);
     @ini_set('memory_limit', '1024M');
     
+    // CRITICO: Desactivar el timeout por consulta de MariaDB/MySQL para
+    // esta sesion. InfinityFree (MariaDB 10.x) impone max_statement_time
+    // (~30s por consulta por defecto) que interrumpe los INSERT masivos
+    // de NominalTrama sobre una tabla con 10+ indices (idx_ntn_*).
+    // Sintoma: la PRIMERA carga de NominalTrama falla con
+    //   SQLSTATE[70100]: 1969 Query execution was interrupted
+    // y la segunda carga funciona porque las paginas de indices ya estan
+    // cacheadas en el buffer pool. Desactivando max_statement_time se
+    // elimina el fallo intermitente desde el primer intento.
+    // Cada SET se envuelve en try/catch porque algunos hosts compartidos
+    // no permiten cambiar variables de sesion (en ese caso el ajuste se
+    // ignora silenciosamente y se mantiene el limite por defecto).
+    try { $pdo->exec("SET SESSION max_statement_time = 0"); } catch (Exception $e) {}
+    try { $pdo->exec("SET SESSION wait_timeout = 28800"); } catch (Exception $e) {}
+    try { $pdo->exec("SET SESSION interactive_timeout = 28800"); } catch (Exception $e) {}
+    try { $pdo->exec("SET SESSION net_read_timeout = 600"); } catch (Exception $e) {}
+    try { $pdo->exec("SET SESSION net_write_timeout = 600"); } catch (Exception $e) {}
+    
     // Validar archivo
     if ($file['error'] !== UPLOAD_ERR_OK) {
         return ['exito' => false, 'mensaje' => 'Error al subir archivo: ' . getUploadError($file['error'])];
@@ -716,7 +734,38 @@ function ejecutarLoteInsert($pdo, $tabla, $columnas, $batch, $rowPlaceholder) {
         }
     }
 
-    $stmt->execute($params);
+    try {
+        $stmt->execute($params);
+    } catch (PDOException $e) {
+        // Recuperacion ante el error 1969 de MariaDB:
+        //   SQLSTATE[70100]: 1969 Query execution was interrupted
+        //   (max_statement_time exceeded)
+        // Si SET SESSION max_statement_time=0 no tuvo efecto (hosts
+        // compartidos que lo prohiben), o si el lote es demasiado grande
+        // para el limite por consulta, dividimos el lote a la mitad y
+        // reintentamos recursivamente. Con batch=50 el primer fallo baja
+        // a 25, luego 12, 6, 3, 1 - en el peor caso se inserta fila por
+        // fila, que es lo suficientemente rapido para no exceder el limite.
+        $isMaxStmtTime = (
+            $e->getCode() === '70100'
+            || $e->getCode() === 1969
+            || stripos($e->getMessage(), 'max_statement_time') !== false
+            || stripos($e->getMessage(), '1969') !== false
+            || stripos($e->getMessage(), 'Query execution was interrupted') !== false
+        );
+
+        if ($isMaxStmtTime && $rowCount > 1) {
+            $mitad = (int) ceil($rowCount / 2);
+            $batchA = array_slice($batch, 0, $mitad);
+            $batchB = array_slice($batch, $mitad);
+            ejecutarLoteInsert($pdo, $tabla, $columnas, $batchA, $rowPlaceholder);
+            ejecutarLoteInsert($pdo, $tabla, $columnas, $batchB, $rowPlaceholder);
+            return;
+        }
+        // Otro tipo de error o lote de 1 fila: relanzar para que el
+        // llamador lo trate (incluye rollback si aplica).
+        throw $e;
+    }
 }
 
 // Obtener conteos de registros actuales
