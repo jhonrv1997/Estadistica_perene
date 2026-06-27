@@ -22,7 +22,13 @@ $(document).ready(function() {
     });
     
     // Loading overlay para formularios de importacion
+    // Se omite cuando el formulario ya gestiona su propio overlay
+    // (por ejemplo #importForm en import.php usa mostrarOverlayProcesamiento).
+    // Para opt-out, agregar la clase "no-auto-loading" al <form>.
     $('form').on('submit', function() {
+        if ($(this).hasClass('no-auto-loading')) {
+            return;
+        }
         if ($(this).find('input[type="file"]').length > 0) {
             showLoading('Procesando archivo...', 'Esto puede tardar varios minutos dependiendo del tamano del archivo.');
         }
