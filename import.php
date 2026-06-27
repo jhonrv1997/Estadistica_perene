@@ -33,6 +33,14 @@ function procesarImportacion($file, $post) {
     $pdo = getDBConnection();
     $startTime = microtime(true);
     
+    // CRITICO: Prevenir timeout de PHP y agotamiento de memoria.
+    // MaestroPaciente y NominalTrama pueden tener millones de filas y
+    // el procesamiento en hosts compartidos (InfinityFree) excede los
+    // 30s por defecto de max_execution_time.
+    @set_time_limit(0);
+    @ignore_user_abort(true);
+    @ini_set('memory_limit', '1024M');
+    
     // Validar archivo
     if ($file['error'] !== UPLOAD_ERR_OK) {
         return ['exito' => false, 'mensaje' => 'Error al subir archivo: ' . getUploadError($file['error'])];
@@ -174,76 +182,149 @@ function procesarImportacion($file, $post) {
             throw new Exception('El archivo CSV encontrado dentro del ZIP esta vacio (0 bytes). Verifique el contenido del ZIP.');
         }
         
-        // Leer CSV
-        $csvData = leerCSV($csvFile);
-        if (empty($csvData)) {
-            // Diagnostico adicional para identificar la causa real
-            $diag = 'No se pudo leer contenido del CSV. ';
-            $diag .= 'Tamano: ' . $csvFileSize . ' bytes. ';
-            $diag .= 'Ruta: ' . basename($csvFile) . '. ';
-            $fp = @fopen($csvFile, 'rb');
-            if ($fp) {
-                $muestra = fread($fp, 200);
-                fclose($fp);
-                $diag .= 'Primeros bytes (hex): ' . bin2hex(substr($muestra, 0, 30));
-            }
-            throw new Exception('El archivo CSV esta vacio o no se pudo leer. ' . $diag);
-        }
-        
         // Obtener columnas de la tabla destino
         $columnas = getColumnMapping($fileInfo['tipo']);
         $dateColumns = getDateColumns($fileInfo['tipo']);
         
-        // Obtener encabezados del CSV (primera fila)
-        $csvHeaders = array_map('trim', $csvData[0]);
-        $csvHeaders = array_map(function($h) { return trim($h, "\xEF\xBB\xBF"); }, $csvHeaders); // BOM removal
+        if (empty($columnas)) {
+            throw new Exception('No se encontraron columnas mapeadas para el tipo: ' . $fileInfo['tipo']);
+        }
         
-        // Iniciar transaccion
-        $pdo->beginTransaction();
+        // Detectar engine de la tabla para decidir uso de transacciones.
+        // El schema del sistema usa ENGINE=MyISAM, que NO soporta transacciones:
+        // llamar a beginTransaction/rollBack sobre MyISAM no da error pero el
+        // rollback NO deshace cambios. Peor aun: si una fila falla a mitad del
+        // INSERT masivo, los datos previos ya estaban persistidos. Por eso se
+        // usa TRUNCATE (en lugar de DELETE) para MyISAM en modo REEMPLAZO, y
+        // se omite beginTransaction/commit para evitar la confusion de un
+        // rollback que no hace nada.
+        $tablaEngine = obtenerEngineTabla($pdo, $fileInfo['tabla']);
+        $soportaTransacciones = ($tablaEngine === 'InnoDB');
+        
+        if ($soportaTransacciones) {
+            $pdo->beginTransaction();
+        }
         
         try {
             // Modo de importacion segun tipo
             if ($fileInfo['modo'] === 'REEMPLAZO') {
-                // Eliminar todos los registros (DELETE en lugar de TRUNCATE para compatibilidad con transacciones)
-                $pdo->exec("DELETE FROM `{$fileInfo['tabla']}`");
+                if ($soportaTransacciones) {
+                    // InnoDB: DELETE dentro de transaccion (permite rollback)
+                    $pdo->exec("DELETE FROM `{$fileInfo['tabla']}`");
+                } else {
+                    // MyISAM: TRUNCATE (mas rapido que DELETE y libera espacio en disco)
+                    $pdo->exec("TRUNCATE TABLE `{$fileInfo['tabla']}`");
+                }
             } else {
-                // Eliminar solo datos del periodo seleccionado
+                // Eliminar solo datos del periodo seleccionado (NominalTrama)
                 $stmt = $pdo->prepare("DELETE FROM `{$fileInfo['tabla']}` WHERE Anio = ? AND CAST(TRIM(Mes) AS UNSIGNED) = ?");
                 $stmt->execute([$periodoAnio, intval($periodoMes)]);
             }
             
-            // Insertar datos del CSV
+            // =========================================================
+            // INSERCION STREAMING DEL CSV
+            // =========================================================
+            // Se lee el CSV fila por fila (sin cargar todo en memoria) y se
+            // inserta en lotes pequenos usando prepared statements con
+            // placeholders tipados (?). Esto evita dos problemas clasicos en
+            // hosts compartidos (InfinityFree):
+            //   1. memory_limit agotado al cargar millones de filas en $csvData.
+            //   2. max_allowed_packet (1 MB) excedido al construir un INSERT
+            //      gigante con 500 filas x 47 columnas (NominalTrama, Alerta
+            //      varchar(3000)) -> PDOException -> HTTP ERROR 500.
+            // Con batch=50 y placeholders vinculados, cada lote ocupa ~150 KB
+            // como maximo, muy por debajo del limite.
+            // =========================================================
+            $batchSize = 50;
             $registrosInsertados = 0;
-            $totalFilas = count($csvData) - 1; // Restar encabezado
+            $filasLeidas = 0;
             
-            // Insertar en lotes para mejor rendimiento
-            $batchSize = 500;
-            $values = [];
-            $placeholders = [];
-            
-            for ($i = 1; $i <= $totalFilas; $i++) {
-                $row = $csvData[$i];
-                
-                // Mapear valores CSV a columnas de tabla
-                $rowValues = [];
-                for ($c = 0; $c < count($columnas); $c++) {
-                    $val = isset($row[$c]) ? trim($row[$c]) : '';
-                    $isDate = in_array($columnas[$c], $dateColumns);
-                    $rowValues[] = sqlValue($val, $isDate);
+            $csvStream = leerCSVStream($csvFile);
+            if (!$csvStream) {
+                // Diagnostico adicional para identificar la causa real
+                $diag = 'No se pudo abrir el CSV para lectura streaming. ';
+                $diag .= 'Tamano: ' . $csvFileSize . ' bytes. ';
+                $diag .= 'Ruta: ' . basename($csvFile) . '. ';
+                $fp = @fopen($csvFile, 'rb');
+                if ($fp) {
+                    $muestra = fread($fp, 200);
+                    fclose($fp);
+                    $diag .= 'Primeros bytes (hex): ' . bin2hex(substr($muestra, 0, 30));
                 }
-                
-                $placeholders[] = '(' . implode(',', $rowValues) . ')';
-                
-                // Ejecutar batch
-                if (count($placeholders) >= $batchSize || $i === $totalFilas) {
-                    $sql = "INSERT INTO `{$fileInfo['tabla']}` (`" . implode('`,`', $columnas) . "`) VALUES " . implode(',', $placeholders);
-                    $pdo->exec($sql);
-                    $registrosInsertados += count($placeholders);
-                    $placeholders = [];
-                }
+                throw new Exception('El archivo CSV no se pudo abrir. ' . $diag);
             }
             
-            $pdo->commit();
+            // Leer encabezado (primera fila) y descartarlo
+            $header = fgetcsv($csvStream['handle'], 0, $csvStream['delimitador']);
+            if ($header === false || $header === null) {
+                fclose($csvStream['handle']);
+                throw new Exception('El archivo CSV esta vacio o no se pudo leer la cabecera. Tamano: ' . $csvFileSize . ' bytes.');
+            }
+            
+            // Plantilla de placeholders para una fila: (?, ?, ..., ?)
+            $rowPlaceholder = '(' . implode(',', array_fill(0, count($columnas), '?')) . ')';
+            $batch = [];
+            
+            while (($row = fgetcsv($csvStream['handle'], 0, $csvStream['delimitador'])) !== false) {
+                // Saltar filas completamente vacias (fgetcsv puede devolver [''] )
+                if (count($row) === 1 && $row[0] === '') {
+                    continue;
+                }
+                $filasLeidas++;
+                
+                // Convertir encoding de cada celda (Windows-1252 / ISO-8859-1 -> UTF-8)
+                foreach ($row as &$cell) {
+                    $cell = $csvStream['convertEncoding']($cell);
+                }
+                unset($cell);
+                
+                // Mapear valores CSV a parametros de la tabla.
+                // A diferencia de sqlValue() que retorna literales SQL (con comillas
+                // y addslashes), aqui se pasan valores nativos a PDO::execute()
+                // que se encarga de escapar de forma segura via protocolo binario.
+                $rowParams = [];
+                for ($c = 0; $c < count($columnas); $c++) {
+                    $val = isset($row[$c]) ? trim($row[$c]) : '';
+                    if ($val === '' || $val === 'NULL') {
+                        $rowParams[] = null;
+                    } elseif (in_array($columnas[$c], $dateColumns)) {
+                        // Convertir fecha (acepta dd/mm/yyyy o dd-mm-yyyy) a YYYY-MM-DD
+                        $valNorm = str_replace('/', '-', $val);
+                        $ts = strtotime($valNorm);
+                        $rowParams[] = ($ts === false) ? null : date('Y-m-d', $ts);
+                    } else {
+                        $rowParams[] = $val;
+                    }
+                }
+                
+                $batch[] = $rowParams;
+                
+                // Ejecutar lote cuando se completa el tamano de batch
+                if (count($batch) >= $batchSize) {
+                    ejecutarLoteInsert($pdo, $fileInfo['tabla'], $columnas, $batch, $rowPlaceholder);
+                    $registrosInsertados += count($batch);
+                    $batch = [];
+                }
+            }
+            fclose($csvStream['handle']);
+            
+            // Insertar lote final (filas restantes)
+            if (!empty($batch)) {
+                ejecutarLoteInsert($pdo, $fileInfo['tabla'], $columnas, $batch, $rowPlaceholder);
+                $registrosInsertados += count($batch);
+                $batch = [];
+            }
+            
+            if ($registrosInsertados === 0) {
+                throw new Exception(
+                    'No se inserto ningun registro. Filas leidas del CSV: ' . $filasLeidas .
+                    '. Verifique que el archivo tenga datos despues de la cabecera y que el delimitador sea correcto.'
+                );
+            }
+            
+            if ($soportaTransacciones) {
+                $pdo->commit();
+            }
             
             $duration = round(microtime(true) - $startTime, 2);
             
@@ -281,7 +362,12 @@ function procesarImportacion($file, $post) {
             return ['exito' => true, 'mensaje' => $msg];
             
         } catch (Exception $e) {
-            $pdo->rollBack();
+            // Solo intentar rollback si la tabla soporta transacciones (InnoDB).
+            // Para MyISAM, rollBack() lanzaria una PDOException "There is no
+            // active transaction" que enmascararia la excepcion original.
+            if ($soportaTransacciones) {
+                try { $pdo->rollBack(); } catch (Exception $rbErr) { /* ignorar */ }
+            }
             throw $e;
         }
         
@@ -489,6 +575,148 @@ function deleteDirectory($dir) {
         is_dir($path) ? deleteDirectory($path) : unlink($path);
     }
     rmdir($dir);
+}
+
+/**
+ * Obtener el ENGINE de una tabla (InnoDB, MyISAM, ...).
+ * Consulta information_schema.TABLES. Si falla (permisos o tabla
+ * no existe), asume MyISAM (que es lo que usa el schema del sistema).
+ */
+function obtenerEngineTabla($pdo, $tabla) {
+    try {
+        $stmt = $pdo->prepare(
+            "SELECT ENGINE FROM information_schema.TABLES "
+            . "WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ?"
+        );
+        $stmt->execute([DB_NAME, $tabla]);
+        $engine = $stmt->fetchColumn();
+        return $engine ?: 'MyISAM';
+    } catch (Exception $e) {
+        return 'MyISAM';
+    }
+}
+
+/**
+ * Abrir un CSV para lectura STREAMING (fila por fila) sin cargar todo
+ * el archivo en memoria. Detecta BOM UTF-8, encoding (Windows-1252 /
+ * ISO-8859-1 / UTF-8) y delimitador (| ; ,) a partir de los primeros
+ * 8 KB del archivo.
+ *
+ * Retorna: ['handle' => resource, 'delimitador' => string, 'convertEncoding' => callable]
+ *          o false si no se pudo abrir.
+ */
+function leerCSVStream($filepath) {
+    if (!is_file($filepath) || !is_readable($filepath)) {
+        return false;
+    }
+
+    @ini_set('auto_detect_line_endings', '1');
+
+    // Subir memory_limit temporalmente (la conversion iconv por celda
+    // puede usar memoria adicional incluso en modo streaming).
+    $currentLimit = ini_get('memory_limit');
+    if ($currentLimit !== '-1') {
+        $currentBytes = returnBytesFromLimit($currentLimit);
+        if ($currentBytes < 512 * 1024 * 1024) {
+            @ini_set('memory_limit', '512M');
+        }
+    }
+
+    // Leer primeros 8 KB para inspeccionar cabecera (BOM, encoding, delimitador)
+    $fpInspect = fopen($filepath, 'rb');
+    if (!$fpInspect) return false;
+    $rawFirst = fread($fpInspect, 8192);
+    fclose($fpInspect);
+
+    // Quitar BOM UTF-8 si existe
+    $bom = "\xEF\xBB\xBF";
+    $hasBom = (substr($rawFirst, 0, 3) === $bom);
+    if ($hasBom) {
+        $rawFirst = substr($rawFirst, 3);
+    }
+
+    // Detectar codificacion de la muestra inicial
+    $encoding = mb_detect_encoding($rawFirst, ['UTF-8', 'Windows-1252', 'ISO-8859-1', 'ASCII'], true);
+
+    // Funcion de conversion por celda (cierra sobre $encoding y $hasBom)
+    $convertEncoding = function($line) use ($encoding, $hasBom) {
+        if (strlen($line) >= 3 && substr($line, 0, 3) === "\xEF\xBB\xBF") {
+            $line = substr($line, 3);
+        }
+        if ($encoding === 'UTF-8' || $encoding === 'ASCII') {
+            return $line;
+        }
+        if ($encoding) {
+            $converted = @iconv($encoding, 'UTF-8//TRANSLIT//IGNORE', $line);
+            if ($converted !== false && $converted !== '') {
+                return $converted;
+            }
+        }
+        // Fallback: Windows-1252 (comun en exportaciones HIS del MINSA)
+        $converted = @iconv('Windows-1252', 'UTF-8//TRANSLIT//IGNORE', $line);
+        if ($converted !== false && $converted !== '') {
+            return $converted;
+        }
+        return $line;
+    };
+
+    // Detectar delimitador desde la primera linea (ya convertida)
+    $firstLineConverted = $convertEncoding($rawFirst);
+    $firstLineForDelimiter = strtok($firstLineConverted, "\n");
+    $firstLineForDelimiter = str_replace(["\r\n", "\r"], ["\n", "\n"], $firstLineForDelimiter);
+
+    $delimitador = ',';
+    $hasPipe = strpos($firstLineForDelimiter, '|') !== false;
+    $hasSemi = strpos($firstLineForDelimiter, ';') !== false;
+    $hasComma = strpos($firstLineForDelimiter, ',') !== false;
+    if ($hasPipe && !$hasComma && !$hasSemi) {
+        $delimitador = '|';
+    } elseif ($hasSemi && !$hasComma) {
+        $delimitador = ';';
+    }
+
+    // Abrir archivo para lectura streaming
+    $handle = fopen($filepath, 'rb');
+    if (!$handle) return false;
+
+    // Si tenia BOM, saltar los 3 bytes del BOM para que fgetcsv no los
+    // incluya en el primer campo del encabezado.
+    if ($hasBom) {
+        fread($handle, 3);
+    }
+
+    return [
+        'handle' => $handle,
+        'delimitador' => $delimitador,
+        'convertEncoding' => $convertEncoding,
+        'encoding' => $encoding,
+    ];
+}
+
+/**
+ * Ejecutar un INSERT multi-fila usando prepared statement con placeholders.
+ *
+ * @param PDO    $pdo           Conexion PDO
+ * @param string $tabla         Nombre de la tabla destino
+ * @param array  $columnas      Lista de nombres de columnas
+ * @param array  $batch         Lote de filas (cada fila = array de valores nativos)
+ * @param string $rowPlaceholder Plantilla '(?,?,?)' para una fila
+ */
+function ejecutarLoteInsert($pdo, $tabla, $columnas, $batch, $rowPlaceholder) {
+    $rowCount = count($batch);
+    $allPlaceholders = implode(',', array_fill(0, $rowCount, $rowPlaceholder));
+    $sql = "INSERT INTO `{$tabla}` (`" . implode('`,`', $columnas) . "`) VALUES " . $allPlaceholders;
+    $stmt = $pdo->prepare($sql);
+
+    // Aplanar el batch (array 2D) a un array 1D de parametros para execute()
+    $params = [];
+    foreach ($batch as $rowParams) {
+        foreach ($rowParams as $val) {
+            $params[] = $val;
+        }
+    }
+
+    $stmt->execute($params);
 }
 
 // Obtener conteos de registros actuales
@@ -986,16 +1214,6 @@ include 'includes/header.php';
                         </button>
                     </form>
                     
-                    <!-- Resetear estado -->
-                    <hr>
-                    <form method="POST" action="process.php" class="process-form" data-accion-tipo="resetear">
-                        <input type="hidden" name="csrf_token" value="<?= generateCSRFToken() ?>">
-                        <input type="hidden" name="accion" value="resetear">
-                        <button type="submit" class="btn btn-outline-secondary btn-sm w-100 process-btn">
-                            <i class="fas fa-redo me-1"></i> Resetear Estado de Importacion
-                        </button>
-                    </form>
-                    
                 <?php else: ?>
                     <!-- Faltan archivos: procesamiento deshabilitado -->
                     <div class="text-center py-3">
@@ -1008,6 +1226,20 @@ include 'includes/header.php';
                         </div>
                     </div>
                 <?php endif; ?>
+                
+                <!-- Resetear estado de importacion.
+                     ALWAYS visible (incluso si faltan archivos por importar).
+                     Antes estaba dentro del condicional todosImportados, lo que
+                     ocultaba el boton justo cuando el usuario mas lo necesita:
+                     cuando importo un archivo con errores y quiere volver a empezar. -->
+                <hr>
+                <form method="POST" action="process.php" class="process-form" data-accion-tipo="resetear">
+                    <input type="hidden" name="csrf_token" value="<?= generateCSRFToken() ?>">
+                    <input type="hidden" name="accion" value="resetear">
+                    <button type="submit" class="btn btn-outline-secondary btn-sm w-100 process-btn">
+                        <i class="fas fa-redo me-1"></i> Resetear Estado de Importacion
+                    </button>
+                </form>
             </div>
         </div>
         
