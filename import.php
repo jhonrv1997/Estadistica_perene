@@ -77,11 +77,49 @@ function procesarImportacion($file, $post) {
             throw new Exception('No se pudo abrir el archivo ZIP');
         }
         
-        $zip->extractTo($tempDir);
+        // Extraer archivo por archivo para manejar correctamente nombres
+        // con caracteres no-ASCII (algunos ZIPs vienen con encoding CP437).
+        for ($i = 0; $i < $zip->numFiles; $i++) {
+            $stat = $zip->statIndex($i);
+            if ($stat === false) continue;
+            $entryName = $stat['name'];
+            // Evitar path traversal
+            if (strpos($entryName, '..') !== false) continue;
+            // Directorio
+            if (substr($entryName, -1) === '/') {
+                @mkdir($tempDir . $entryName, 0777, true);
+                continue;
+            }
+            // Crear subdirectorio si hace falta
+            $subdir = dirname($entryName);
+            if ($subdir && $subdir !== '.') {
+                @mkdir($tempDir . $subdir, 0777, true);
+            }
+            // Extraer contenido
+            $stream = $zip->getStream($entryName);
+            if ($stream === false) {
+                // Fallback a getFromIndex
+                $contents = $zip->getFromIndex($i);
+                if ($contents !== false) {
+                    @file_put_contents($tempDir . $entryName, $contents);
+                }
+            } else {
+                $out = @fopen($tempDir . $entryName, 'wb');
+                if ($out) {
+                    stream_copy_to_stream($stream, $out);
+                    fclose($out);
+                }
+                fclose($stream);
+            }
+        }
         $zip->close();
         
         // Buscar archivo CSV dentro del ZIP
+        // Estrategia: si hay varios CSVs, elegir el de mayor tamano
+        // (evita tomar un README.csv o ejemplo.csv vacio).
         $csvFile = null;
+        $csvFileSize = 0;
+        $csvCandidates = [];
         $iterator = new RecursiveIteratorIterator(
             new RecursiveDirectoryIterator($tempDir, RecursiveDirectoryIterator::SKIP_DOTS),
             RecursiveIteratorIterator::SELF_FIRST
@@ -89,19 +127,67 @@ function procesarImportacion($file, $post) {
         
         foreach ($iterator as $item) {
             if ($item->isFile() && strtolower($item->getExtension()) === 'csv') {
-                $csvFile = $item->getPathname();
-                break;
+                $size = $item->getSize();
+                $csvCandidates[] = ['path' => $item->getPathname(), 'size' => $size];
+                if ($size > $csvFileSize) {
+                    $csvFileSize = $size;
+                    $csvFile = $item->getPathname();
+                }
+            }
+        }
+        
+        // Tambien considerar archivos sin extension si el ZIP venia sin .csv
+        // pero con un nombre obvio. (Solo si no se encontro ningun .csv)
+        if (!$csvFile) {
+            $iterator2 = new RecursiveIteratorIterator(
+                new RecursiveDirectoryIterator($tempDir, RecursiveDirectoryIterator::SKIP_DOTS),
+                RecursiveIteratorIterator::SELF_FIRST
+            );
+            foreach ($iterator2 as $item) {
+                if ($item->isFile()) {
+                    $nombre = strtolower($item->getFilename());
+                    // Algunos HIS exportan como .txt cuando en realidad es CSV
+                    if (in_array($item->getExtension(), ['txt', 'dat'], true)) {
+                        $csvFile = $item->getPathname();
+                        $csvFileSize = $item->getSize();
+                        break;
+                    }
+                }
             }
         }
         
         if (!$csvFile) {
-            throw new Exception('No se encontro ningun archivo .csv dentro del archivo ZIP');
+            $lista = [];
+            foreach (new RecursiveIteratorIterator(
+                new RecursiveDirectoryIterator($tempDir, RecursiveDirectoryIterator::SKIP_DOTS),
+                RecursiveIteratorIterator::SELF_FIRST
+            ) as $item) {
+                if ($item->isFile()) {
+                    $lista[] = $item->getFilename();
+                }
+            }
+            $listaStr = implode(', ', $lista);
+            throw new Exception('No se encontro ningun archivo .csv dentro del archivo ZIP. Archivos encontrados: ' . $listaStr);
+        }
+        
+        if ($csvFileSize === 0) {
+            throw new Exception('El archivo CSV encontrado dentro del ZIP esta vacio (0 bytes). Verifique el contenido del ZIP.');
         }
         
         // Leer CSV
         $csvData = leerCSV($csvFile);
         if (empty($csvData)) {
-            throw new Exception('El archivo CSV esta vacio o no se pudo leer');
+            // Diagnostico adicional para identificar la causa real
+            $diag = 'No se pudo leer contenido del CSV. ';
+            $diag .= 'Tamano: ' . $csvFileSize . ' bytes. ';
+            $diag .= 'Ruta: ' . basename($csvFile) . '. ';
+            $fp = @fopen($csvFile, 'rb');
+            if ($fp) {
+                $muestra = fread($fp, 200);
+                fclose($fp);
+                $diag .= 'Primeros bytes (hex): ' . bin2hex(substr($muestra, 0, 30));
+            }
+            throw new Exception('El archivo CSV esta vacio o no se pudo leer. ' . $diag);
         }
         
         // Obtener columnas de la tabla destino
@@ -226,56 +312,153 @@ function procesarImportacion($file, $post) {
 }
 
 /**
- * Leer archivo CSV con manejo de delimitadores y codificacion
+ * Leer archivo CSV con manejo de delimitadores y codificacion.
+ * Robusto frente a:
+ *   - Archivos grandes (no carga todo el archivo en memoria).
+ *   - Distintos fines de linea (\r\n, \r, \n).
+ *   - BOM UTF-8 al inicio.
+ *   - Codificaciones Windows-1252 / ISO-8859-1 (comunes en exportaciones HIS).
+ *   - Delimitadores | ; , (autodeteccion).
+ *   - memory_limit insuficiente (se eleva temporalmente).
+ *
+ * Retorna array de filas (cada fila = array de strings) o [] si falla.
  */
 function leerCSV($filepath) {
-    $data = [];
-    $handle = fopen($filepath, 'r');
-    if (!$handle) return [];
-    
-    // Leer todo el contenido para convertir codificacion
-    $contenido = stream_get_contents($handle);
-    fclose($handle);
-    
-    // Detectar BOM UTF-8
-    $bom = "\xEF\xBB\xBF";
-    if (substr($contenido, 0, 3) === $bom) {
-        $contenido = substr($contenido, 3);
+    if (!is_file($filepath) || !is_readable($filepath)) {
+        return [];
     }
-    
-    // Detectar y convertir codificacion si no es UTF-8
-    // Los archivos HIS del MINSA suelen venir en Windows-1252 o ISO-8859-1
-    $encoding = mb_detect_encoding($contenido, ['UTF-8', 'Windows-1252', 'ISO-8859-1', 'ASCII'], true);
-    if ($encoding && $encoding !== 'UTF-8') {
-        $contenido = iconv($encoding, 'UTF-8//TRANSLIT//IGNORE', $contenido);
-    } elseif (!$encoding) {
-        // Si no se detecta, intentar convertir desde Windows-1252 (comun en exportaciones HIS)
-        $convertido = @iconv('Windows-1252', 'UTF-8//TRANSLIT//IGNORE', $contenido);
-        if ($convertido !== false) {
-            $contenido = $convertido;
+
+    // Activar deteccion automatica de fines de linea para archivos viejos
+    // (Mac usa \r, Windows usa \r\n). En PHP 8.1+ es obsoleto pero inofensivo.
+    @ini_set('auto_detect_line_endings', '1');
+
+    // Subir memory_limit temporalmente para archivos grandes
+    // (MaestroPaciente / NominalTrama pueden tener millones de filas).
+    $currentLimit = ini_get('memory_limit');
+    if ($currentLimit !== '-1') {
+        $currentBytes = returnBytesFromLimit($currentLimit);
+        // Al menos 512M
+        if ($currentBytes < 512 * 1024 * 1024) {
+            @ini_set('memory_limit', '512M');
         }
     }
-    
-    // Detectar delimitador desde la primera linea
-    $firstLine = strtok($contenido, "\n");
+
+    // Detectar BOM y leer primeras lineas en crudo para identificar
+    // delimitador y codificacion sin cargar todo el archivo en memoria.
+    $rawFirst = '';
+    $fp = fopen($filepath, 'rb');
+    if (!$fp) {
+        return [];
+    }
+    // Leer hasta 8 KB para inspeccionar cabecera (suficiente para detectar
+    // delimitador y BOM).
+    $rawFirst = fread($fp, 8192);
+    fclose($fp);
+
+    // Quitar BOM UTF-8 si existe
+    $bom = "\xEF\xBB\xBF";
+    $hasBom = (substr($rawFirst, 0, 3) === $bom);
+    if ($hasBom) {
+        $rawFirst = substr($rawFirst, 3);
+    }
+
+    // Detectar codificacion usando la muestra inicial
+    $encoding = mb_detect_encoding($rawFirst, ['UTF-8', 'Windows-1252', 'ISO-8859-1', 'ASCII'], true);
+
+    // Decidir funcion de conversion por linea
+    $convertEncoding = function($line) use ($encoding, $hasBom) {
+        // Quitar BOM si esta embebido al inicio de la primera linea
+        if (strlen($line) >= 3 && substr($line, 0, 3) === "\xEF\xBB\xBF") {
+            $line = substr($line, 3);
+        }
+        if ($encoding === 'UTF-8' || $encoding === 'ASCII') {
+            return $line;
+        }
+        if ($encoding) {
+            $converted = @iconv($encoding, 'UTF-8//TRANSLIT//IGNORE', $line);
+            if ($converted !== false && $converted !== '') {
+                return $converted;
+            }
+        }
+        // Fallback: intentar Windows-1252 (comun en exportaciones HIS del MINSA)
+        $converted = @iconv('Windows-1252', 'UTF-8//TRANSLIT//IGNORE', $line);
+        if ($converted !== false && $converted !== '') {
+            return $converted;
+        }
+        return $line;
+    };
+
+    // Detectar delimitador desde la primera linea (ya convertida)
+    $firstLineConverted = $convertEncoding($rawFirst);
+    // Tomar solo hasta el primer \n para no mezclar lineas
+    $firstLineForDelimiter = strtok($firstLineConverted, "\n");
+    $firstLineForDelimiter = str_replace(["\r\n", "\r"], ["\n", "\n"], $firstLineForDelimiter);
+
     $delimitador = ',';
-    if (strpos($firstLine, '|') !== false && strpos($firstLine, ',') === false && strpos($firstLine, ';') === false) {
+    $hasPipe = strpos($firstLineForDelimiter, '|') !== false;
+    $hasSemi = strpos($firstLineForDelimiter, ';') !== false;
+    $hasComma = strpos($firstLineForDelimiter, ',') !== false;
+    if ($hasPipe && !$hasComma && !$hasSemi) {
         $delimitador = '|';
-    } elseif (strpos($firstLine, ';') !== false && strpos($firstLine, ',') === false) {
+    } elseif ($hasSemi && !$hasComma) {
         $delimitador = ';';
     }
-    
-    // Crear stream temporal desde el contenido ya convertido
-    $tempStream = fopen('php://temp', 'r+');
-    fwrite($tempStream, $contenido);
-    rewind($tempStream);
-    
-    while (($row = fgetcsv($tempStream, 0, $delimitador)) !== false) {
-        $data[] = $row;
+
+    // Ahora procesar el archivo linea por linea usando fgetcsv.
+    // fgetcsv con length=0 (sin limite) y auto_detect_line_endings=1.
+    $handle = fopen($filepath, 'rb');
+    if (!$handle) {
+        return [];
     }
-    fclose($tempStream);
-    
+
+    $data = [];
+    $rowIndex = 0;
+    while (($row = fgetcsv($handle, 0, $delimitador)) !== false) {
+        // Si la fila completa vino en un solo campo porque no se detecto el
+        // delimitador correcto, intentar re-parsear con str_getcsv probando
+        // otros delimitadores.
+        if (count($row) === 1 && $delimitador !== '|' && $delimitador !== ';') {
+            $line = $row[0];
+            if (strpos($line, '|') !== false && strpos($line, ',') === false) {
+                $row = str_getcsv($line, '|');
+            } elseif (strpos($line, ';') !== false && strpos($line, ',') === false) {
+                $row = str_getcsv($line, ';');
+            }
+        }
+
+        // Convertir codificacion de cada celda
+        foreach ($row as &$cell) {
+            $cell = $convertEncoding($cell);
+        }
+        unset($cell);
+
+        // Quitar BOM del primer encabezado si quedo
+        if ($rowIndex === 0 && isset($row[0]) && strlen($row[0]) >= 3 && substr($row[0], 0, 3) === "\xEF\xBB\xBF") {
+            $row[0] = substr($row[0], 3);
+        }
+
+        $data[] = $row;
+        $rowIndex++;
+    }
+    fclose($handle);
+
     return $data;
+}
+
+/**
+ * Convierte un valor de memory_limit tipo "128M" / "1G" a bytes.
+ */
+function returnBytesFromLimit($val) {
+    if ($val === '-1') return -1;
+    $val = trim($val);
+    $last = strtolower(substr($val, -1));
+    $num = (int)$val;
+    switch ($last) {
+        case 'g': $num *= 1024;
+        case 'm': $num *= 1024;
+        case 'k': $num *= 1024;
+    }
+    return $num;
 }
 
 /**
@@ -506,7 +689,7 @@ include 'includes/header.php';
                 <h6 class="mb-0 fw-bold"><i class="fas fa-file-import me-2 text-primary"></i>Importar Archivo ZIP</h6>
             </div>
             <div class="card-body">
-                <form method="POST" action="" enctype="multipart/form-data" id="importForm">
+                <form method="POST" action="" enctype="multipart/form-data" id="importForm" class="no-auto-loading">
                     <input type="hidden" name="csrf_token" value="<?= generateCSRFToken() ?>">
                     
                     <!-- Seleccion de periodo (solo para NominalTrama) -->
