@@ -474,12 +474,26 @@ include 'includes/header.php';
 
 <!-- Mensaje de resultado -->
 <?php if ($mensaje): ?>
-<div class="alert alert-<?= $tipoMensaje ?> alert-dismissible fade show" role="alert">
+<div class="alert alert-<?= $tipoMensaje ?> alert-dismissible fade show" role="alert" id="mensajeResultado">
     <i class="fas fa-<?= $tipoMensaje === 'success' ? 'check-circle' : 'exclamation-triangle' ?> me-2"></i>
     <?= $mensaje ?>
     <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
 </div>
 <?php endif; ?>
+
+<!-- Overlay de carga para procesamiento (reutiliza .loading-overlay de style.css) -->
+<div id="processingOverlay" class="loading-overlay" style="display: none;">
+    <div class="loading-content">
+        <div class="loading-spinner"></div>
+        <h5 class="mb-2" id="processingTitle" style="color: var(--his-primary); font-weight: 700;">
+            <i class="fas fa-cogs me-2"></i>Procesando...
+        </h5>
+        <p class="mb-2 text-muted" id="processingMessage">Esto puede tardar varios minutos. Por favor espere.</p>
+        <p class="mb-0 text-muted small">
+            <i class="fas fa-info-circle me-1"></i>No cierre ni recargue esta pagina.
+        </p>
+    </div>
+</div>
 
 <!-- Formulario de Importacion y Log de Auditoria -->
 <div class="row">
@@ -694,23 +708,40 @@ include 'includes/header.php';
                     </div>
                     
                     <?php if ($hayPeriodosPendientes): ?>
-                    <!-- Botones rapidos para periodos pendientes -->
-                    <div class="mb-3">
-                        <label class="form-label fw-semibold small text-warning mb-1">
-                            <i class="fas fa-clock me-1"></i>Periodos pendientes de consolidar:
+                    <!-- Botones rapidos para periodos pendientes y lista de consolidados -->
+                    <div class="mb-3" id="panelPeriodos">
+                        <label class="form-label fw-semibold small text-warning mb-2 d-block">
+                            <i class="fas fa-clock me-1"></i>Periodos pendientes de consolidar (<?= count($periodosPendientes) ?>):
                         </label>
                         <?php foreach ($periodosPendientes as $pp): ?>
-                        <form method="POST" action="process.php" class="mb-1">
+                        <form method="POST" action="process.php" class="mb-1 process-form" data-periodo="<?= getNombreMes(trim($pp['Mes'])) ?> <?= trim($pp['Anio']) ?>">
                             <input type="hidden" name="csrf_token" value="<?= generateCSRFToken() ?>">
                             <input type="hidden" name="accion" value="procesar">
                             <input type="hidden" name="proc_anio" value="<?= htmlspecialchars(trim($pp['Anio'])) ?>">
                             <input type="hidden" name="proc_mes" value="<?= htmlspecialchars(trim($pp['Mes'])) ?>">
-                            <button type="submit" class="btn btn-warning btn-sm w-100 text-start">
+                            <button type="submit" class="btn btn-warning btn-sm w-100 text-start process-btn">
                                 <i class="fas fa-play me-1"></i> Procesar: <?= getNombreMes(trim($pp['Mes'])) ?> <?= trim($pp['Anio']) ?>
                                 <span class="badge bg-dark ms-1"><?= number_format($pp['regs_trama']) ?> regs.</span>
                             </button>
                         </form>
                         <?php endforeach; ?>
+                        
+                        <?php if (count($periodosConsolidados) > 0): ?>
+                        <div class="mt-3 pt-2 border-top">
+                            <label class="form-label fw-semibold small text-success mb-2 d-block">
+                                <i class="fas fa-check-double me-1"></i>Periodos ya consolidados (<?= count($periodosConsolidados) ?>):
+                            </label>
+                            <?php foreach ($periodosConsolidados as $pc): ?>
+                            <div class="alert alert-success py-1 px-2 mb-1 small d-flex justify-content-between align-items-center">
+                                <span>
+                                    <i class="fas fa-check-circle me-1"></i>
+                                    <strong><?= getNombreMes(trim($pc['Mes'])) ?> <?= trim($pc['Anio']) ?></strong>
+                                </span>
+                                <span class="badge bg-success"><?= number_format($pc['regs_consolidado']) ?> regs.</span>
+                            </div>
+                            <?php endforeach; ?>
+                        </div>
+                        <?php endif; ?>
                     </div>
                     <?php elseif (!empty($estadoConsolidacion)): ?>
                     <div class="alert alert-success py-2 mb-3">
@@ -721,19 +752,19 @@ include 'includes/header.php';
                     
                     <?php if ($ultimoPeriodoTrama && !$hayPeriodosPendientes): ?>
                     <!-- Opcion 1: Procesar periodo de NominalTrama importado (solo si no hay pendientes auto-detectados) -->
-                    <form method="POST" action="process.php" class="mb-3">
+                    <form method="POST" action="process.php" class="mb-3 process-form" data-periodo="<?= getNombreMes($ultimoPeriodoTrama['mes']) ?> <?= $ultimoPeriodoTrama['anio'] ?>">
                         <input type="hidden" name="csrf_token" value="<?= generateCSRFToken() ?>">
                         <input type="hidden" name="accion" value="procesar">
                         <input type="hidden" name="proc_anio" value="<?= htmlspecialchars($ultimoPeriodoTrama['anio']) ?>">
                         <input type="hidden" name="proc_mes" value="<?= htmlspecialchars($ultimoPeriodoTrama['mes']) ?>">
-                        <button type="submit" class="btn btn-success w-100">
+                        <button type="submit" class="btn btn-success w-100 process-btn">
                             <i class="fas fa-play me-1"></i> Procesar Periodo: <?= getNombreMes($ultimoPeriodoTrama['mes']) ?> <?= $ultimoPeriodoTrama['anio'] ?>
                         </button>
                     </form>
                     <?php endif; ?>
                     
                     <!-- Opcion 2: Procesar por periodo seleccionado manualmente -->
-                    <form method="POST" action="process.php" class="mb-3">
+                    <form method="POST" action="process.php" class="mb-3 process-form" data-periodo="periodo seleccionado">
                         <input type="hidden" name="csrf_token" value="<?= generateCSRFToken() ?>">
                         <input type="hidden" name="accion" value="procesar">
                         <div class="row g-2 mb-2">
@@ -754,16 +785,16 @@ include 'includes/header.php';
                                 </select>
                             </div>
                         </div>
-                        <button type="submit" class="btn btn-his btn-sm w-100">
+                        <button type="submit" class="btn btn-his btn-sm w-100 process-btn">
                             <i class="fas fa-play me-1"></i> Procesar por Periodo
                         </button>
                     </form>
                     
                     <!-- Opcion 3: Procesamiento completo -->
-                    <form method="POST" action="process.php">
+                    <form method="POST" action="process.php" class="process-form" data-accion-tipo="completo">
                         <input type="hidden" name="csrf_token" value="<?= generateCSRFToken() ?>">
                         <input type="hidden" name="accion" value="procesar_completo">
-                        <button type="submit" class="btn btn-outline-danger btn-sm w-100" 
+                        <button type="submit" class="btn btn-outline-danger btn-sm w-100 process-btn" 
                                 onclick="return confirm('Se reconstruira COMPLETAMENTE el consolidado. Esto puede tardar varios minutos. Desea continuar?')">
                             <i class="fas fa-sync-alt me-1"></i> Reconstruccion Completa del Consolidado
                         </button>
@@ -771,10 +802,10 @@ include 'includes/header.php';
                     
                     <!-- Resetear estado -->
                     <hr>
-                    <form method="POST" action="process.php">
+                    <form method="POST" action="process.php" class="process-form" data-accion-tipo="resetear">
                         <input type="hidden" name="csrf_token" value="<?= generateCSRFToken() ?>">
                         <input type="hidden" name="accion" value="resetear">
-                        <button type="submit" class="btn btn-outline-secondary btn-sm w-100"
+                        <button type="submit" class="btn btn-outline-secondary btn-sm w-100 process-btn"
                                 onclick="return confirm('Se reiniciara el estado de importacion. Debera importar los 4 archivos nuevamente antes de procesar. Desea continuar?')">
                             <i class="fas fa-redo me-1"></i> Resetear Estado de Importacion
                         </button>
@@ -875,11 +906,117 @@ document.getElementById('importForm').addEventListener('submit', function(e) {
     
     if (!confirm(msg)) {
         e.preventDefault();
+        return;
     }
     
-    // Mostrar indicador de carga
+    // Mostrar indicador de carga en el boton
     document.getElementById('btnImportar').innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i> Importando...';
     document.getElementById('btnImportar').disabled = true;
+    
+    // Mostrar overlay de procesamiento
+    mostrarOverlayProcesamiento('Importando datos...', 'Esto puede tardar varios minutos dependiendo del tamano del archivo. Por favor espere.');
+});
+
+// =====================================================
+// Manejo de overlay de carga para TODOS los formularios
+// que envian datos a process.php (procesamiento/consolidacion)
+// =====================================================
+
+/**
+ * Muestra el overlay de procesamiento con un titulo y mensaje personalizados
+ */
+function mostrarOverlayProcesamiento(titulo, mensaje) {
+    var overlay = document.getElementById('processingOverlay');
+    var titleEl = document.getElementById('processingTitle');
+    var msgEl = document.getElementById('processingMessage');
+    
+    if (titleEl) {
+        titleEl.innerHTML = '<i class="fas fa-cogs me-2"></i>' + titulo;
+    }
+    if (msgEl) {
+        msgEl.textContent = mensaje;
+    }
+    if (overlay) {
+        overlay.style.display = 'flex';
+    }
+}
+
+/**
+ * Intercepta el envio de TODOS los formularios con clase .process-form
+ * y muestra el overlay de procesamiento antes de enviar.
+ */
+document.querySelectorAll('form.process-form').forEach(function(form) {
+    form.addEventListener('submit', function(e) {
+        var accionInput = form.querySelector('input[name="accion"]');
+        var accion = accionInput ? accionInput.value : 'procesar';
+        var titulo = 'Procesando...';
+        var mensaje = 'Esto puede tardar varios minutos. Por favor espere.';
+        
+        // Boton que disparo el submit (para extraer info del periodo)
+        var boton = form.querySelector('button.process-btn');
+        var textoBoton = boton ? boton.textContent.trim() : '';
+        
+        if (accion === 'procesar') {
+            // Intentar extraer periodo del atributo data-periodo del form
+            var periodo = form.getAttribute('data-periodo');
+            if (periodo && periodo !== 'periodo seleccionado') {
+                titulo = 'Procesando periodo: ' + periodo;
+                mensaje = 'Consolidando datos del periodo ' + periodo + '. Esto puede tardar varios minutos. Por favor espere.';
+            } else {
+                // Es el formulario manual "Procesar por Periodo"
+                var anioSel = form.querySelector('select[name="proc_anio"]');
+                var mesSel = form.querySelector('select[name="proc_mes"]');
+                var anioVal = anioSel ? anioSel.value : '';
+                var mesVal = mesSel ? mesSel.value : '';
+                
+                if (anioVal && mesVal) {
+                    titulo = 'Procesando periodo: ' + mesVal + '/' + anioVal;
+                    mensaje = 'Consolidando datos del periodo seleccionado. Esto puede tardar varios minutos. Por favor espere.';
+                } else if (anioVal || mesVal) {
+                    titulo = 'Procesando periodos...';
+                    mensaje = 'Consolidando datos. Esto puede tardar varios minutos. Por favor espere.';
+                } else {
+                    titulo = 'Procesando TODOS los periodos...';
+                    mensaje = 'Se procesaran todos los periodos disponibles. Esto puede tardar varios minutos. Por favor espere.';
+                }
+            }
+        } else if (accion === 'procesar_completo') {
+            titulo = 'Reconstruccion completa del consolidado';
+            mensaje = 'Se reconstruira COMPLETAMENTE el consolidado. Esto puede tardar varios minutos. Por favor espere.';
+        } else if (accion === 'resetear') {
+            titulo = 'Reseteando estado de importacion...';
+            mensaje = 'Por favor espere mientras se reinicia el estado.';
+        }
+        
+        // Cambiar el texto del boton para feedback adicional
+        if (boton) {
+            // Guardar el HTML original por si falla el envio
+            boton.setAttribute('data-original-html', boton.innerHTML);
+            boton.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i> Procesando...';
+            boton.disabled = true;
+        }
+        
+        // Mostrar el overlay
+        mostrarOverlayProcesamiento(titulo, mensaje);
+    });
+});
+
+// =====================================================
+// Auto-scroll al panel de periodos o al mensaje despues
+// de recargar la pagina (para que el usuario vea el resultado)
+// =====================================================
+document.addEventListener('DOMContentLoaded', function() {
+    // Si hay un mensaje de resultado, hacer scroll hacia el
+    var mensajeDiv = document.getElementById('mensajeResultado');
+    var panelPeriodos = document.getElementById('panelPeriodos');
+    
+    if (mensajeDiv) {
+        // Scroll suave al mensaje
+        mensajeDiv.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    } else if (panelPeriodos) {
+        // Si no hay mensaje pero hay panel de periodos, scroll al panel
+        panelPeriodos.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
 });
 </script>
 
