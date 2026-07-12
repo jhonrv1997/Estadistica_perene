@@ -1,0 +1,54 @@
+# Sistema HIS - Configuracion Apache
+
+# Proteger directorios sensibles
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+    
+    # Bloquear acceso directo a includes
+    RewriteRule ^includes/ - [F,L]
+    
+    # Bloquear acceso directo a sql
+    RewriteRule ^sql/ - [F,L]
+    
+    # Bloquear acceso a archivos temporales en uploads
+    RewriteRule ^uploads/temp_ - [F,L]
+</IfModule>
+
+# Proteger archivos de configuracion
+<FilesMatch "^(config\.php|functions\.php|auth\.php)$">
+    Order deny,allow
+    Deny from all
+</FilesMatch>
+
+# Impedir listado de directorios
+Options -Indexes
+
+# Configuracion PHP recomendada
+<IfModule mod_php.c>
+    php_value upload_max_filesize 100M
+    php_value post_max_size 110M
+    php_value max_execution_time 600
+    php_value max_input_time 600
+    php_value memory_limit 512M
+</IfModule>
+
+# Cache de assets
+<IfModule mod_expires.c>
+    ExpiresActive On
+    ExpiresByType text/css "access plus 1 week"
+    ExpiresByType application/javascript "access plus 1 week"
+    ExpiresByType image/png "access plus 1 month"
+    ExpiresByType image/jpeg "access plus 1 month"
+</IfModule>
+
+# Compresion
+<IfModule mod_deflate.c>
+    AddOutputFilterByType DEFLATE text/html text/css application/javascript application/json
+</IfModule>
+
+# Seguridad
+<IfModule mod_headers.c>
+    Header set X-Content-Type-Options "nosniff"
+    Header set X-Frame-Options "SAMEORIGIN"
+    Header set X-XSS-Protection "1; mode=block"
+</IfModule>
