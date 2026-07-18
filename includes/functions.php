@@ -69,14 +69,17 @@ function getNombreMes($mes) {
 function logImportacion($datos) {
     try {
         $pdo = getDBConnection();
+        // Zona horaria Lima/Peru para fecha_operacion
+        $tzLima = new DateTimeZone('America/Lima');
+        $fechaOperacion = (new DateTime('now', $tzLima))->format('Y-m-d H:i:s');
         $sql = "INSERT INTO LOG_IMPORTACION 
                 (tipo_operacion, tipo_archivo, nombre_archivo, tabla_destino, 
                  periodo_mes, periodo_anio, registros_procesados, modo_importacion, 
-                 usuario, estado, mensaje, duracion_segundos)
+                 fecha_operacion, usuario, estado, mensaje, duracion_segundos)
                 VALUES 
                 (:tipo_operacion, :tipo_archivo, :nombre_archivo, :tabla_destino,
                  :periodo_mes, :periodo_anio, :registros_procesados, :modo_importacion,
-                 :usuario, :estado, :mensaje, :duracion_segundos)";
+                 :fecha_operacion, :usuario, :estado, :mensaje, :duracion_segundos)";
         $stmt = $pdo->prepare($sql);
         return $stmt->execute([
             ':tipo_operacion' => $datos['tipo_operacion'],
@@ -87,6 +90,7 @@ function logImportacion($datos) {
             ':periodo_anio' => $datos['periodo_anio'] ?? null,
             ':registros_procesados' => $datos['registros_procesados'] ?? 0,
             ':modo_importacion' => $datos['modo_importacion'] ?? null,
+            ':fecha_operacion' => $fechaOperacion,
             ':usuario' => $datos['usuario'] ?? $_SESSION['usuario'] ?? 'sistema',
             ':estado' => $datos['estado'],
             ':mensaje' => $datos['mensaje'] ?? null,
