@@ -130,7 +130,7 @@ function detectFileType($filename) {
         return [
             'tipo' => 'NominalTrama',
             'tabla' => 'NOMINAL_TRAMA_NUEVO',
-            'modo' => 'PERIODO'
+            'modo' => 'REEMPLAZO'
         ];
     }
     return null;
