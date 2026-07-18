@@ -2,6 +2,7 @@
 /**
  * Sistema de Gestion de Datos HIS
  * Dashboard de Atenciones con filtros y exportacion
+ * Mejora: No carga datos hasta que se elijan filtros
  */
 
 require_once 'includes/auth.php';
@@ -11,7 +12,7 @@ require_once 'includes/functions.php';
 
 $pdo = getDBConnection();
 
-// Obtener opciones para filtros
+// Obtener opciones para filtros (siempre necesarias para los dropdowns)
 $anios = $pdo->query("SELECT DISTINCT Anio FROM T_CONSOLIDADO_NUEVA_TRAMA_HISMINSA_DETALLADO WHERE Anio IS NOT NULL ORDER BY Anio DESC")->fetchAll(PDO::FETCH_COLUMN);
 $establecimientos = $pdo->query("SELECT DISTINCT Nombre_Establecimiento FROM T_CONSOLIDADO_NUEVA_TRAMA_HISMINSA_DETALLADO WHERE Nombre_Establecimiento IS NOT NULL ORDER BY Nombre_Establecimiento")->fetchAll(PDO::FETCH_COLUMN);
 $gruposEdad = ['01 a 29 dias', '01 a 11 meses', '01 a 04 anos', '05 a 11 anos', '12 a 17 anos', '18 a 29 anos', '30 a 59 anos', '60 anos a mas'];
@@ -28,88 +29,104 @@ $fValorLab = $_GET['valor_lab'] ?? '';
 $fDocPersonal = trim($_GET['doc_personal'] ?? '');
 $fDocPaciente = trim($_GET['doc_paciente'] ?? '');
 
-// Construir consulta con filtros
-$where = "1=1";
-$params = [];
+// Determinar si se ha aplicado al menos un filtro
+$hayFiltros = ($fAnio !== '' || $fMes !== '' || $fEstablecimiento !== '' || $fGrupoEdad !== '' 
+    || $fCodigoItem !== '' || $fTipoDiagnostico !== '' || $fValorLab !== '' 
+    || $fDocPersonal !== '' || $fDocPaciente !== '');
 
-if ($fAnio !== '') {
-    $where .= " AND Anio = :anio";
-    $params[':anio'] = $fAnio;
-}
-if ($fMes !== '') {
-    $where .= " AND CAST(TRIM(Mes) AS UNSIGNED) = :mes";
-    $params[':mes'] = intval($fMes);
-}
-if ($fEstablecimiento !== '') {
-    $where .= " AND Nombre_Establecimiento = :establecimiento";
-    $params[':establecimiento'] = $fEstablecimiento;
-}
-if ($fGrupoEdad !== '') {
-    $where .= " AND Grupo_Edad = :grupo_edad";
-    $params[':grupo_edad'] = $fGrupoEdad;
-}
-if ($fCodigoItem !== '') {
-    $where .= " AND Codigo_Item LIKE :codigo_item";
-    $params[':codigo_item'] = $fCodigoItem;
-}
-if ($fTipoDiagnostico !== '') {
-    $where .= " AND Tipo_Diagnostico = :tipo_diagnostico";
-    $params[':tipo_diagnostico'] = $fTipoDiagnostico;
-}
-if ($fValorLab !== '') {
-    $where .= " AND Valor_Lab LIKE :valor_lab";
-    $params[':valor_lab'] = '%' . $fValorLab . '%';
-}
-if ($fDocPersonal !== '') {
-    $where .= " AND Numero_Documento_Personal LIKE :doc_personal";
-    $params[':doc_personal'] = '%' . $fDocPersonal . '%';
-}
-if ($fDocPaciente !== '') {
-    $where .= " AND Numero_Documento_Paciente LIKE :doc_paciente";
-    $params[':doc_paciente'] = '%' . $fDocPaciente . '%';
-}
+// Solo ejecutar consultas de datos si hay filtros aplicados
+$totalRegistros = 0;
+$datos = [];
+$stats = ['total_pacientes' => 0, 'total_personal' => 0, 'total_establecimientos' => 0, 'total_items' => 0];
+$totalPaginas = 0;
+$pagina = 1;
+$offset = 0;
 
-// Conteo total
-$countSql = "SELECT COUNT(*) FROM T_CONSOLIDADO_NUEVA_TRAMA_HISMINSA_DETALLADO WHERE " . $where;
-$countStmt = $pdo->prepare($countSql);
-$countStmt->execute($params);
-$totalRegistros = $countStmt->fetchColumn();
+if ($hayFiltros) {
+    // Construir consulta con filtros
+    $where = "1=1";
+    $params = [];
 
-// Paginacion
-$porPagina = 50;
-$pagina = max(1, intval($_GET['pagina'] ?? 1));
-$offset = ($pagina - 1) * $porPagina;
-$totalPaginas = ceil($totalRegistros / $porPagina);
+    if ($fAnio !== '') {
+        $where .= " AND Anio = :anio";
+        $params[':anio'] = $fAnio;
+    }
+    if ($fMes !== '') {
+        $where .= " AND CAST(TRIM(Mes) AS UNSIGNED) = :mes";
+        $params[':mes'] = intval($fMes);
+    }
+    if ($fEstablecimiento !== '') {
+        $where .= " AND Nombre_Establecimiento = :establecimiento";
+        $params[':establecimiento'] = $fEstablecimiento;
+    }
+    if ($fGrupoEdad !== '') {
+        $where .= " AND Grupo_Edad = :grupo_edad";
+        $params[':grupo_edad'] = $fGrupoEdad;
+    }
+    if ($fCodigoItem !== '') {
+        $where .= " AND Codigo_Item LIKE :codigo_item";
+        $params[':codigo_item'] = $fCodigoItem;
+    }
+    if ($fTipoDiagnostico !== '') {
+        $where .= " AND Tipo_Diagnostico = :tipo_diagnostico";
+        $params[':tipo_diagnostico'] = $fTipoDiagnostico;
+    }
+    if ($fValorLab !== '') {
+        $where .= " AND Valor_Lab LIKE :valor_lab";
+        $params[':valor_lab'] = '%' . $fValorLab . '%';
+    }
+    if ($fDocPersonal !== '') {
+        $where .= " AND Numero_Documento_Personal LIKE :doc_personal";
+        $params[':doc_personal'] = '%' . $fDocPersonal . '%';
+    }
+    if ($fDocPaciente !== '') {
+        $where .= " AND Numero_Documento_Paciente LIKE :doc_paciente";
+        $params[':doc_paciente'] = '%' . $fDocPaciente . '%';
+    }
 
-// Consulta de datos
-$campos = "Id_Cita, Anio, Mes, Dia, Fecha_Atencion, Descripcion_Ups, Nombre_Establecimiento,
-           Numero_Documento_Paciente, Apellido_Paterno_Paciente, Apellido_Materno_Paciente, 
-           Nombres_Paciente, Fecha_Nacimiento_Paciente, Id_Genero, Grupo_Edad,
-           Numero_Documento_Personal, Apellido_Paterno_Personal, Nombres_Personal,
-           Descripcion_Profesion, Codigo_Item, Descripcion_Item, Tipo_Diagnostico, 
-           Valor_Lab, Descripcion_Financiador, Descripcion_Etnia";
+    // Conteo total
+    $countSql = "SELECT COUNT(*) FROM T_CONSOLIDADO_NUEVA_TRAMA_HISMINSA_DETALLADO WHERE " . $where;
+    $countStmt = $pdo->prepare($countSql);
+    $countStmt->execute($params);
+    $totalRegistros = $countStmt->fetchColumn();
 
-$dataSql = "SELECT {$campos} FROM T_CONSOLIDADO_NUEVA_TRAMA_HISMINSA_DETALLADO WHERE {$where} ORDER BY Fecha_Atencion DESC LIMIT {$porPagina} OFFSET {$offset}";
-$dataStmt = $pdo->prepare($dataSql);
-$dataStmt->execute($params);
-$datos = $dataStmt->fetchAll();
+    // Paginacion
+    $porPagina = 50;
+    $pagina = max(1, intval($_GET['pagina'] ?? 1));
+    $offset = ($pagina - 1) * $porPagina;
+    $totalPaginas = ceil($totalRegistros / $porPagina);
 
-// Estadisticas rapidas
-$statsSql = "SELECT 
-    COUNT(DISTINCT Id_Paciente) as total_pacientes,
-    COUNT(DISTINCT Id_Personal) as total_personal,
-    COUNT(DISTINCT Id_Establecimiento) as total_establecimientos,
-    COUNT(DISTINCT Codigo_Item) as total_items
-    FROM T_CONSOLIDADO_NUEVA_TRAMA_HISMINSA_DETALLADO WHERE " . $where;
-$statsStmt = $pdo->prepare($statsSql);
-$statsStmt->execute($params);
-$stats = $statsStmt->fetch();
+    // Consulta de datos
+    $campos = "Id_Cita, Anio, Mes, Dia, Fecha_Atencion, Descripcion_Ups, Nombre_Establecimiento,
+               Numero_Documento_Paciente, Apellido_Paterno_Paciente, Apellido_Materno_Paciente, 
+               Nombres_Paciente, Fecha_Nacimiento_Paciente, Id_Genero, Grupo_Edad,
+               Numero_Documento_Personal, Apellido_Paterno_Personal, Nombres_Personal,
+               Descripcion_Profesion, Codigo_Item, Descripcion_Item, Tipo_Diagnostico, 
+               Valor_Lab, Descripcion_Financiador, Descripcion_Etnia";
+
+    $dataSql = "SELECT {$campos} FROM T_CONSOLIDADO_NUEVA_TRAMA_HISMINSA_DETALLADO WHERE {$where} ORDER BY Fecha_Atencion DESC LIMIT {$porPagina} OFFSET {$offset}";
+    $dataStmt = $pdo->prepare($dataSql);
+    $dataStmt->execute($params);
+    $datos = $dataStmt->fetchAll();
+
+    // Estadisticas rapidas
+    $statsSql = "SELECT 
+        COUNT(DISTINCT Id_Paciente) as total_pacientes,
+        COUNT(DISTINCT Id_Personal) as total_personal,
+        COUNT(DISTINCT Id_Establecimiento) as total_establecimientos,
+        COUNT(DISTINCT Codigo_Item) as total_items
+        FROM T_CONSOLIDADO_NUEVA_TRAMA_HISMINSA_DETALLADO WHERE " . $where;
+    $statsStmt = $pdo->prepare($statsSql);
+    $statsStmt->execute($params);
+    $stats = $statsStmt->fetch();
+}
 
 $pageTitle = 'Dashboard Atenciones - Sistema HIS';
 include 'includes/header.php';
 ?>
 
 <!-- Estadisticas rapidas -->
+<?php if ($hayFiltros): ?>
 <div class="row mb-4">
     <div class="col-md-3 col-6 mb-3">
         <div class="stat-card stat-primary">
@@ -148,6 +165,7 @@ include 'includes/header.php';
         </div>
     </div>
 </div>
+<?php endif; ?>
 
 <!-- Filtros -->
 <div class="card shadow-sm mb-4">
@@ -235,6 +253,16 @@ include 'includes/header.php';
     </div>
 </div>
 
+<!-- Mensaje cuando no hay filtros seleccionados -->
+<?php if (!$hayFiltros): ?>
+<div class="card shadow-sm">
+    <div class="card-body text-center py-5">
+        <i class="fas fa-filter fa-3x text-muted mb-3"></i>
+        <h5 class="text-muted mb-2">Seleccione al menos un filtro para consultar</h5>
+        <p class="text-muted small mb-0">Use los filtros de arriba (Anio, Mes, Establecimiento, etc.) para cargar los datos del consolidado.</p>
+    </div>
+</div>
+<?php else: ?>
 <!-- Resultados -->
 <div class="card shadow-sm">
     <div class="card-header bg-white d-flex justify-content-between align-items-center flex-wrap gap-2">
@@ -353,7 +381,7 @@ include 'includes/header.php';
         </nav>
         <div class="text-center mt-2">
             <small class="text-muted">
-                Mostrando <?= number_format($offset + 1) ?> - <?= number_format(min($offset + $porPagina, $totalRegistros)) ?> 
+                Mostrando <?= number_format($offset + 1) ?> - <?= number_format(min($offset + 50, $totalRegistros)) ?> 
                 de <?= number_format($totalRegistros) ?> registros 
                 | Pagina <?= $pagina ?> de <?= $totalPaginas ?>
             </small>
@@ -361,5 +389,6 @@ include 'includes/header.php';
     </div>
     <?php endif; ?>
 </div>
+<?php endif; ?>
 
 <?php include 'includes/footer.php'; ?>

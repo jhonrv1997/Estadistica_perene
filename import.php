@@ -224,19 +224,13 @@ function procesarImportacion($file, $post) {
         }
         
         try {
-            // Modo de importacion segun tipo
-            if ($fileInfo['modo'] === 'REEMPLAZO') {
-                if ($soportaTransacciones) {
-                    // InnoDB: DELETE dentro de transaccion (permite rollback)
-                    $pdo->exec("DELETE FROM `{$fileInfo['tabla']}`");
-                } else {
-                    // MyISAM: TRUNCATE (mas rapido que DELETE y libera espacio en disco)
-                    $pdo->exec("TRUNCATE TABLE `{$fileInfo['tabla']}`");
-                }
+            // Modo de importacion: siempre TRUNCATE (vaciado total) antes de insertar
+            // Aplica a las 4 tablas: MAESTRO_REGISTRADOR, MAESTRO_PERSONAL,
+            // MAESTRO_PACIENTE y NOMINAL_TRAMA_NUEVO
+            if ($soportaTransacciones) {
+                $pdo->exec("DELETE FROM `{$fileInfo['tabla']}`");
             } else {
-                // Eliminar solo datos del periodo seleccionado (NominalTrama)
-                $stmt = $pdo->prepare("DELETE FROM `{$fileInfo['tabla']}` WHERE Anio = ? AND CAST(TRIM(Mes) AS UNSIGNED) = ?");
-                $stmt->execute([$periodoAnio, intval($periodoMes)]);
+                $pdo->exec("TRUNCATE TABLE `{$fileInfo['tabla']}`");
             }
             
             // =========================================================
@@ -369,12 +363,47 @@ function procesarImportacion($file, $post) {
             
             $msg = "Importacion exitosa: {$registrosInsertados} registros en {$fileInfo['tabla']} ({$duration}s)";
             
+            // =====================================================
+            // PASO ESPECIAL para NominalTrama (mejora 2.4 + 3):
+            // - Eliminar del consolidado los registros del periodo
+            //   seleccionado (Anio + Mes)
+            // - Ejecutar la consolidacion automaticamente para ese
+            //   periodo despues de la importacion
+            // =====================================================
+            $consolidacionMsg = '';
+            if ($fileInfo['tipo'] === 'NominalTrama' && $periodoAnio && $periodoMes) {
+                // 2.4: Eliminar registros del consolidado para el periodo seleccionado
+                $stmtDel = $pdo->prepare("DELETE FROM T_CONSOLIDADO_NUEVA_TRAMA_HISMINSA_DETALLADO WHERE TRIM(Anio) = ? AND CAST(TRIM(Mes) AS UNSIGNED) = ?");
+                $stmtDel->execute([$periodoAnio, intval($periodoMes)]);
+                $regsEliminadosConsolidado = $stmtDel->rowCount();
+                
+                // 3: Ejecutar consolidacion automaticamente para el periodo importado
+                try {
+                    $resultadoConsolidacion = ejecutarProcesamiento($periodoAnio, $periodoMes);
+                    if ($resultadoConsolidacion['success']) {
+                        $consolidacionMsg = "<br><span class='text-info fw-bold'><i class='fas fa-cogs me-1'></i>Consolidacion automatica ejecutada para " . getNombreMes($periodoMes) . " {$periodoAnio}: " . number_format($resultadoConsolidacion['registros']) . " registros consolidados (" . $resultadoConsolidacion['duracion'] . "s). Registros previos del consolidado eliminados: " . number_format($regsEliminadosConsolidado) . "</span>";
+                    } else {
+                        $consolidacionMsg = "<br><span class='text-warning'><i class='fas fa-exclamation-triangle me-1'></i>La consolidacion automatica fallo: " . clean($resultadoConsolidacion['mensaje']) . "</span>";
+                    }
+                } catch (Exception $eConsol) {
+                    $consolidacionMsg = "<br><span class='text-warning'><i class='fas fa-exclamation-triangle me-1'></i>Error en consolidacion automatica: " . clean($eConsol->getMessage()) . "</span>";
+                }
+            }
+            
             // Verificar si los 4 archivos ya estan importados
             if (verificarTodosImportados()) {
-                $msg .= "<br><span class='text-success fw-bold'><i class='fas fa-check-circle me-1'></i>Los 4 archivos han sido importados. Puede ejecutar el Procesamiento (Consolidacion).</span>";
+                $msg .= "<br><span class='text-success fw-bold'><i class='fas fa-check-circle me-1'></i>Los 4 archivos han sido importados.";
+                if ($consolidacionMsg) {
+                    $msg .= $consolidacionMsg;
+                } else {
+                    $msg .= " Puede ejecutar el Procesamiento (Consolidacion) para los periodos pendientes.</span>";
+                }
             } else {
                 $faltantes = obtenerArchivosFaltantes();
-                $msg .= "<br><span class='text-warning'><i class='fas fa-exclamation-circle me-1'></i>Falta importar: <strong>" . implode(', ', $faltantes) . "</strong> para habilitar el procesamiento.</span>";
+                $msg .= "<br><span class='text-warning'><i class='fas fa-exclamation-circle me-1'></i>Falta importar: <strong>" . implode(', ', $faltantes) . "</strong> para habilitar el procesamiento.";
+                if ($consolidacionMsg) {
+                    $msg .= $consolidacionMsg;
+                }
             }
             
             return ['exito' => true, 'mensaje' => $msg];
@@ -795,6 +824,31 @@ $hayPeriodosPendientes = count($periodosPendientes) > 0;
 // Obtener ultimos 16 registros del log de importacion
 $ultimosLogs = $pdo->query("SELECT * FROM LOG_IMPORTACION ORDER BY fecha_operacion DESC LIMIT 16")->fetchAll();
 
+// Mejora 4: Obtener fecha/hora de la ultima importacion exitosa por cada tabla
+// Se consulta LOG_IMPORTACION para tener el historial real (no depende de IMPORT_ESTADO)
+$ultimaImportacionPorTabla = [];
+try {
+    // Consulta compatible con cPanel/MySQL sin procedimientos almacenados
+    // Usa subquery para obtener la ultima fecha por tabla_destino
+    $tablasDestino = ['MAESTRO_REGISTRADOR', 'MAESTRO_PERSONAL', 'MAESTRO_PACIENTE', 'NOMINAL_TRAMA_NUEVO'];
+    foreach ($tablasDestino as $tablaDest) {
+        $stmtUlt = $pdo->prepare("
+            SELECT tipo_archivo, tabla_destino, fecha_operacion, registros_procesados, nombre_archivo
+            FROM LOG_IMPORTACION 
+            WHERE tipo_operacion = 'IMPORT' AND estado = 'EXITO' AND tabla_destino = ?
+            ORDER BY fecha_operacion DESC
+            LIMIT 1
+        ");
+        $stmtUlt->execute([$tablaDest]);
+        $rowUlt = $stmtUlt->fetch();
+        if ($rowUlt) {
+            $ultimaImportacionPorTabla[$tablaDest] = $rowUlt;
+        }
+    }
+} catch (Exception $e) {
+    // Fallback silencioso
+}
+
 // Procesar mensajes de sesion (desde process.php)
 if (isset($_SESSION['mensaje'])) {
     $mensaje = $_SESSION['mensaje'];
@@ -824,13 +878,15 @@ include 'includes/header.php';
                 <div class="row g-3">
                     <?php 
                     $iconos = [
-                        'MaestroRegistrador' => ['icon' => 'fa-user-check', 'color' => 'primary', 'label' => 'Maestro Registrador'],
-                        'MaestroPersonal' => ['icon' => 'fa-user-md', 'color' => 'success', 'label' => 'Maestro Personal'],
-                        'MaestroPaciente' => ['icon' => 'fa-user-injured', 'color' => 'info', 'label' => 'Maestro Paciente'],
-                        'MaestroTrama' => ['icon' => 'fa-file-medical', 'color' => 'warning', 'label' => 'Nominal Trama'],
+                        'MaestroRegistrador' => ['icon' => 'fa-user-check', 'color' => 'primary', 'label' => 'Maestro Registrador', 'tabla' => 'MAESTRO_REGISTRADOR'],
+                        'MaestroPersonal' => ['icon' => 'fa-user-md', 'color' => 'success', 'label' => 'Maestro Personal', 'tabla' => 'MAESTRO_PERSONAL'],
+                        'MaestroPaciente' => ['icon' => 'fa-user-injured', 'color' => 'info', 'label' => 'Maestro Paciente', 'tabla' => 'MAESTRO_PACIENTE'],
+                        'MaestroTrama' => ['icon' => 'fa-file-medical', 'color' => 'warning', 'label' => 'Nominal Trama', 'tabla' => 'NOMINAL_TRAMA_NUEVO'],
                     ];
                     foreach ($importEstado as $tipo => $info):
-                        $cfg = $iconos[$tipo] ?? ['icon' => 'fa-file', 'color' => 'secondary', 'label' => $tipo];
+                        $cfg = $iconos[$tipo] ?? ['icon' => 'fa-file', 'color' => 'secondary', 'label' => $tipo, 'tabla' => ''];
+                        $tablaNombre = $cfg['tabla'];
+                        $logUltimo = $ultimaImportacionPorTabla[$tablaNombre] ?? null;
                     ?>
                     <div class="col-lg-3 col-md-6 col-sm-6">
                         <div class="import-status-card <?= $info['importado'] ? 'status-done' : 'status-pending' ?>">
@@ -844,13 +900,20 @@ include 'includes/header.php';
                                         <small class="text-success">
                                             <i class="fas fa-check-circle me-1"></i>
                                             <?= number_format($info['registros_importados']) ?> regs.
-                                            <?= formatDateTime($info['fecha_importacion']) ?>
                                         </small>
                                         <?php if ($tipo === 'NominalTrama' && $info['periodo_anio'] && $info['periodo_mes']): ?>
                                             <small class="text-muted d-block">Periodo: <?= getNombreMes($info['periodo_mes']) ?> <?= $info['periodo_anio'] ?></small>
                                         <?php endif; ?>
+                                        <?php if ($logUltimo): ?>
+                                            <small class="text-muted d-block"><i class="fas fa-clock me-1"></i>Ultima importacion: <?= formatDateTime($logUltimo['fecha_operacion']) ?></small>
+                                        <?php elseif ($info['fecha_importacion']): ?>
+                                            <small class="text-muted d-block"><i class="fas fa-clock me-1"></i>Importado: <?= formatDateTime($info['fecha_importacion']) ?></small>
+                                        <?php endif; ?>
                                     <?php else: ?>
                                         <small class="text-danger"><i class="fas fa-times-circle me-1"></i>Pendiente</small>
+                                        <?php if ($logUltimo): ?>
+                                            <small class="text-muted d-block"><i class="fas fa-clock me-1"></i>Ultima: <?= formatDateTime($logUltimo['fecha_operacion']) ?></small>
+                                        <?php endif; ?>
                                     <?php endif; ?>
                                 </div>
                             </div>
@@ -1146,7 +1209,8 @@ include 'includes/header.php';
                 <div class="mb-3">
                     <h6 class="fw-semibold text-warning">NominalTrama</h6>
                     <p class="small text-muted mb-1">Archivo: NominalTramaxxxxxxxx_xxxxxx.zip</p>
-                    <span class="badge bg-warning text-dark">Reemplazo por periodo</span>
+                    <span class="badge bg-danger">Vaciado total + Consolidacion auto</span>
+                    <p class="small text-muted mb-0 mt-1">Vacia toda la tabla NOMINAL_TRAMA_NUEVO, elimina el periodo del consolidado y ejecuta la consolidacion automaticamente.</p>
                 </div>
                 <hr>
                 <div class="alert alert-warning py-2 mb-0">
@@ -1333,7 +1397,7 @@ document.getElementById('archivo_zip').addEventListener('change', function() {
     if (filename.includes('NOMINALTRAMA')) {
         periodoSection.style.display = 'block';
         tipoDetectado.className = 'alert alert-warning mb-3';
-        tipoDetectadoText.textContent = 'Tipo detectado: NominalTrama - Reemplazo por periodo. Seleccione Mes y Anio.';
+        tipoDetectadoText.textContent = 'Tipo detectado: NominalTrama - Vaciado total de NOMINAL_TRAMA_NUEVO. Seleccione Mes y Anio para eliminar el periodo del consolidado y ejecutar consolidacion automatica.';
     } else if (filename.includes('MAESTROREGISTRADOR')) {
         periodoSection.style.display = 'none';
         tipoDetectado.className = 'alert alert-primary mb-3';
@@ -1365,9 +1429,9 @@ document.getElementById('importForm').addEventListener('submit', function(e) {
             alert('Debe seleccionar el periodo (Anio y Mes) para la importacion de NominalTrama.');
             return;
         }
-        msg += 'Se reemplazaran los datos del periodo seleccionado en NominalTrama. El procesamiento se ejecutara despues de importar los 4 archivos.';
+        msg += 'Se VACIARAN TODOS los registros de NOMINAL_TRAMA_NUEVO y se insertaran los nuevos. Tambien se eliminaran los registros del consolidado para el periodo ' + mes + '/' + anio + ' y se ejecutara la consolidacion automaticamente.';
     } else if (filename.includes('MAESTRO')) {
-        msg += 'Se eliminaran TODOS los registros actuales de la tabla y se reemplazaran con los nuevos. El procesamiento se ejecutara despues de importar los 4 archivos.';
+        msg += 'Se eliminaran TODOS los registros actuales de la tabla y se reemplazaran con los nuevos.';
     }
     
     if (!confirm(msg)) {
