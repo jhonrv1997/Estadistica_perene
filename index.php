@@ -5,6 +5,7 @@
  */
 
 require_once 'config.php';
+require_once 'includes/auth.php';
 
 // Si ya esta autenticado, redirigir al home
 if (isset($_SESSION['usuario_id'])) {
@@ -30,8 +31,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
     }
 }
-
-require_once 'includes/auth.php';
 
 $pageTitle = 'Sistema HIS - Iniciar Sesion';
 include 'includes/header.php';
