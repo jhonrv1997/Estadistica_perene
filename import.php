@@ -6,6 +6,7 @@
 
 require_once 'includes/auth.php';
 verificarAutenticacion();
+verificarAdmin();
 
 require_once 'includes/functions.php';
 

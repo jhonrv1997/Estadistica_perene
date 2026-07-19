@@ -6,9 +6,9 @@
 
 require_once 'config.php';
 
-// Si ya esta autenticado, redirigir al dashboard
+// Si ya esta autenticado, redirigir al home
 if (isset($_SESSION['usuario_id'])) {
-    header('Location: dashboard.php');
+    header('Location: home.php');
     exit;
 }
 
@@ -24,7 +24,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     } else {
         require_once 'includes/auth.php';
         if (iniciarSesion($usuario, $password)) {
-            header('Location: dashboard.php');
+            header('Location: home.php');
             exit;
         } else {
             $error = 'Usuario o contrasena incorrectos';
