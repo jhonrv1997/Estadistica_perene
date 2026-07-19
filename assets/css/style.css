@@ -399,3 +399,401 @@ code {
 @keyframes spin {
     to { transform: rotate(360deg); }
 }
+
+/* ============================================================
+   Estilos para nuevos modulos v2.0
+   ============================================================ */
+
+/* Scrollable dropdown menus (para listas largas como Operacionales) */
+.dropdown-menu-scroll {
+    max-height: 70vh;
+    overflow-y: auto;
+    min-width: 240px;
+}
+
+.dropdown-menu-scroll::-webkit-scrollbar {
+    width: 6px;
+}
+
+.dropdown-menu-scroll::-webkit-scrollbar-track {
+    background: #f1f1f1;
+}
+
+.dropdown-menu-scroll::-webkit-scrollbar-thumb {
+    background: #c1c1c1;
+    border-radius: 3px;
+}
+
+/* Sub-pages nav tabs */
+.subpage-tabs {
+    background: #fff;
+    border-radius: 12px;
+    padding: 0.5rem;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+    margin-bottom: 1.25rem;
+}
+
+.subpage-tabs .nav-link {
+    color: #495057;
+    border-radius: 8px;
+    padding: 0.5rem 1rem;
+    font-size: 0.85rem;
+    font-weight: 500;
+    transition: all 0.2s ease;
+}
+
+.subpage-tabs .nav-link:hover {
+    background: rgba(26, 82, 118, 0.06);
+    color: var(--his-primary);
+}
+
+.subpage-tabs .nav-link.active {
+    background: linear-gradient(135deg, var(--his-primary) 0%, var(--his-primary-light) 100%);
+    color: #fff;
+}
+
+/* Page header section */
+.page-header-section {
+    background: linear-gradient(135deg, rgba(26, 82, 118, 0.04) 0%, rgba(41, 128, 185, 0.04) 100%);
+    border-radius: 12px;
+    padding: 1.25rem;
+    margin-bottom: 1.25rem;
+    border-left: 4px solid var(--his-primary);
+}
+
+.page-header-section h4 {
+    color: var(--his-primary);
+    font-weight: 700;
+    margin-bottom: 0.3rem;
+}
+
+.page-header-section .subtitle {
+    color: #6c757d;
+    font-size: 0.9rem;
+    margin-bottom: 0;
+}
+
+/* Indicador card */
+.indicador-card {
+    background: #fff;
+    border-radius: 12px;
+    padding: 1.25rem;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+    border-left: 4px solid var(--his-primary);
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+    height: 100%;
+}
+
+.indicador-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.1);
+}
+
+.indicador-card.estado-critico { border-left-color: var(--his-danger); }
+.indicador-card.estado-bajo { border-left-color: var(--his-warning); }
+.indicador-card.estado-regular { border-left-color: #f4d35e; }
+.indicador-card.estado-bueno { border-left-color: #58d68d; }
+.indicador-card.estado-excelente { border-left-color: var(--his-success); }
+
+.indicador-card .indicador-codigo {
+    font-size: 0.72rem;
+    font-weight: 600;
+    color: var(--his-primary);
+    background: rgba(26, 82, 118, 0.08);
+    padding: 2px 8px;
+    border-radius: 4px;
+    display: inline-block;
+    margin-bottom: 0.5rem;
+}
+
+.indicador-card .indicador-nombre {
+    font-size: 0.92rem;
+    font-weight: 600;
+    color: #2c3e50;
+    line-height: 1.35;
+    margin-bottom: 0.5rem;
+    min-height: 2.5rem;
+}
+
+.indicador-card .indicador-meta {
+    font-size: 0.78rem;
+    color: #6c757d;
+    margin-bottom: 0.75rem;
+}
+
+/* Progress bar customization */
+.progress-his {
+    height: 10px;
+    border-radius: 6px;
+    background-color: #e9ecef;
+    overflow: hidden;
+}
+
+.progress-his .progress-bar {
+    border-radius: 6px;
+    transition: width 0.5s ease;
+}
+
+/* Avance badge */
+.avance-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 4px 10px;
+    border-radius: 16px;
+    font-size: 0.78rem;
+    font-weight: 600;
+}
+
+.avance-excelente { background: rgba(39, 174, 96, 0.15); color: #1e8449; }
+.avance-bueno { background: rgba(88, 214, 141, 0.2); color: #196f3d; }
+.avance-regular { background: rgba(244, 211, 94, 0.25); color: #9a7d0a; }
+.avance-bajo { background: rgba(243, 156, 18, 0.2); color: #9c640c; }
+.avance-critico { background: rgba(231, 76, 60, 0.18); color: #b03a2e; }
+.avance-sin-dato { background: rgba(108, 117, 125, 0.15); color: #495057; }
+
+/* Observacion severity colors */
+.sev-baja { color: #27ae60; }
+.sev-media { color: #f39c12; }
+.sev-alta { color: #e67e22; }
+.sev-critica { color: #e74c3c; }
+
+.badge-sev-baja { background: rgba(39, 174, 96, 0.15); color: #1e8449; }
+.badge-sev-media { background: rgba(243, 156, 18, 0.18); color: #9c640c; }
+.badge-sev-alta { background: rgba(230, 126, 34, 0.18); color: #a04000; }
+.badge-sev-critica { background: rgba(231, 76, 60, 0.18); color: #b03a2e; }
+
+/* Estado observacion */
+.badge-estado-pendiente { background: rgba(231, 76, 60, 0.15); color: #b03a2e; }
+.badge-estado-en_proceso { background: rgba(243, 156, 18, 0.18); color: #9c640c; }
+.badge-estado-atendida { background: rgba(52, 152, 219, 0.18); color: #1f618d; }
+.badge-estado-cerrada { background: rgba(39, 174, 96, 0.18); color: #1e8449; }
+
+/* Sub-page card grid */
+.subpage-card {
+    text-decoration: none;
+    color: inherit;
+    background: #fff;
+    border-radius: 12px;
+    padding: 1.25rem;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+    border: 1px solid #e9ecef;
+    transition: all 0.2s ease;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.5rem;
+}
+
+.subpage-card:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+    border-color: var(--his-primary-light);
+    color: inherit;
+}
+
+.subpage-card .sub-icon {
+    width: 48px;
+    height: 48px;
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.3rem;
+    background: rgba(26, 82, 118, 0.1);
+    color: var(--his-primary);
+}
+
+.subpage-card h6 {
+    font-weight: 600;
+    margin: 0;
+    color: #2c3e50;
+}
+
+.subpage-card small {
+    color: #6c757d;
+    font-size: 0.78rem;
+}
+
+/* Stat mini badges for indicator summary */
+.stat-mini {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-size: 0.72rem;
+    font-weight: 600;
+    background: #f8f9fa;
+    color: #495057;
+}
+
+/* Empty state */
+.empty-state {
+    text-align: center;
+    padding: 3rem 1rem;
+}
+
+.empty-state i {
+    font-size: 3rem;
+    color: #adb5bd;
+    margin-bottom: 1rem;
+}
+
+.empty-state h5 {
+    color: #6c757d;
+    margin-bottom: 0.5rem;
+}
+
+.empty-state p {
+    color: #adb5bd;
+    font-size: 0.88rem;
+    margin-bottom: 0;
+}
+
+/* ============================================================
+   Home page - Bienvenida y tarjetas de modulos
+   ============================================================ */
+
+.welcome-banner {
+    background: linear-gradient(135deg, rgba(26, 82, 118, 0.05) 0%, rgba(41, 128, 185, 0.05) 100%);
+    border-left: 5px solid var(--his-primary);
+}
+
+.welcome-icon {
+    width: 64px;
+    height: 64px;
+    border-radius: 16px;
+    background: linear-gradient(135deg, var(--his-primary) 0%, var(--his-primary-light) 100%);
+    color: #fff;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.8rem;
+    flex-shrink: 0;
+    box-shadow: 0 6px 18px rgba(26, 82, 118, 0.25);
+}
+
+/* Tarjeta de modulo en home */
+.home-card {
+    display: flex;
+    align-items: stretch;
+    gap: 0.85rem;
+    background: #fff;
+    border-radius: 12px;
+    padding: 1rem;
+    text-decoration: none;
+    color: inherit;
+    border: 1px solid #e9ecef;
+    border-left: 5px solid var(--his-primary);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+    transition: all 0.22s ease;
+    height: 100%;
+    min-height: 140px;
+}
+
+.home-card:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 12px 30px rgba(0, 0, 0, 0.12);
+    text-decoration: none;
+    color: inherit;
+}
+
+.home-card-icon {
+    width: 52px;
+    height: 52px;
+    border-radius: 12px;
+    background: rgba(26, 82, 118, 0.1);
+    color: var(--his-primary);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.5rem;
+    flex-shrink: 0;
+    transition: all 0.22s ease;
+}
+
+.home-card:hover .home-card-icon {
+    transform: scale(1.08) rotate(-5deg);
+}
+
+.home-card-body {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+}
+
+.home-card-title {
+    font-size: 0.98rem;
+    font-weight: 700;
+    color: #2c3e50;
+    margin-bottom: 0.25rem;
+    line-height: 1.25;
+}
+
+.home-card-desc {
+    font-size: 0.78rem;
+    color: #6c757d;
+    line-height: 1.4;
+    margin-bottom: 0.5rem;
+    flex: 1;
+}
+
+.home-card-badge {
+    display: inline-block;
+    font-size: 0.7rem;
+    font-weight: 600;
+    padding: 2px 8px;
+    border-radius: 10px;
+    background: rgba(26, 82, 118, 0.08);
+    color: var(--his-primary);
+    align-self: flex-start;
+}
+
+.home-card-arrow {
+    display: flex;
+    align-items: center;
+    color: #adb5bd;
+    font-size: 0.9rem;
+    transition: all 0.22s ease;
+}
+
+.home-card:hover .home-card-arrow {
+    color: var(--his-primary);
+    transform: translateX(4px);
+}
+
+/* Variantes de color por modulo */
+.home-card-primary { border-left-color: var(--his-primary); }
+.home-card-primary .home-card-icon { background: rgba(26, 82, 118, 0.1); color: var(--his-primary); }
+.home-card-primary .home-card-badge { background: rgba(26, 82, 118, 0.1); color: var(--his-primary); }
+
+.home-card-success { border-left-color: var(--his-success); }
+.home-card-success .home-card-icon { background: rgba(39, 174, 96, 0.12); color: var(--his-success); }
+.home-card-success .home-card-badge { background: rgba(39, 174, 96, 0.12); color: #1e8449; }
+
+.home-card-info { border-left-color: var(--his-info); }
+.home-card-info .home-card-icon { background: rgba(52, 152, 219, 0.12); color: var(--his-info); }
+.home-card-info .home-card-badge { background: rgba(52, 152, 219, 0.12); color: #1f618d; }
+
+.home-card-warning { border-left-color: var(--his-warning); }
+.home-card-warning .home-card-icon { background: rgba(243, 156, 18, 0.15); color: var(--his-warning); }
+.home-card-warning .home-card-badge { background: rgba(243, 156, 18, 0.15); color: #9c640c; }
+
+.home-card-danger { border-left-color: var(--his-danger); }
+.home-card-danger .home-card-icon { background: rgba(231, 76, 60, 0.12); color: var(--his-danger); }
+.home-card-danger .home-card-badge { background: rgba(231, 76, 60, 0.12); color: #b03a2e; }
+
+.home-card-secondary { border-left-color: #6c757d; }
+.home-card-secondary .home-card-icon { background: rgba(108, 117, 125, 0.12); color: #495057; }
+.home-card-secondary .home-card-badge { background: rgba(108, 117, 125, 0.12); color: #495057; }
+
+/* Hover lift variants: sombra de color */
+.home-card-primary:hover { box-shadow: 0 12px 30px rgba(26, 82, 118, 0.18); }
+.home-card-success:hover { box-shadow: 0 12px 30px rgba(39, 174, 96, 0.18); }
+.home-card-info:hover    { box-shadow: 0 12px 30px rgba(52, 152, 219, 0.18); }
+.home-card-warning:hover { box-shadow: 0 12px 30px rgba(243, 156, 18, 0.20); }
+.home-card-danger:hover  { box-shadow: 0 12px 30px rgba(231, 76, 60, 0.18); }
+.home-card-secondary:hover { box-shadow: 0 12px 30px rgba(108, 117, 125, 0.18); }
