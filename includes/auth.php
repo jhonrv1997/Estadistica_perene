@@ -31,6 +31,40 @@ function verificarAutenticacion() {
     $_SESSION['ultimo_acceso'] = time();
 }
 
+/**
+ * Verificar si el usuario autenticado tiene rol de administrador
+ * Llamar despues de verificarAutenticacion()
+ * Si no es admin, redirige al dashboard con un mensaje de error
+ */
+function verificarAdmin() {
+    if (session_status() === PHP_SESSION_NONE) {
+        session_start();
+    }
+    // Primero verificar autenticacion
+    if (!isset($_SESSION['usuario_id']) || !isset($_SESSION['usuario'])) {
+        header('Location: ' . getAppUrl() . '/index.php');
+        exit;
+    }
+    // Verificar rol administrador
+    $rol = strtolower(trim($_SESSION['rol'] ?? ''));
+    if ($rol !== 'admin') {
+        // Redirigir al dashboard con mensaje de acceso denegado
+        header('Location: ' . getAppUrl() . '/dashboard.php?acceso_denegado=1');
+        exit;
+    }
+}
+
+/**
+ * Retornar true si el usuario actual es administrador
+ */
+function esAdmin() {
+    if (session_status() === PHP_SESSION_NONE) {
+        session_start();
+    }
+    $rol = strtolower(trim($_SESSION['rol'] ?? ''));
+    return $rol === 'admin';
+}
+
 function getAppUrl() {
     // Determinar URL base de la aplicacion
     $scriptName = $_SERVER['SCRIPT_NAME'] ?? '';
