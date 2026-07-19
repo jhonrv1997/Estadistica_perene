@@ -22,7 +22,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if (empty($usuario) || empty($password)) {
         $error = 'Ingrese usuario y contrasena';
     } else {
-        require_once 'includes/auth.php';
         if (iniciarSesion($usuario, $password)) {
             header('Location: home.php');
             exit;
@@ -31,6 +30,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
     }
 }
+
+require_once 'includes/auth.php';
 
 $pageTitle = 'Sistema HIS - Iniciar Sesion';
 include 'includes/header.php';
