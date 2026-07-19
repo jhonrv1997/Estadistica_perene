@@ -9,15 +9,6 @@ Sistema web para la gestion y consolidacion de datos del HIS (Historia de Salud)
 - **Frontend:** Bootstrap 5, Font Awesome 6, jQuery 3
 - **Hosting recomendado:** Cpanel / cualquier hosting con PHP + MySQL
 
-## Instalacion
-
-1. Subir todos los archivos al servidor (carpeta publica o subdirectorio).
-2. Ejecutar el script `Database/if0_42181393_his.sql` en phpMyAdmin o consola MySQL para crear las tablas base.
-3. Ejecutar el script `Database/update_his_v2.sql` para crear las tablas adicionales (Convenio de Gestion, Convenio FED, Control de Calidad) y cargar los indicadores semilla.
-4. Editar `config.php` con las credenciales correctas de la base de datos.
-5. Acceder al sistema e iniciar sesion con el usuario por defecto: `admin` / `admin123`.
-6. **Importante:** Cambiar la contrasena del usuario admin despues del primer inicio de sesion.
-
 ## Roles de Usuario
 
 El sistema soporta dos roles:
@@ -56,6 +47,7 @@ El sistema soporta dos roles:
 - `process.php` - Ejecucion del procesamiento/consolidacion
 - `export_excel.php` - Exportacion de resultados a Excel
 - `logout.php` - Cierre de sesion
+- `home.php` -Pagina principal
 
 ## Estructura de Archivos
 
@@ -63,7 +55,8 @@ El sistema soporta dos roles:
 /
 |-- config.php                  # Configuracion de BD y aplicacion
 |-- index.php                   # Pagina de login
-|-- dashboard.php               # Dashboard general
+|-- home.php                    # Pagina Principal
+|-- dashboard.php               # Pagina para filtros
 |-- convenio_gestion.php        # Pagina 01: Convenio de Gestion (34 indicadores)
 |-- convenio_fed.php            # Pagina 02: Convenio FED (7 indicadores)
 |-- consulta_atenciones.php     # Pagina 03: Consulta de Atenciones
