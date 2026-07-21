@@ -4,7 +4,7 @@
  * Navbar reorganizado con 8 modulos y sub-paginas.
  * Items de administracion (Importar, Usuarios) solo se muestran a rol admin.
  */
-if (!isset($pageTitle)) $pageTitle = 'Sistema HIS';
+if (!isset($pageTitle)) $pageTitle = 'IntelHIS';
 $currentpage = basename($_SERVER['PHP_SELF'], '.php');
 $subpage = $_GET['sub'] ?? '';
 $esAdmin = esAdmin();
@@ -30,8 +30,8 @@ $esAdmin = esAdmin();
     <nav class="navbar navbar-expand-lg navbar-dark bg-his">
         <div class="container-fluid">
             <a class="navbar-brand d-flex align-items-center" href="home.php">
-                <i class="fas fa-hospital-alt me-2 fs-4"></i>
-                <span class="fw-bold">Sistema HIS</span>
+                <img src="assets/img/logo_hisminsa.png" alt="HIS" class="me-2" style="width:28px;height:28px;object-fit:contain;border-radius:50%;">
+                <span class="fw-bold">IntelHIS</span>
             </a>
             <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
                 <span class="navbar-toggler-icon"></span>
