@@ -26,17 +26,28 @@ body {
 }
 
 .navbar-brand {
-    font-size: 1.1rem;
+    font-size: 1.05rem;
     letter-spacing: -0.3px;
+    margin-right: 0.5rem !important;
 }
 
 .navbar .nav-link {
-    font-size: 0.88rem;
+    font-size: 0.82rem;
     font-weight: 500;
-    padding: 0.5rem 1rem !important;
+    padding: 0.4rem 0.55rem !important;
     border-radius: 6px;
-    margin: 0 2px;
+    margin: 0 1px;
     transition: all 0.2s ease;
+    white-space: nowrap;
+}
+
+/* Asegurar que todos los nav-items quepan en una línea */
+.navbar .navbar-nav {
+    flex-wrap: nowrap;
+}
+
+.navbar .nav-item {
+    white-space: nowrap;
 }
 
 .navbar .nav-link:hover {
