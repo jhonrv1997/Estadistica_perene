@@ -86,7 +86,7 @@ $esAdmin = esAdmin();
                 <li class="nav-item dropdown">
                     <a class="nav-link dropdown-toggle <?= in_array($currentpage, ['consulta_atenciones']) ? 'active' : '' ?>"
                        href="#" role="button" data-bs-toggle="dropdown" aria-expanded="false">
-                        <i class="fas fa-search me-1"></i> Consulta Atenciones
+                        <i class="fas fa-search me-1"></i> Atenciones
                     </a>
                     <ul class="dropdown-menu">
                         <li>
@@ -107,7 +107,7 @@ $esAdmin = esAdmin();
                 <!-- Control de Calidad -->
                 <li class="nav-item">
                     <a class="nav-link <?= $currentpage === 'control_calidad' ? 'active' : '' ?>" href="control_calidad.php">
-                        <i class="fas fa-clipboard-check me-1"></i> Control Calidad
+                        <i class="fas fa-clipboard-check me-1"></i> C. Calidad
                     </a>
                 </li>
 
@@ -115,7 +115,7 @@ $esAdmin = esAdmin();
                 <li class="nav-item dropdown">
                     <a class="nav-link dropdown-toggle <?= in_array($currentpage, ['reporte_atenciones']) ? 'active' : '' ?>"
                        href="#" role="button" data-bs-toggle="dropdown" aria-expanded="false">
-                        <i class="fas fa-file-medical me-1"></i> Reporte Atenciones
+                        <i class="fas fa-file-medical me-1"></i> Rep. Atenc.
                     </a>
                     <ul class="dropdown-menu">
                         <li><a class="dropdown-item <?= $currentpage === 'reporte_atenciones' && $subpage === 'atendidos' ? 'active' : '' ?>" href="reporte_atenciones.php?sub=atendidos"><i class="fas fa-users me-2 text-primary"></i>Atenciones y Atendidos</a></li>
@@ -129,7 +129,7 @@ $esAdmin = esAdmin();
                 <li class="nav-item dropdown">
                     <a class="nav-link dropdown-toggle <?= in_array($currentpage, ['reporte_operacionales']) ? 'active' : '' ?>"
                        href="#" role="button" data-bs-toggle="dropdown" aria-expanded="false">
-                        <i class="fas fa-chart-line me-1"></i> Reportes Operac.
+                        <i class="fas fa-chart-line me-1"></i> Rep. Operac.
                     </a>
                     <ul class="dropdown-menu dropdown-menu-scroll">
                         <li><a class="dropdown-item <?= $currentpage === 'reporte_operacionales' && $subpage === 'adolescente' ? 'active' : '' ?>" href="reporte_operacionales.php?sub=adolescente"><i class="fas fa-user-graduate me-2"></i>Adolescente</a></li>
@@ -157,7 +157,7 @@ $esAdmin = esAdmin();
                 <li class="nav-item dropdown">
                     <a class="nav-link dropdown-toggle <?= in_array($currentpage, ['import', 'usuarios', 'log']) ? 'active' : '' ?>"
                        href="#" role="button" data-bs-toggle="dropdown" aria-expanded="false">
-                        <i class="fas fa-cog me-1"></i> Administracion
+                        <i class="fas fa-cog me-1"></i> Admin
                     </a>
                     <ul class="dropdown-menu">
                         <li>
@@ -196,7 +196,7 @@ $esAdmin = esAdmin();
         <!-- ====== OPCIONES DE USUARIO (siempre visibles, fuera del collapse) ====== -->
         <div class="d-flex align-items-center text-white ms-lg-3 flex-shrink-0">
             <i class="fas fa-user-circle me-2"></i>
-            <span class="me-2 d-none d-md-inline"><?= htmlspecialchars($_SESSION['nombre_completo'] ?? $_SESSION['usuario']) ?></span>
+            
             <?php if ($esAdmin): ?>
                 <span class="badge bg-warning text-dark me-2 d-none d-md-inline">Admin</span>
             <?php else: ?>
