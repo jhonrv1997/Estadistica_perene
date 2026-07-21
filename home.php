@@ -154,7 +154,7 @@ include 'includes/header.php';
     <div class="card-body d-flex align-items-center justify-content-between flex-wrap gap-3">
         <div class="d-flex align-items-center gap-3">
             <div class="welcome-icon">
-                <i class="fas fa-hospital-alt"></i>
+                <img src="assets/img/logo_hisminsa.png" alt="HIS" style="width:44px;height:44px;object-fit:contain;border-radius:50%;">
             </div>
             <div>
                 <h4 class="mb-1 fw-bold">Bienvenido, <?= htmlspecialchars($nombreUsuario) ?></h4>
@@ -265,9 +265,9 @@ include 'includes/header.php';
             <div class="card-body">
                 <h6 class="fw-bold text-info"><i class="fas fa-lightbulb me-2"></i>Recordatorios</h6>
                 <ul class="small mb-0 ps-3">
-                    <li>Ejecute el script <code>Database/update_his_v2.sql</code> si aun no lo ha hecho.</li>
-                    <li>Cambie la contrasena del usuario <code>admin</code> despues del primer login.</li>
-                    <li>Verifique el estado de importacion antes de generar reportes.</li>
+                    <li>Verifique el estado de  <code>importacion</code> antes de generar reportes.</li>
+                    <li>Sistema desarrollado por <code>Estadística e Informática</code> de Zona Sanitaria Perené</li>
+                    
                 </ul>
             </div>
         </div>

@@ -403,7 +403,7 @@ include 'includes/header.php';
                 <div class="modal-body">
                     <div class="mb-3">
                         <label class="form-label fw-semibold">Usuario <span class="text-danger">*</span></label>
-                        <input type="text" name="usuario" class="form-control" required minlength="3" maxlength="50" placeholder="Nombre de usuario para login">
+                        <input type="text" name="usuario" class="form-control" required minlength="3" maxlength="50" placeholder="Ingrese DNI">
                     </div>
                     <div class="mb-3">
                         <label class="form-label fw-semibold">Nombre Completo <span class="text-danger">*</span></label>

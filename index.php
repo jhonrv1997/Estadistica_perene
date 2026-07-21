@@ -21,27 +21,27 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $password = $_POST['password'] ?? '';
     
     if (empty($usuario) || empty($password)) {
-        $error = 'Ingrese usuario y contrasena';
+        $error = 'Ingrese usuario y contraseña';
     } else {
         if (iniciarSesion($usuario, $password)) {
             header('Location: home.php');
             exit;
         } else {
-            $error = 'Usuario o contrasena incorrectos';
+            $error = 'Usuario o contraseña incorrectos';
         }
     }
 }
 
-$pageTitle = 'Sistema HIS - Iniciar Sesion';
+$pageTitle = 'InteLHIS- Iniciar Sesion';
 include 'includes/header.php';
 ?>
 
 <div class="login-container">
     <div class="login-card">
         <div class="login-header">
-            <i class="fas fa-hospital-alt fa-3x text-white mb-3"></i>
-            <h3 class="text-white fw-bold">Sistema HIS</h3>
-            <p class="text-white-50 mb-0">Gestion de Datos HIS-MINSA</p>
+            <img src="assets/img/logo_hisminsa.png" alt="HIS" class="mb-3" style="width:100px;height:100px;object-fit:contain;border-radius:50%;">
+            <h3 class="text-white fw-bold">InteLHIS</h3>
+            <p class="text-white-50 mb-0">Sistema de Analítica y Reportes HIS</p>
         </div>
         <div class="login-body">
             <?php if ($error): ?>
@@ -85,7 +85,7 @@ include 'includes/header.php';
             </form>
         </div>
         <div class="login-footer">
-            <small class="text-muted">Sistema HIS v1.0 &copy; <?= date('Y') ?></small>
+            <small class="text-muted">InteLHIS v1.0 &copy; <?= date('Y') ?></small>
         </div>
     </div>
 </div>
