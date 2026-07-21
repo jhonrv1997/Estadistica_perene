@@ -3,7 +3,7 @@
 -- https://www.phpmyadmin.net/
 --
 -- Servidor: sql102.infinityfree.com
--- Tiempo de generación: 19-07-2026 a las 12:59:48
+-- Tiempo de generación: 20-07-2026 a las 22:29:15
 -- Versión del servidor: 11.4.12-MariaDB
 -- Versión de PHP: 7.2.22
 
@@ -1120,7 +1120,8 @@ CREATE TABLE `USUARIOS` (
 --
 
 INSERT INTO `USUARIOS` (`id_usuario`, `usuario`, `password`, `nombre_completo`, `rol`, `estado`, `fecha_creacion`, `ultimo_acceso`) VALUES
-(1, 'admin', '$2a$12$oyHlo6Q4WLAz05diONMFx.D93QR915rs.iVOZx7K1wUpgiTI7CtB.', 'Administrador del Sistema', 'admin', 1, '2026-06-14 12:35:48', '2026-07-18 14:05:05');
+(1, 'admin', '$2a$12$oyHlo6Q4WLAz05diONMFx.D93QR915rs.iVOZx7K1wUpgiTI7CtB.', 'Administrador del Sistema', 'admin', 1, '2026-06-14 12:35:48', '2026-07-20 19:17:17'),
+(2, '41132134', '$2y$10$0JLq5iaw1SA1PizLCQN5ouhm76c7b.SMDV8R/MSmVe.iqmwdJLpe.', 'MARCO ANTONIO ESPINOZA VALERIO', 'usuario', 1, '2026-07-20 19:13:56', '2026-07-20 19:18:35');
 
 -- --------------------------------------------------------
 
@@ -1433,7 +1434,7 @@ ALTER TABLE `NOMINAL_TRAMA_PERIODOS`
 -- AUTO_INCREMENT de la tabla `USUARIOS`
 --
 ALTER TABLE `USUARIOS`
-  MODIFY `id_usuario` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=2;
+  MODIFY `id_usuario` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=3;
 
 --
 -- Restricciones para tablas volcadas
