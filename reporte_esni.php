@@ -59,6 +59,7 @@ $profesionales    = esniGetProfesionales($pdo, $cols);
 $ejecutar = isset($_GET['generar']) || $fAnio !== '' || $fMes !== '' || $fEstablecimiento !== '' || $fDepartamento !== '' || $fProfesional !== '';
 $reporte = null;
 $debugSQL = null;
+$diagnostico = null;
 
 if ($ejecutar && $esquemaOK) {
     $t0 = microtime(true);
@@ -67,6 +68,10 @@ if ($ejecutar && $esquemaOK) {
     $reporte['tiempo_ejecucion'] = $tEjec;
     if (!empty($reporte['error']) && strpos($reporte['error'], 'Error SQL') === 0) {
         $debugSQL = ['sql' => $reporte['sql_debug'] ?? '', 'params' => $reporte['params_debug'] ?? []];
+    }
+    // Diagnostico de cobertura de reglas (solo si no hubo error SQL)
+    if (empty($reporte['error'])) {
+        $diagnostico = esniDiagnosticarReglas($pdo, $cols, $filtros);
     }
 }
 
@@ -128,6 +133,9 @@ include 'includes/header.php';
         <h6 class="mb-0 fw-bold"><i class="fas fa-filter me-2 text-primary"></i>Filtros del Reporte</h6>
         <div class="d-flex gap-2">
             <?php if ($esquemaOK): ?>
+            <?php if (esAdmin()): ?>
+            <a href="install_esni_extra.php" class="btn btn-sm btn-outline-warning" title="Cargar reglas adicionales para codigos de item HIS reales"><i class="fas fa-plus-circle me-1"></i> Reglas extra</a>
+            <?php endif; ?>
             <a href="esni_config.php" class="btn btn-sm btn-outline-secondary"><i class="fas fa-cog me-1"></i> Configurar</a>
             <a href="esni_export.php?<?= http_build_query($filtros) ?>" class="btn btn-sm btn-success"><i class="fas fa-file-excel me-1"></i> Exportar Excel</a>
             <?php endif; ?>
@@ -229,6 +237,80 @@ include 'includes/header.php';
         <?php endforeach; ?>
     </div>
 </div>
+
+<?php if ($diagnostico && !empty($diagnostico['cod_items_sin_reglas'])): ?>
+<!-- Panel de diagnostico de cobertura -->
+<div class="card border-warning mb-3">
+    <div class="card-header bg-warning bg-opacity-25 d-flex align-items-center">
+        <i class="fas fa-exclamation-triangle me-2 text-warning"></i>
+        <strong class="me-3">Diagnostico de cobertura de reglas</strong>
+        <span class="text-muted small">
+            Cobertura actual:
+            <strong class="<?= $diagnostico['porcentaje_cobertura'] < 50 ? 'text-danger' : 'text-success' ?>">
+                <?= $diagnostico['porcentaje_cobertura'] ?>%
+            </strong>
+            (<?= number_format($diagnostico['filas_cubiertas']) ?> de <?= number_format($diagnostico['total_filas_datos']) ?> filas HIS)
+        </span>
+    </div>
+    <div class="card-body">
+        <p class="mb-2 small">
+            Se encontraron <strong><?= count($diagnostico['cod_items_sin_reglas']) ?> codigos de item</strong>
+            en los datos HIS que <strong>no tienen reglas ESNI configuradas</strong>.
+            Estas filas no se estan contando en el reporte. Ejecute
+            <a href="install_esni_extra.php" class="alert-link"><code>install_esni_extra.php</code></a>
+            o agregue las reglas manualmente desde <a href="esni_config.php?tab=reglas" class="alert-link">Configurar ESNI &raquo; Reglas</a>.
+        </p>
+        <div class="table-responsive">
+            <table class="table table-sm table-hover mb-0" style="font-size:.8rem">
+                <thead>
+                    <tr>
+                        <th style="width:120px;">Codigo Item</th>
+                        <th class="text-end" style="width:90px;">Filas HIS</th>
+                        <th>Acción recomendada</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <?php foreach ($diagnostico['cod_items_sin_reglas'] as $info): ?>
+                    <tr>
+                        <td><code><?= htmlspecialchars($info['cod']) ?></code></td>
+                        <td class="text-end fw-bold text-danger"><?= number_format($info['n']) ?></td>
+                        <td class="text-muted small">
+                            Crear regla en <a href="esni_config.php?tab=reglas">esni_config.php</a> con cod_item=<code><?= htmlspecialchars($info['cod']) ?></code>
+                        </td>
+                    </tr>
+                    <?php endforeach; ?>
+                </tbody>
+            </table>
+        </div>
+        <?php if (!empty($diagnostico['reglas_sin_datos'])): ?>
+        <p class="mt-3 mb-0 small text-muted">
+            <i class="fas fa-info-circle me-1"></i>
+            Adicionalmente, hay <strong><?= count($diagnostico['reglas_sin_datos']) ?> reglas</strong> configuradas
+            para cod_items que <em>no aparecen en los datos actuales</em>:
+            <code><?= htmlspecialchars(implode(', ', $diagnostico['reglas_sin_datos'])) ?></code>.
+            Estas reglas son inofensivas pero pueden eliminarse para limpiar la configuracion.
+        </p>
+        <?php endif; ?>
+    </div>
+</div>
+<?php endif; ?>
+
+<?php if ($reporte['totales']['total_dosis'] === 0): ?>
+<!-- Aviso de 0 resultados -->
+<div class="alert alert-info d-flex align-items-center">
+    <i class="fas fa-info-circle me-3 fa-2x"></i>
+    <div>
+        <strong>El reporte se ejecuto correctamente pero no se encontro ninguna dosis que coincida con las reglas configuradas.</strong><br>
+        Posibles causas:
+        <ul class="mb-0 mt-1 small">
+            <li>Los codigos de item HIS en los datos no coinciden con los codigos configurados en las reglas ESNI (ver diagnostico de cobertura arriba).</li>
+            <li>Los <code>Valor_Lab</code> de las filas HIS no coinciden con los valores esperados por las reglas (por ejemplo: la regla espera <code>'1'</code> pero los datos tienen <code>'DU'</code>).</li>
+            <li>Los grupos de edad de las filas HIS no encajan con los grupos configurados en las reglas.</li>
+            <li>No hay datos HIS para el periodo/establecimiento/departamento seleccionado en los filtros.</li>
+        </ul>
+    </div>
+</div>
+<?php endif; ?>
 
 <?php foreach ($reporte['secciones'] as $sec): ?>
 <div class="esni-section-card">
