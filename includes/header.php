@@ -136,7 +136,7 @@ $esAdmin = esAdmin();
                         <li><a class="dropdown-item <?= $currentpage === 'reporte_operacionales' && $subpage === 'adulto' ? 'active' : '' ?>" href="reporte_operacionales.php?sub=adulto"><i class="fas fa-user me-2"></i>Adulto</a></li>
                         <li><a class="dropdown-item <?= $currentpage === 'reporte_operacionales' && $subpage === 'adulto_mayor' ? 'active' : '' ?>" href="reporte_operacionales.php?sub=adulto_mayor"><i class="fas fa-user-tie me-2"></i>Adulto Mayor</a></li>
                         <li><a class="dropdown-item <?= $currentpage === 'reporte_operacionales' && $subpage === 'cancer' ? 'active' : '' ?>" href="reporte_operacionales.php?sub=cancer"><i class="fas fa-ribbon me-2"></i>Cancer</a></li>
-                        <li><a class="dropdown-item <?= $currentpage === 'reporte_operacionales' && $subpage === 'esni' ? 'active' : '' ?>" href="reporte_operacionales.php?sub=esni"><i class="fas fa-syringe me-2"></i>ESNI</a></li>
+                        <li><a class="dropdown-item <?= $currentpage === 'reporte_operacionales' && $subpage === 'esni' ? 'active' : '' ?>" href="reporte_esni.php"><i class="fas fa-syringe me-2"></i>ESNI <span class="badge bg-success ms-1" style="font-size:.65em">NUEVO</span><small class="d-block text-muted">Reporte Operacional completo (data-driven)</small></a></li>
                         <li><a class="dropdown-item <?= $currentpage === 'reporte_operacionales' && $subpage === 'joven' ? 'active' : '' ?>" href="reporte_operacionales.php?sub=joven"><i class="fas fa-walking me-2"></i>Joven</a></li>
                         <li><a class="dropdown-item <?= $currentpage === 'reporte_operacionales' && $subpage === 'materno' ? 'active' : '' ?>" href="reporte_operacionales.php?sub=materno"><i class="fas fa-baby me-2"></i>Materno</a></li>
                         <li><a class="dropdown-item <?= $currentpage === 'reporte_operacionales' && $subpage === 'medicina_alternativa' ? 'active' : '' ?>" href="reporte_operacionales.php?sub=medicina_alternativa"><i class="fas fa-leaf me-2"></i>Medicina Alternativa</a></li>
@@ -155,7 +155,7 @@ $esAdmin = esAdmin();
                 <?php if ($esAdmin): ?>
                 <!-- Administracion (dropdown) - solo admin -->
                 <li class="nav-item dropdown">
-                    <a class="nav-link dropdown-toggle <?= in_array($currentpage, ['import', 'usuarios', 'log']) ? 'active' : '' ?>"
+                    <a class="nav-link dropdown-toggle <?= in_array($currentpage, ['import', 'usuarios', 'log', 'esni_config']) ? 'active' : '' ?>"
                        href="#" role="button" data-bs-toggle="dropdown" aria-expanded="false">
                         <i class="fas fa-cog me-1"></i> Admin
                     </a>
@@ -164,6 +164,12 @@ $esAdmin = esAdmin();
                             <a class="dropdown-item <?= $currentpage === 'import' ? 'active' : '' ?>" href="import.php">
                                 <i class="fas fa-file-import me-2 text-primary"></i>Importar Datos
                                 <small class="d-block text-muted">Carga de archivos ZIP</small>
+                            </a>
+                        </li>
+                        <li>
+                            <a class="dropdown-item <?= $currentpage === 'esni_config' ? 'active' : '' ?>" href="esni_config.php">
+                                <i class="fas fa-syringe me-2 text-success"></i>Configurar ESNI
+                                <small class="d-block text-muted">Vacunas, dosis, reglas (data-driven)</small>
                             </a>
                         </li>
                         <li>
