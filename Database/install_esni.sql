@@ -557,19 +557,50 @@ INSERT INTO ESNI_PARAMETRO (clave, valor, descripcion) VALUES
   ('columna_anio',            'Anio',                  'Columna con anio'),
   ('columna_mes',             'Mes',                   'Columna con mes (1-12)'),
   ('columna_id_cita',         'Id_Cita',               'Columna con id de cita'),
-  ('columna_profesional',     'Id_Profesional',        'Columna con id del profesional'),
+  ('columna_profesional',     'Id_Personal',           'Columna con id del profesional (Personal de salud). Nota: en la tabla consolidada HIS MINSA esta columna se llama Id_Personal, no Id_Profesional'),
   ('columna_renaes',          'Renaes',                'Columna con codigo Renaes del establecimiento'),
   ('columna_id_gruporiesgo',  'Id_GrupoRiesgo',        'Columna con grupo de riesgo (2=riesgo)'),
   ('columna_rownnum_lab',     'I_ROWNUM_LAB',          'Columna con numero de fila (deduplicacion). Si no existe, se asume 1'),
-  ('version_esquema',         '1.0.0',                 'Version del esquema ESNI'),
+  ('version_esquema',         '1.1.0',                 'Version del esquema ESNI (1.1.0 = con deteccion mejorada de Id_Personal y Tipo_Edad)'),
   ('modo_estricto',           '0',                     '1=exige todas las columnas; 0=tolerante a columnas faltantes');
 
 SET FOREIGN_KEY_CHECKS = 1;
 
 -- =====================================================================
+-- REGLAS ADICIONALES PARA CODIGOS DE ITEM HIS REALES
+-- ---------------------------------------------------------------------
+-- Las reglas anteriores cubren la Seccion A (menores de 1 anio) usando
+-- codigos de item HIS historicos/teoricamente validos (90585, 90669,
+-- 90681, 90687, 90723, 90744, Z2xx).
+--
+-- Sin embargo, en la tabla consolidada real T_CONSOLIDADO_NUEVA_TRAMA_HISMINSA_DETALLADO
+-- los codigos de item que aparecen con mayor frecuencia son distintos:
+--
+--   90658  - Influenza (3+ anos)           [~3000 filas, ~57% del total]
+--   90670  - Neumococo                      [~480 filas]
+--   90657  - Influenza pediatrica           [~340 filas]
+--   90746  - Hepatitis B adulto             [~300 filas]
+--   90707  - MMR / SPR                      [~200 filas]
+--   90717  - Fiebre Amarilla                [~200 filas]
+--   90722  - Pentavalente                   [~130 filas]
+--   90713  - IPV                             [~130 filas]
+--   90649  - VPH                            [~100 filas]
+--   90633.01 - Hepatitis A pediatrica      [~30 filas]
+--   90714  - dT adulto                       [~70 filas]
+--   90715  - TDAP                            [~50 filas]
+--   90716  - Varicela                        [~40 filas]
+--
+-- Para evitar que el reporte ESNI salga vacio, debe ejecutar tambien:
+--   Database/install_esni_extra_rules.sql
+-- o usar el asistente web: install_esni_extra.php
+-- =====================================================================
+
+-- =====================================================================
 -- FIN DEL SCRIPT
 -- Tablas creadas: 7 (ESNI_VACUNA, ESNI_GRUPO_EDAD, ESNI_DOSIS,
 -- ESNI_SECCION_REPORTE, ESNI_LINEA_REPORTE, ESNI_REGLA, ESNI_PARAMETRO)
--- Reglas sembradas: ~120 reglas para seccion A (menores de 1 anio)
--- El usuario podra agregar reglas para secciones B-Q via esni_config.php
+-- Reglas sembradas: ~137 reglas para seccion A (menores de 1 anio)
+-- Para cobertura completa de los datos reales, ejecutar tambien:
+--   Database/install_esni_extra_rules.sql
+-- El usuario podra agregar mas reglas via esni_config.php
 -- =====================================================================
