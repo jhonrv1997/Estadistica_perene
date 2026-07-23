@@ -808,3 +808,44 @@ code {
 .home-card-warning:hover { box-shadow: 0 12px 30px rgba(243, 156, 18, 0.20); }
 .home-card-danger:hover  { box-shadow: 0 12px 30px rgba(231, 76, 60, 0.18); }
 .home-card-secondary:hover { box-shadow: 0 12px 30px rgba(108, 117, 125, 0.18); }
+
+/* === ESNI - Tarjeta destacada en pagina indice === */
+.subpage-card-featured {
+    border: 2px solid var(--his-success) !important;
+    background: linear-gradient(135deg, rgba(39, 174, 96, 0.06) 0%, rgba(39, 174, 96, 0.02) 100%) !important;
+    position: relative;
+}
+.subpage-card-featured::before {
+    content: 'NUEVO';
+    position: absolute;
+    top: -8px;
+    right: 10px;
+    background: var(--his-success);
+    color: #fff;
+    font-size: .65rem;
+    font-weight: 700;
+    padding: .15rem .5rem;
+    border-radius: 1rem;
+    letter-spacing: .05em;
+}
+.subpage-card-featured:hover {
+    box-shadow: 0 12px 30px rgba(39, 174, 96, 0.25) !important;
+    transform: translateY(-3px);
+}
+
+/* === ESNI - Pagina de reporte === */
+.esni-section-card { border:1px solid #dee2e6; border-radius:.5rem; margin-bottom:1.2rem; overflow:hidden; box-shadow:0 1px 3px rgba(0,0,0,.05); }
+.esni-section-header { background:linear-gradient(90deg,#0d6efd 0%,#0b5ed7 100%); color:#fff; padding:.6rem 1rem; font-weight:600; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:.5rem; }
+.esni-section-header small { opacity:.85; font-weight:400; }
+.esni-table { font-size:.82rem; margin:0; }
+.esni-table thead th { background:#f1f3f5; border-bottom:2px solid #dee2e6; padding:.4rem .5rem; text-align:center; vertical-align:middle; font-weight:600; color:#343a40; }
+.esni-table tbody td { padding:.35rem .5rem; vertical-align:middle; border-bottom:1px solid #f1f3f5; }
+.esni-table tbody tr:hover { background:#f8f9fa; }
+.esni-cod-pill { display:inline-block; background:#e9ecef; color:#495057; padding:.05rem .35rem; border-radius:.3rem; font-size:.7rem; font-weight:600; margin-right:.25rem; font-family:'Courier New', monospace; }
+.esni-total-row { background:#fff3cd !important; font-weight:700; }
+.esni-bigtotal { background:linear-gradient(90deg,#198754 0%,#157347 100%); color:#fff; padding:1rem 1.5rem; border-radius:.5rem; margin-bottom:1rem; }
+.esni-vac-dot { width:10px; height:10px; border-radius:50%; display:inline-block; margin-right:.4rem; vertical-align:middle; }
+.esni-debug { background:#f8f9fa; border:1px solid #dee2e6; padding:.8rem; font-family:monospace; font-size:.75rem; white-space:pre-wrap; word-break:break-all; }
+.esni-stat-card { padding:.8rem; border-radius:.5rem; color:#fff; }
+.esni-stat-num { font-size:1.6rem; font-weight:700; line-height:1; }
+.esni-stat-lbl { font-size:.78rem; opacity:.9; margin-top:.2rem; }
