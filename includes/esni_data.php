@@ -70,7 +70,7 @@ function esniResolverColumnas(PDO $pdo): array {
         'valor_lab'       => ['Valor_Lab', 'valor_lab', 'VALOR_LAB', 'ValorLab', 'LabValor'],
         'aniomes'         => ['AnioMes', 'aniomes', 'Periodo', 'periodo', 'AnioMesMov'],
         'edad_reg'        => ['Edad_Reg', 'edad_reg', 'Edad', 'edad'],
-        'tip_edad'        => ['Tipo_Edad_Reg', 'id_tipedad_reg', 'tip_edad', 'TipEdad', 'TipoEdad'],
+        'tip_edad'        => ['Tipo_Edad_Reg', 'id_tipedad_reg', 'tip_edad', 'TipEdad', 'TipoEdad', 'Tipo_Edad'],
         'grupo_edad'      => ['Grupo_Edad', 'grupo_edad', 'GrupoEdad'],
         'sexo'            => ['Id_Genero', 'id_genero', 'sexo', 'Sexo', 'Genero'],
         'id_paciente'     => ['Id_Paciente', 'id_paciente', 'id_persona', 'Id_Persona'],
@@ -79,7 +79,7 @@ function esniResolverColumnas(PDO $pdo): array {
         'anio'            => ['Anio', 'anio', 'AnioMov'],
         'mes'             => ['Mes', 'mes'],
         'id_cita'         => ['Id_Cita', 'id_cita', 'Id_Cita'],
-        'profesional'     => ['Id_Profesional', 'id_profesional', 'Profesional'],
+        'profesional'     => ['Id_Profesional', 'id_profesional', 'Profesional', 'Id_Personal', 'id_personal', 'Personal'],
         'renaes'          => ['Renaes', 'renaes', 'Codigo_Renaes', 'CodigoRenaes'],
         'id_gruporiesgo'  => ['Id_GrupoRiesgo', 'id_gruporiesgo', 'GrupoRiesgo'],
         'rownnum_lab'     => ['I_ROWNUM_LAB', 'i_rownum_lab', 'RowNumLab'],
@@ -301,8 +301,16 @@ function esniEjecutarReporte(PDO $pdo, array $filtros, array $cols): array {
 
     // Construir SELECT con las columnas relevantes
     $selCols = ["`{$cols['cod_item']}` AS cod_item"];
-    foreach (['valor_lab', 'edad_reg', 'tip_edad', 'grupo_edad', 'sexo', 'aniomes', 'id_paciente', 'id_cita', 'id_gruporiesgo'] as $c) {
+    foreach (['valor_lab', 'edad_reg', 'tip_edad', 'grupo_edad', 'sexo', 'id_paciente', 'id_cita', 'id_gruporiesgo'] as $c) {
         $selCols[] = !empty($cols[$c]) ? "`{$cols[$c]}` AS {$c}" : "NULL AS {$c}";
+    }
+    // AnioMes: si existe la columna, usarla; si no, construir a partir de Anio+Mes (formato YYYYMM)
+    if (!empty($cols['aniomes'])) {
+        $selCols[] = "`{$cols['aniomes']}` AS aniomes";
+    } elseif (!empty($cols['anio']) && !empty($cols['mes'])) {
+        $selCols[] = "CONCAT(`{$cols['anio']}`, LPAD(TRIM(CAST(`{$cols['mes']}` AS CHAR)), 2, '0')) AS aniomes";
+    } else {
+        $selCols[] = "NULL AS aniomes";
     }
     $tabla = $cols['_tabla'];
     $sql = "SELECT " . implode(', ', $selCols) . " FROM `{$tabla}` WHERE {$whereComun}";
@@ -343,7 +351,8 @@ function esniEjecutarReporte(PDO $pdo, array $filtros, array $cols): array {
         $cod = trim((string)$cod);
         if (!isset($reglasPorCod[$cod])) continue;
 
-        $valorLab = isset($f['valor_lab']) ? (string)$f['valor_lab'] : null;
+        $valorLabRaw = isset($f['valor_lab']) ? (string)$f['valor_lab'] : null;
+        $valorLab = ($valorLabRaw !== null && $valorLabRaw !== '') ? strtoupper(trim($valorLabRaw)) : null;
         $edadReg  = isset($f['edad_reg'])  && $f['edad_reg']  !== null ? (float)$f['edad_reg']  : null;
         $tipEdad  = isset($f['tip_edad'])  && $f['tip_edad']  !== null ? (string)$f['tip_edad'] : null;
         $grupoEd  = isset($f['grupo_edad']) && $f['grupo_edad'] !== null ? (string)$f['grupo_edad'] : null;
@@ -352,15 +361,25 @@ function esniEjecutarReporte(PDO $pdo, array $filtros, array $cols): array {
         $idRiesgo = isset($f['id_gruporiesgo']) && $f['id_gruporiesgo'] !== null ? (string)$f['id_gruporiesgo'] : null;
 
         foreach ($reglasPorCod[$cod] as $r) {
-            // 1) Valor lab
-            if (!esniValorLabEncaja($r['valor_lab'], $valorLab)) continue;
+            // 1) Valor lab. Si la regla no especifica valor_lab (NULL o vacio), encaja con cualquier valor.
+            //    Si la regla SI especifica valor_lab, encaja solo si coincide exactamente (case-insensitive).
+            //    Adicionalmente, si el valor_lab de la fila es NULL, intentamos treatarlo como 'DU'
+            //    (Dosis Unica) que es el caso tipico cuando la vacuna es de dosis unica pero no se registro el lab.
+            if (!esniValorLabEncaja($r['valor_lab'], $valorLab)) {
+                // Fallback: si la fila no tiene valor_lab, intentar con 'DU'
+                if ($valorLab === null && esniValorLabEncaja($r['valor_lab'], 'DU')) {
+                    // ok, sigue evaluando
+                } else {
+                    continue;
+                }
+            }
 
             // 2) Sexo
             if ($r['sexo'] !== 'A' && $sexoFila !== null) {
                 if (strtoupper($r['sexo']) !== $sexoFila) continue;
             }
 
-            // 3) Rango aniomes
+            // 3) Rango aniomes (solo si tenemos aniomes calculado)
             if (!empty($r['aniomes_min']) && $aniomes !== null && strcmp($aniomes, $r['aniomes_min']) < 0) continue;
             if (!empty($r['aniomes_max']) && $aniomes !== null && strcmp($aniomes, $r['aniomes_max']) > 0) continue;
 
@@ -564,4 +583,85 @@ function esniGetResumenConfig(PDO $pdo): array {
         $res['reglas']       = (int)$pdo->query("SELECT COUNT(*) FROM ESNI_REGLA WHERE activo=1")->fetchColumn();
     } catch (Throwable $e) {}
     return $res;
+}
+
+/**
+ * Diagnostica la cobertura de reglas ESNI contra los datos reales de la tabla origen.
+ *
+ * Devuelve un array con:
+ *   - 'cod_items_con_reglas'   : cod_items que estan en ESNI_REGLA
+ *   - 'cod_items_en_datos'     : cod_items que aparecen en la tabla origen (con conteo)
+ *   - 'cod_items_sin_reglas'   : cod_items en datos pero SIN reglas (potencialmente perdidos)
+ *   - 'reglas_sin_datos'       : cod_items en reglas pero SIN datos reales (reglas inutiles)
+ *   - 'total_filas_datos'      : total de filas HIS leidas
+ *   - 'filas_cubiertas'        : filas HIS cuyo cod_item tiene al menos una regla
+ *   - 'porcentaje_cobertura'   : filas_cubiertas / total_filas_datos * 100
+ */
+function esniDiagnosticarReglas(PDO $pdo, array $cols, ?array $filtros = null): array {
+    $diag = [
+        'cod_items_con_reglas'  => [],
+        'cod_items_en_datos'    => [],
+        'cod_items_sin_reglas'  => [],
+        'reglas_sin_datos'      => [],
+        'total_filas_datos'     => 0,
+        'filas_cubiertas'       => 0,
+        'porcentaje_cobertura'  => 0.0,
+        'tabla_origen'          => $cols['_tabla'] ?? '?',
+    ];
+
+    // 1) cod_items en reglas
+    try {
+        $stmt = $pdo->query("SELECT DISTINCT cod_item FROM ESNI_REGLA WHERE activo=1");
+        $diag['cod_items_con_reglas'] = $stmt->fetchAll(PDO::FETCH_COLUMN);
+    } catch (Throwable $e) {
+        return $diag;
+    }
+
+    if (!$cols['cod_item']) return $diag;
+    $tabla = $cols['_tabla'];
+
+    // 2) cod_items en datos (aplicando los mismos filtros comunes si se pasan)
+    try {
+        [$where, $params] = esniConstruirWhereFiltros($cols, $filtros ?? []);
+        $sql = "SELECT `{$cols['cod_item']}` AS cod, COUNT(*) AS n
+                FROM `{$tabla}`
+                WHERE {$where}
+                GROUP BY `{$cols['cod_item']}`
+                ORDER BY n DESC";
+        $stmt = $pdo->prepare($sql);
+        $stmt->execute($params);
+        $rows = $stmt->fetchAll();
+        $total = 0;
+        $cubiertas = 0;
+        $conReglaSet = array_fill_keys($diag['cod_items_con_reglas'], true);
+        foreach ($rows as $r) {
+            $cod = trim((string)($r['cod'] ?? ''));
+            $n = (int)$r['n'];
+            $diag['cod_items_en_datos'][] = ['cod' => $cod, 'n' => $n];
+            $total += $n;
+            if (isset($conReglaSet[$cod])) $cubiertas += $n;
+        }
+        $diag['total_filas_datos'] = $total;
+        $diag['filas_cubiertas']   = $cubiertas;
+        $diag['porcentaje_cobertura'] = $total > 0 ? round($cubiertas * 100.0 / $total, 2) : 0.0;
+
+        // 3) cod_items en datos sin reglas (solo los que tienen > 0 filas)
+        foreach ($diag['cod_items_en_datos'] as $r) {
+            if (!isset($conReglaSet[$r['cod']])) {
+                $diag['cod_items_sin_reglas'][] = $r;
+            }
+        }
+        // 4) reglas sin datos
+        $enDatosSet = [];
+        foreach ($diag['cod_items_en_datos'] as $r) $enDatosSet[$r['cod']] = true;
+        foreach ($diag['cod_items_con_reglas'] as $cod) {
+            if (!isset($enDatosSet[$cod])) {
+                $diag['reglas_sin_datos'][] = $cod;
+            }
+        }
+    } catch (Throwable $e) {
+        $diag['error'] = $e->getMessage();
+    }
+
+    return $diag;
 }
