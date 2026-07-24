@@ -524,12 +524,12 @@ function construirSQLConsolidacion($whereClause = '') {
     CASE
         WHEN (NTN.Tipo_Edad='D' AND NTN.Edad_Reg BETWEEN 1 AND 29) THEN '01 a 29 dias'
         WHEN (NTN.Tipo_Edad='M' AND NTN.Edad_Reg BETWEEN 1 AND 11) THEN '01 a 11 meses'
-        WHEN (NTN.Tipo_Edad='A' AND NTN.Edad_Reg BETWEEN 1 AND 4) THEN '01 a 04 anos'
-        WHEN (NTN.Tipo_Edad='A' AND NTN.Edad_Reg BETWEEN 5 AND 11) THEN '05 a 11 anos'
-        WHEN (NTN.Tipo_Edad='A' AND NTN.Edad_Reg BETWEEN 12 AND 17) THEN '12 a 17 anos'
-        WHEN (NTN.Tipo_Edad='A' AND NTN.Edad_Reg BETWEEN 18 AND 29) THEN '18 a 29 anos'
-        WHEN (NTN.Tipo_Edad='A' AND NTN.Edad_Reg BETWEEN 30 AND 59) THEN '30 a 59 anos'
-        WHEN (NTN.Tipo_Edad='A' AND NTN.Edad_Reg > 59) THEN '60 anos a mas'
+        WHEN (NTN.Tipo_Edad='A' AND NTN.Edad_Reg BETWEEN 1 AND 4) THEN '01 a 04 años'
+        WHEN (NTN.Tipo_Edad='A' AND NTN.Edad_Reg BETWEEN 5 AND 11) THEN '05 a 11 años'
+        WHEN (NTN.Tipo_Edad='A' AND NTN.Edad_Reg BETWEEN 12 AND 17) THEN '12 a 17 años'
+        WHEN (NTN.Tipo_Edad='A' AND NTN.Edad_Reg BETWEEN 18 AND 29) THEN '18 a 29 años'
+        WHEN (NTN.Tipo_Edad='A' AND NTN.Edad_Reg BETWEEN 30 AND 59) THEN '30 a 59 años'
+        WHEN (NTN.Tipo_Edad='A' AND NTN.Edad_Reg > 59) THEN '60 años a mas'
     END AS Grupo_Edad,
     NTN.Peso_Pregestacional,
     NTN.Id_Turno,
