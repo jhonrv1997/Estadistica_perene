@@ -16,6 +16,8 @@ $pdo = getDBConnection();
 $fAnio = $_POST['filter_anio'] ?? '';
 $fMes = $_POST['filter_mes'] ?? '';
 $fZonaSanitaria = $_POST['filter_zona_sanitaria'] ?? '';
+$fDepartamento = $_POST['filter_departamento'] ?? '';
+$fUps = $_POST['filter_ups'] ?? '';
 $fEstablecimiento = $_POST['filter_establecimiento'] ?? '';
 $fGrupoEdad = $_POST['filter_grupo_edad'] ?? '';
 $fIdGenero = $_POST['filter_id_genero'] ?? '';
@@ -93,6 +95,18 @@ if ($fDocPaciente !== '') {
 if ($fDocRegistrador !== '') {
     $where .= " AND Numero_Documento_Registrador LIKE :doc_registrador";
     $params[':doc_registrador'] = '%' . $fDocRegistrador . '%';
+}
+if ($fZonaSanitaria !== '') {
+    $where .= " AND Codigo_Unico IN (SELECT Codigo_Unico FROM ZSPERENE WHERE MicroRed = :microred)";
+    $params[':microred'] = $fZonaSanitaria;
+}
+if ($fDepartamento !== '') {
+    $where .= " AND Departamento_Establecimiento = :departamento";
+    $params[':departamento'] = $fDepartamento;
+}
+if ($fUps !== '') {
+    $where .= " AND Id_Ups = :ups";
+    $params[':ups'] = $fUps;
 }
 
 // Consulta de datos para exportar (sin limite)

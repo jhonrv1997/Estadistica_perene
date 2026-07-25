@@ -99,7 +99,9 @@ try {
     $upsPreventivas = [];
 }
 
-$hayFiltros = ($fAnio !== '' || $fMes !== '' || $fZonaSanitaria !== '' || $fEstablecimiento !== '' || $fGrupoEdad !== ''
+// Nota: $fZonaSanitaria se excluye de esta validacion porque tiene valor por defecto 'Perene'.
+// Solo se considera que hay filtros activos cuando el usuario aplica al menos un filtro adicional.
+$hayFiltros = ($fAnio !== '' || $fMes !== '' || $fEstablecimiento !== '' || $fGrupoEdad !== ''
     || $fIdGenero !== '' || $fOtraCondicion !== '' || $fTipoDiagnostico !== '' || $fCodigoItem !== ''
     || $fLote !== '' || $fNumPag !== '' || $fNumReg !== '' || $fDocPaciente !== ''
     || $fDocPersonal !== '' || $fDocRegistrador !== '' || $fUps !== '' || $fDepartamento !== '');
@@ -564,9 +566,9 @@ include 'includes/header.php';
                 <p class="text-muted mb-0">No se encontraron registros con los filtros seleccionados</p>
             </div>
         <?php else: ?>
-            <div class="table-responsive">
+            <div class="table-responsive" style="max-height: 65vh; overflow: auto;">
                 <table class="table table-hover table-sm mb-0" style="font-size: 0.8rem;">
-                    <thead class="table-light">
+                    <thead class="table-light" style="position: sticky; top: 0; z-index: 2; background-color: #f8f9fa;">
                         <tr>
                             <th>#</th>
                             <th>Fecha Atencion</th>
