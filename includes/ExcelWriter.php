@@ -63,12 +63,17 @@ class ExcelWriter {
             $zip->close();
             
             // Enviar archivo
+            if (ob_get_level()) {
+                ob_end_clean();
+            }
             header('Content-Type: application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
             header('Content-Disposition: attachment; filename="' . $filename . '"');
             header('Content-Length: ' . filesize($zipFile));
             header('Cache-Control: max-age=0');
-            
+            header('Pragma: public');
+
             readfile($zipFile);
+            flush();
             
             // Limpiar
             unlink($zipFile);
@@ -126,6 +131,7 @@ class ExcelWriter {
     }
     
     private function createRels($dir) {
+        mkdir($dir . '/_rels', 0777, true);
         $xml = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' . "\n";
         $xml .= '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">';
         $xml .= '<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/>';
