@@ -46,6 +46,7 @@ $fIdGenero = trim($_GET['id_genero'] ?? '');
 $fOtraCondicion = trim($_GET['otra_condicion'] ?? '');
 $fCodigoItem = trim($_GET['codigo_item'] ?? '');
 $fTipoDiagnostico = trim($_GET['tipo_diagnostico'] ?? '');
+$fValorLab = trim($_GET['valor_lab'] ?? '');
 $fLote = trim($_GET['lote'] ?? '');
 $fNumPag = trim($_GET['num_pag'] ?? '');
 $fNumReg = trim($_GET['num_reg'] ?? '');
@@ -110,7 +111,7 @@ try {
 // Nota: $fZonaSanitaria se excluye de esta validacion porque tiene valor por defecto 'Perene'.
 // Solo se considera que hay filtros activos cuando el usuario aplica al menos un filtro adicional.
 $hayFiltros = ($fAnio !== '' || $fMes !== '' || $fEstablecimiento !== '' || $fGrupoEdad !== ''
-    || $fIdGenero !== '' || $fOtraCondicion !== '' || $fTipoDiagnostico !== '' || $fCodigoItem !== ''
+    || $fIdGenero !== '' || $fOtraCondicion !== '' || $fTipoDiagnostico !== '' || $fValorLab !== '' || $fCodigoItem !== ''
     || $fLote !== '' || $fNumPag !== '' || $fNumReg !== '' || $fDocPaciente !== ''
     || $fDocPersonal !== '' || $fDocRegistrador !== '' || $fUps !== '' || $fDepartamento !== '');
 
@@ -125,7 +126,7 @@ $buscar = isset($_GET['buscar']) && $_GET['buscar'] === '1';
 
 // Filtros adicionales: cualquier filtro distinto a Anio, Mes y Zona Sanitaria (que tienen valores por defecto)
 $hayFiltrosAdicionales = ($fEstablecimiento !== '' || $fGrupoEdad !== ''
-    || $fIdGenero !== '' || $fOtraCondicion !== '' || $fTipoDiagnostico !== '' || $fCodigoItem !== ''
+    || $fIdGenero !== '' || $fOtraCondicion !== '' || $fTipoDiagnostico !== '' || $fValorLab !== '' || $fCodigoItem !== ''
     || $fLote !== '' || $fNumPag !== '' || $fNumReg !== '' || $fDocPaciente !== ''
     || $fDocPersonal !== '' || $fDocRegistrador !== '' || $fUps !== '' || $fDepartamento !== '');
 
@@ -162,6 +163,9 @@ if ($fOtraCondicion !== '') {
 }
 if ($fTipoDiagnostico !== '') {
     $where .= " AND Tipo_Diagnostico = :td"; $params[':td'] = $fTipoDiagnostico;
+}
+if ($fValorLab !== '') {
+    $where .= " AND Valor_Lab LIKE :vlab"; $params[':vlab'] = '%' . $fValorLab . '%';
 }
 if ($fCodigoItem !== '') {
     $where .= " AND Codigo_Item LIKE :citem"; $params[':citem'] = '%' . $fCodigoItem . '%';
@@ -424,7 +428,7 @@ include 'includes/header.php';
                     <input type="text" name="codigo_item" class="form-control form-control-sm" placeholder="Ej: CIE10" value="<?= htmlspecialchars($fCodigoItem) ?>">
                 </div>
 
-                <!-- Fila 3: Tipo Diagnostico, Lote, Num Pag, Num Reg -->
+                <!-- Fila 3: Tipo Diagnostico, Valor Lab, Lote, Num Pag, Num Reg -->
                 <div class="col-lg-3 col-md-4 col-sm-6">
                     <label class="form-label fw-semibold">Tipo Diagnostico</label>
                     <select name="tipo_diagnostico" class="form-select form-select-sm">
@@ -433,6 +437,10 @@ include 'includes/header.php';
                             <option value="<?= htmlspecialchars($td) ?>" <?= $fTipoDiagnostico === $td ? 'selected' : '' ?>><?= htmlspecialchars($td) ?></option>
                         <?php endforeach; ?>
                     </select>
+                </div>
+                <div class="col-lg-3 col-md-4 col-sm-6">
+                    <label class="form-label fw-semibold">Valor Lab</label>
+                    <input type="text" name="valor_lab" class="form-control form-control-sm" placeholder="Valor Lab" value="<?= htmlspecialchars($fValorLab) ?>">
                 </div>
                 <div class="col-lg-3 col-md-4 col-sm-6">
                     <label class="form-label fw-semibold">Lote</label>
