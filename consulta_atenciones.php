@@ -37,8 +37,8 @@ $subInfo = [
 // ============================================================
 // FILTROS COMUNES
 // ============================================================
-$fAnio = trim($_GET['anio'] ?? '');
-$fMes = trim($_GET['mes'] ?? '');
+$fAnio = trim($_GET['anio'] ?? date('Y'));
+$fMes = trim($_GET['mes'] ?? date('m'));
 $fZonaSanitaria = trim($_GET['zona_sanitaria'] ?? 'Perene'); // Valor por defecto: Perene
 $fEstablecimiento = trim($_GET['establecimiento'] ?? '');
 $fGrupoEdad = trim($_GET['grupo_edad'] ?? '');
@@ -211,6 +211,7 @@ if ($hayFiltros || $sub === 'preventivas') {
     // Campos ampliados segun requerimiento para la tabla general
     $campos = "Id_Cita, Anio, Mes, Dia, Fecha_Atencion,
                Lote, Num_Pag, Num_Reg,
+               Id_Turno, Id_Condicion_Establecimiento, Id_Condicion_Servicio,
                Codigo_Unico, Nombre_Establecimiento,
                Abrev_Tipo_Doc_Paciente, Numero_Documento_Paciente,
                Nombres_Paciente, Apellido_Paterno_Paciente,
@@ -567,27 +568,30 @@ include 'includes/header.php';
             </div>
         <?php else: ?>
             <div class="table-responsive" style="max-height: 65vh; overflow: auto;">
-                <table class="table table-hover table-sm mb-0" style="font-size: 0.8rem;">
+                <table class="table table-hover table-sm mb-0" style="font-size: 0.73rem;">
                     <thead class="table-light" style="position: sticky; top: 0; z-index: 2; background-color: #f8f9fa;">
                         <tr>
                             <th>#</th>
-                            <th>Fecha Atencion</th>
+                            <th>FECHA ATC</th>
                             <th>Establecimiento</th>
                             <th>Lote</th>
-                            <th>Num. Pag</th>
-                            <th>Num. Reg</th>
+                            <th>N.P.</th>
+                            <th>N.R.</th>
+                            <th>TUR</th>
+                            <th>CE</th>
+                            <th>CS</th>
                             <th>T. Doc.</th>
-                            <th>Doc. Paciente</th>
+                            <th>NUM. DOCUMENTO</th>
                             <th>Nombres Paciente</th>
                             <th>Ap. Paterno Pac.</th>
-                            <th>Genero</th>
+                            <th>GEN</th>
                             <th>T. Edad</th>
                             <th>Edad</th>
-                            <th>F. Nacimiento</th>
-                            <th>Cod. Item</th>
+                            <th>FECHA NAC.</th>
+                            <th>CIEX/CPT</th>
                             <th>Descripcion Item</th>
-                            <th>T. Diag.</th>
-                            <th>Valor Lab</th>
+                            <th>T.Dx</th>
+                            <th>LAB</th>
                             <th>Tipo</th>
                             <th>UPS</th>
                             <th>Nombres Personal</th>
@@ -610,6 +614,9 @@ include 'includes/header.php';
                             <td><?= clean($row['Lote']) ?></td>
                             <td><?= clean($row['Num_Pag']) ?></td>
                             <td><?= clean($row['Num_Reg']) ?></td>
+                            <td><?= clean($row['Id_Turno']) ?></td>
+                            <td><?= clean($row['Id_Condicion_Establecimiento']) ?></td>
+                            <td><?= clean($row['Id_Condicion_Servicio']) ?></td>
                             <td><small><?= clean($row['Abrev_Tipo_Doc_Paciente']) ?></small></td>
                             <td><?= clean($row['Numero_Documento_Paciente']) ?></td>
                             <td title="<?= clean($row['Nombres_Paciente']) ?>">
