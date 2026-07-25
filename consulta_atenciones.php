@@ -60,6 +60,14 @@ $fDepartamento = trim($_GET['departamento'] ?? '');
 // ============================================================
 $anios = $pdo->query("SELECT DISTINCT Anio FROM T_CONSOLIDADO_NUEVA_TRAMA_HISMINSA_DETALLADO WHERE Anio IS NOT NULL ORDER BY Anio DESC")->fetchAll(PDO::FETCH_COLUMN);
 
+// Asegurar que el anio actual este siempre en la lista (por defecto seleccionado)
+$anioActual = date('Y');
+$aniosAsString = array_map('strval', $anios);
+if (!in_array($anioActual, $aniosAsString, true)) {
+    $anios[] = $anioActual;
+    usort($anios, function ($a, $b) { return intval($b) - intval($a); }); // Re-ordenar descendente
+}
+
 // Zona Sanitaria - basada en tabla ZSPERENE (campo MicroRed)
 $zonasSanitarias = $pdo->query("SELECT DISTINCT MicroRed FROM ZSPERENE WHERE MicroRed IS NOT NULL ORDER BY MicroRed")->fetchAll(PDO::FETCH_COLUMN);
 
@@ -105,6 +113,23 @@ $hayFiltros = ($fAnio !== '' || $fMes !== '' || $fEstablecimiento !== '' || $fGr
     || $fIdGenero !== '' || $fOtraCondicion !== '' || $fTipoDiagnostico !== '' || $fCodigoItem !== ''
     || $fLote !== '' || $fNumPag !== '' || $fNumReg !== '' || $fDocPaciente !== ''
     || $fDocPersonal !== '' || $fDocRegistrador !== '' || $fUps !== '' || $fDepartamento !== '');
+
+// ============================================================
+// CONTROL DE VISUALIZACION DE RESULTADOS
+// ============================================================
+// Para sub=general: la pagina se carga SIN resultados por defecto.
+// Los resultados solo se muestran cuando el usuario hace clic en el boton "Buscar"
+// (lo que envia el parametro buscar=1 en la URL) o cuando hay filtros adicionales.
+// Para sub=preventivas: se mantiene el comportamiento original (siempre muestra resultados).
+$buscar = isset($_GET['buscar']) && $_GET['buscar'] === '1';
+
+// Filtros adicionales: cualquier filtro distinto a Anio, Mes y Zona Sanitaria (que tienen valores por defecto)
+$hayFiltrosAdicionales = ($fEstablecimiento !== '' || $fGrupoEdad !== ''
+    || $fIdGenero !== '' || $fOtraCondicion !== '' || $fTipoDiagnostico !== '' || $fCodigoItem !== ''
+    || $fLote !== '' || $fNumPag !== '' || $fNumReg !== '' || $fDocPaciente !== ''
+    || $fDocPersonal !== '' || $fDocRegistrador !== '' || $fUps !== '' || $fDepartamento !== '');
+
+$mostrarResultados = ($sub === 'preventivas') ? true : ($buscar || $hayFiltrosAdicionales);
 
 // ============================================================
 // CONSTRUCCION DE WHERE
@@ -198,7 +223,7 @@ $pagina = 1;
 $offset = 0;
 $porPagina = 50;
 
-if ($hayFiltros || $sub === 'preventivas') {
+if ($mostrarResultados) {
     $countSql = "SELECT COUNT(*) FROM T_CONSOLIDADO_NUEVA_TRAMA_HISMINSA_DETALLADO WHERE " . $where;
     $countStmt = $pdo->prepare($countSql);
     $countStmt->execute($params);
@@ -265,7 +290,7 @@ include 'includes/header.php';
 </ul>
 
 <!-- Stats -->
-<?php if ($hayFiltros || $sub === 'preventivas'): ?>
+<?php if ($mostrarResultados): ?>
 <div class="row mb-4">
     <div class="col-md-3 col-6 mb-3">
         <div class="stat-card stat-primary">
@@ -322,6 +347,7 @@ include 'includes/header.php';
     <div class="card-body">
         <form id="filterForm" method="GET" action="consulta_atenciones.php">
             <input type="hidden" name="sub" value="<?= htmlspecialchars($sub) ?>">
+            <input type="hidden" name="buscar" value="1">
 
             <?php if ($sub === 'general'): ?>
             <!-- ============================================ -->
@@ -334,7 +360,7 @@ include 'includes/header.php';
                     <select name="anio" class="form-select form-select-sm">
                         <option value="">-- Todos --</option>
                         <?php foreach ($anios as $a): ?>
-                            <option value="<?= htmlspecialchars($a) ?>" <?= $fAnio === $a ? 'selected' : '' ?>><?= htmlspecialchars($a) ?></option>
+                            <option value="<?= htmlspecialchars($a) ?>" <?= (string)$fAnio === (string)$a ? 'selected' : '' ?>><?= htmlspecialchars($a) ?></option>
                         <?php endforeach; ?>
                     </select>
                 </div>
@@ -343,7 +369,7 @@ include 'includes/header.php';
                     <select name="mes" class="form-select form-select-sm">
                         <option value="">-- Todos --</option>
                         <?php for ($m = 1; $m <= 12; $m++): ?>
-                            <option value="<?= $m ?>" <?= $fMes === (string)$m ? 'selected' : '' ?>><?= getNombreMes($m) ?></option>
+                            <option value="<?= $m ?>" <?= ($fMes !== '' && intval($fMes) === $m) ? 'selected' : '' ?>><?= getNombreMes($m) ?></option>
                         <?php endfor; ?>
                     </select>
                 </div>
@@ -385,7 +411,7 @@ include 'includes/header.php';
                     </select>
                 </div>
                 <div class="col-lg-3 col-md-4 col-sm-6">
-                    <label class="form-label fw-semibold">Otra Condicion</label>
+                    <label class="form-label fw-semibold">Condicion Materna</label>
                     <select name="otra_condicion" class="form-select form-select-sm">
                         <option value="">-- Todos --</option>
                         <?php foreach ($otrasCondiciones as $oc): ?>
@@ -394,7 +420,7 @@ include 'includes/header.php';
                     </select>
                 </div>
                 <div class="col-lg-3 col-md-4 col-sm-6">
-                    <label class="form-label fw-semibold">Codigo Item</label>
+                    <label class="form-label fw-semibold">CIE-10 / CPT</label>
                     <input type="text" name="codigo_item" class="form-control form-control-sm" placeholder="Ej: CIE10" value="<?= htmlspecialchars($fCodigoItem) ?>">
                 </div>
 
@@ -446,7 +472,7 @@ include 'includes/header.php';
                     <select name="anio" class="form-select form-select-sm">
                         <option value="">-- Todos --</option>
                         <?php foreach ($anios as $a): ?>
-                            <option value="<?= htmlspecialchars($a) ?>" <?= $fAnio === $a ? 'selected' : '' ?>><?= htmlspecialchars($a) ?></option>
+                            <option value="<?= htmlspecialchars($a) ?>" <?= (string)$fAnio === (string)$a ? 'selected' : '' ?>><?= htmlspecialchars($a) ?></option>
                         <?php endforeach; ?>
                     </select>
                 </div>
@@ -455,7 +481,7 @@ include 'includes/header.php';
                     <select name="mes" class="form-select form-select-sm">
                         <option value="">-- Todos --</option>
                         <?php for ($m = 1; $m <= 12; $m++): ?>
-                            <option value="<?= $m ?>" <?= $fMes === (string)$m ? 'selected' : '' ?>><?= getNombreMes($m) ?></option>
+                            <option value="<?= $m ?>" <?= ($fMes !== '' && intval($fMes) === $m) ? 'selected' : '' ?>><?= getNombreMes($m) ?></option>
                         <?php endfor; ?>
                     </select>
                 </div>
@@ -534,12 +560,12 @@ include 'includes/header.php';
 <?php endif; ?>
 
 <!-- Resultados -->
-<?php if (!$hayFiltros && $sub !== 'preventivas'): ?>
+<?php if (!$mostrarResultados && $sub !== 'preventivas'): ?>
 <div class="card shadow-sm">
     <div class="card-body text-center py-5">
         <i class="fas fa-filter fa-3x text-muted mb-3"></i>
-        <h5 class="text-muted mb-2">Seleccione al menos un filtro para consultar</h5>
-        <p class="text-muted small mb-0">Use los filtros de arriba para cargar los datos del consolidado.</p>
+        <h5 class="text-muted mb-2">Haga clic en Buscar para consultar las atenciones</h5>
+        <p class="text-muted small mb-0">Configure los filtros de arriba y presione el boton <strong>Buscar</strong> para cargar los datos del consolidado.</p>
     </div>
 </div>
 <?php else: ?>
