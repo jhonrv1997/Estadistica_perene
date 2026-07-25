@@ -165,10 +165,22 @@ if ($fTipoDiagnostico !== '') {
     $where .= " AND Tipo_Diagnostico = :td"; $params[':td'] = $fTipoDiagnostico;
 }
 if ($fValorLab !== '') {
-    $where .= " AND Valor_Lab LIKE :vlab"; $params[':vlab'] = '%' . $fValorLab . '%';
+    // Coincidencia exacta por defecto; si termina con "*", busqueda parcial desde el inicio
+    if (str_ends_with($fValorLab, '*')) {
+        $vlabVal = rtrim($fValorLab, '*');
+        $where .= " AND Valor_Lab LIKE :vlab"; $params[':vlab'] = $vlabVal . '%';
+    } else {
+        $where .= " AND Valor_Lab = :vlab"; $params[':vlab'] = $fValorLab;
+    }
 }
 if ($fCodigoItem !== '') {
-    $where .= " AND Codigo_Item LIKE :citem"; $params[':citem'] = '%' . $fCodigoItem . '%';
+    // Coincidencia exacta por defecto; si termina con "*", busqueda parcial desde el inicio
+    if (str_ends_with($fCodigoItem, '*')) {
+        $citemVal = rtrim($fCodigoItem, '*');
+        $where .= " AND Codigo_Item LIKE :citem"; $params[':citem'] = $citemVal . '%';
+    } else {
+        $where .= " AND Codigo_Item = :citem"; $params[':citem'] = $fCodigoItem;
+    }
 }
 if ($fLote !== '') {
     $where .= " AND Lote = :lote"; $params[':lote'] = $fLote;
@@ -425,7 +437,7 @@ include 'includes/header.php';
                 </div>
                 <div class="col-lg-3 col-md-4 col-sm-6">
                     <label class="form-label fw-semibold">CIE-10 / CPT</label>
-                    <input type="text" name="codigo_item" class="form-control form-control-sm" placeholder="Ej: CIE10" value="<?= htmlspecialchars($fCodigoItem) ?>">
+                    <input type="text" name="codigo_item" class="form-control form-control-sm" placeholder="Ej: A00* para búsqueda parcial" value="<?= htmlspecialchars($fCodigoItem) ?>">
                 </div>
 
                 <!-- Fila 3: Tipo Diagnostico, Valor Lab, Lote, Num Pag, Num Reg -->
@@ -440,7 +452,7 @@ include 'includes/header.php';
                 </div>
                 <div class="col-lg-3 col-md-4 col-sm-6">
                     <label class="form-label fw-semibold">Valor Lab</label>
-                    <input type="text" name="valor_lab" class="form-control form-control-sm" placeholder="Valor Lab" value="<?= htmlspecialchars($fValorLab) ?>">
+                    <input type="text" name="valor_lab" class="form-control form-control-sm" placeholder="Ej: 150* para búsqueda parcial" value="<?= htmlspecialchars($fValorLab) ?>">
                 </div>
                 <div class="col-lg-3 col-md-4 col-sm-6">
                     <label class="form-label fw-semibold">Lote</label>
@@ -531,7 +543,7 @@ include 'includes/header.php';
                 </div>
                 <div class="col-lg-3 col-md-4 col-sm-6">
                     <label class="form-label fw-semibold">Codigo Item</label>
-                    <input type="text" name="codigo_item" class="form-control form-control-sm" placeholder="Ej: CIE10" value="<?= htmlspecialchars($fCodigoItem) ?>">
+                    <input type="text" name="codigo_item" class="form-control form-control-sm" placeholder="Ej: A00* para búsqueda parcial" value="<?= htmlspecialchars($fCodigoItem) ?>">
                 </div>
                 <?php if (!empty($upsPreventivas)): ?>
                 <div class="col-lg-3 col-md-4 col-sm-6">
