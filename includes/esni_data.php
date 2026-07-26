@@ -290,6 +290,21 @@ function esniEjecutarReporte(PDO $pdo, array $filtros, array $cols): array {
     $codItems = array_filter($codItems, fn($c) => $c !== null && $c !== '');
     if (empty($codItems)) return ['secciones' => [], 'totales' => [], 'error' => 'Las reglas no tienen cod_item definidos'];
 
+    // Comorbilidad: si alguna regla activa requiere/excluye comorbilidad, necesitamos
+    // traer tambien las filas con cod_item=9999 para saber que pacientes la tienen.
+    // El valor '9999' es el codigo de item HIS que marca condicion de comorbilidad.
+    $usaComorbilidad = false;
+    foreach ($reglas as $r) {
+        if (!empty($r['requiere_comorbilidad']) || !empty($r['excluye_comorbilidad'])) {
+            $usaComorbilidad = true;
+            break;
+        }
+    }
+    $codComorbilidad = '9999';
+    if ($usaComorbilidad && !in_array($codComorbilidad, $codItems, true)) {
+        $codItems[] = $codComorbilidad;
+    }
+
     if (!$cols['cod_item']) {
         return ['secciones' => [], 'totales' => [], 'error' => 'La tabla origen no tiene columna de codigo de item detectable'];
     }
@@ -356,11 +371,29 @@ function esniEjecutarReporte(PDO $pdo, array $filtros, array $cols): array {
         }
     }
 
+    // Comorbilidad: construir conjunto de id_paciente que tienen al menos una
+    // fila con cod_item=9999. Se usa para evaluar requiere/excluye_comorbilidad.
+    $pacientesConComorbilidad = [];
+    if ($usaComorbilidad && !empty($cols['id_paciente'])) {
+        foreach ($filas as $f) {
+            $cod = isset($f['cod_item']) ? trim((string)$f['cod_item']) : '';
+            if ($cod !== $codComorbilidad) continue;
+            $idPac = isset($f['id_paciente']) && $f['id_paciente'] !== null && $f['id_paciente'] !== ''
+                ? (string)$f['id_paciente'] : null;
+            if ($idPac !== null) {
+                $pacientesConComorbilidad[$idPac] = true;
+            }
+        }
+    }
+
     // Recorrer filas y aplicar motor de reglas
     foreach ($filas as $f) {
         $cod = $f['cod_item'] ?? null;
         if ($cod === null) continue;
         $cod = trim((string)$cod);
+        // Las filas con cod_item=9999 solo se usan como marcador de comorbilidad,
+        // no se cuentan como dosis administrada en ninguna linea del reporte.
+        if ($cod === $codComorbilidad) continue;
         if (!isset($reglasPorCod[$cod])) continue;
 
         $valorLabRaw = isset($f['valor_lab']) ? (string)$f['valor_lab'] : null;
@@ -371,6 +404,8 @@ function esniEjecutarReporte(PDO $pdo, array $filtros, array $cols): array {
         $sexoFila = isset($f['sexo']) && $f['sexo'] !== null ? strtoupper(trim((string)$f['sexo'])) : null;
         $aniomes  = isset($f['aniomes']) && $f['aniomes'] !== null ? (string)$f['aniomes'] : null;
         $idRiesgo = isset($f['id_gruporiesgo']) && $f['id_gruporiesgo'] !== null ? (string)$f['id_gruporiesgo'] : null;
+        $idPaciente = isset($f['id_paciente']) && $f['id_paciente'] !== null && $f['id_paciente'] !== ''
+            ? (string)$f['id_paciente'] : null;
 
         foreach ($reglasPorCod[$cod] as $r) {
             // 1) Valor lab. Si la regla no especifica valor_lab (NULL o vacio), encaja con cualquier valor.
@@ -401,6 +436,14 @@ function esniEjecutarReporte(PDO $pdo, array $filtros, array $cols): array {
             // 5) Requiere/excluye riesgo
             if ($r['requiere_riesgo'] == 1 && $idRiesgo !== '2') continue;
             if ($r['excluye_riesgo'] == 1 && $idRiesgo === '2') continue;
+
+            // 6) Requiere/excluye comorbilidad (cod_item=9999 en otro registro del mismo paciente)
+            if (!empty($r['requiere_comorbilidad'])) {
+                if ($idPaciente === null || !isset($pacientesConComorbilidad[$idPaciente])) continue;
+            }
+            if (!empty($r['excluye_comorbilidad'])) {
+                if ($idPaciente !== null && isset($pacientesConComorbilidad[$idPaciente])) continue;
+            }
 
             // Match!
             $contadores[$r['id_linea']]++;
@@ -627,10 +670,19 @@ function esniCrearLinea(PDO $pdo, int $idSeccion, string $etiqueta, ?int $idVacu
 
 /**
  * Crea una nueva regla. Devuelve el id_regla.
+ *
+ * Comorbilidad: cuando requiereComorbilidad=1 la regla solo encaja si el
+ * paciente tiene ademas otro registro con cod_item=9999. Cuando
+ * excluyeComorbilidad=1 la regla solo encaja si el paciente NO tiene ningun
+ * registro con cod_item=9999. Esto permite distinguir lineas como:
+ *   - Influenza sin Comorbilidad  (excluye_comorbilidad=1)
+ *   - Influenza con Comorbilidad  (requiere_comorbilidad=1)
+ *   - Neumococo sin Comorbilidad  (excluye_comorbilidad=1)
+ *   - Neumococo con Comorbilidad  (requiere_comorbilidad=1)
  */
-function esniCrearRegla(PDO $pdo, int $idLinea, string $codItem, ?string $valorLab = null, ?int $idGrupoEdad = null, string $sexo = 'A', ?string $aniomesMin = null, ?string $aniomesMax = null, int $requiereRiesgo = 0, int $excluyeRiesgo = 0): int {
-    $stmt = $pdo->prepare("INSERT INTO ESNI_REGLA (id_linea, cod_item, valor_lab, id_grupo_edad, sexo, aniomes_min, aniomes_max, requiere_riesgo, excluye_riesgo) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)");
-    $stmt->execute([$idLinea, $codItem, $valorLab, $idGrupoEdad, $sexo, $aniomesMin, $aniomesMax, $requiereRiesgo, $excluyeRiesgo]);
+function esniCrearRegla(PDO $pdo, int $idLinea, string $codItem, ?string $valorLab = null, ?int $idGrupoEdad = null, string $sexo = 'A', ?string $aniomesMin = null, ?string $aniomesMax = null, int $requiereRiesgo = 0, int $excluyeRiesgo = 0, int $requiereComorbilidad = 0, int $excluyeComorbilidad = 0): int {
+    $stmt = $pdo->prepare("INSERT INTO ESNI_REGLA (id_linea, cod_item, valor_lab, id_grupo_edad, sexo, aniomes_min, aniomes_max, requiere_riesgo, excluye_riesgo, requiere_comorbilidad, excluye_comorbilidad) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
+    $stmt->execute([$idLinea, $codItem, $valorLab, $idGrupoEdad, $sexo, $aniomesMin, $aniomesMax, $requiereRiesgo, $excluyeRiesgo, $requiereComorbilidad, $excluyeComorbilidad]);
     return (int)$pdo->lastInsertId();
 }
 
