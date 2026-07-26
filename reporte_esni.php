@@ -30,6 +30,17 @@ $esquemaOK = esniEsquemaInstalado($pdo);
 // Resolver columnas de la tabla origen
 $cols = esniResolverColumnas($pdo);
 
+// ============================================================================
+// FILTRO DE ESTRATEGIA ESNI
+// ----------------------------------------------------------------------------
+// Se forza el filtro Id_Ups = 301204 sobre la tabla
+// T_CONSOLIDADO_NUEVA_TRAMA_HISMINSA_DETALLADO para evitar cargar datos de
+// otras estrategias (ESNI / VPH / Atencion, etc.) que comparten la misma
+// tabla consolidada. De esta manera el reporte ESNI solo trabajara con las
+// filas que realmente pertenecen a Inmunizaciones (Id_Ups = 301204).
+// ============================================================================
+define('ESNI_ID_UPS', '301204');
+
 // Filtros
 $fAnio            = trim($_GET['anio'] ?? '');
 $fMes             = trim($_GET['mes'] ?? '');
@@ -43,17 +54,19 @@ $filtros = [
     'establecimiento' => $fEstablecimiento,
     'departamento'    => $fDepartamento,
     'profesional'     => $fProfesional,
+    // Fijo para el modulo ESNI: solo estrategia Id_Ups = 301204
+    'id_ups'          => ESNI_ID_UPS,
 ];
 
-// Listas para los selectores
-$anios           = esniGetAniosDisponibles($pdo, $cols);
+// Listas para los selectores (filtradas por Id_Ups = 301204)
+$anios           = esniGetAniosDisponibles($pdo, $cols, ESNI_ID_UPS);
 if (empty($anios)) $anios = [date('Y')];
 if ($fAnio === '' && !empty($anios)) $fAnio = $anios[0];
 $filtros['anio'] = $fAnio;
 
-$establecimientos = esniGetEstablecimientos($pdo, $cols);
-$departamentos    = esniGetDepartamentos($pdo, $cols);
-$profesionales    = esniGetProfesionales($pdo, $cols);
+$establecimientos = esniGetEstablecimientos($pdo, $cols, ESNI_ID_UPS);
+$departamentos    = esniGetDepartamentos($pdo, $cols, ESNI_ID_UPS);
+$profesionales    = esniGetProfesionales($pdo, $cols, ESNI_ID_UPS);
 
 // Ejecutar reporte solo si se solicita (boton Generar) o si hay filtros
 $ejecutar = isset($_GET['generar']) || $fAnio !== '' || $fMes !== '' || $fEstablecimiento !== '' || $fDepartamento !== '' || $fProfesional !== '';
@@ -143,6 +156,16 @@ include 'includes/header.php';
         </div>
     </div>
     <div class="card-body">
+        <div class="alert alert-info py-2 mb-3 small d-flex align-items-center">
+            <i class="fas fa-lock me-2 text-info"></i>
+            <span>
+                <strong>Estrategia fija:</strong>
+                Este reporte solo carga datos de la tabla
+                <code>T_CONSOLIDADO_NUEVA_TRAMA_HISMINSA_DETALLADO</code>
+                con <code>Id_Ups = <?= htmlspecialchars(ESNI_ID_UPS) ?></code>
+                (Inmunizaciones / ESNI), para evitar cargar datos de otras estrategias.
+            </span>
+        </div>
         <form id="filterForm" method="GET" action="reporte_esni.php">
             <input type="hidden" name="generar" value="1">
             <div class="row g-3">
@@ -225,12 +248,13 @@ include 'includes/header.php';
         <small>Filtros:</small>
         <?php
         $tags = [];
+        $tags[] = 'Id_Ups=' . ESNI_ID_UPS . ' (ESNI)'; // Fijo por modulo
         if ($fAnio)            $tags[] = 'Anio=' . $fAnio;
         if ($fMes)             $tags[] = 'Mes=' . getNombreMes($fMes);
         if ($fDepartamento)    $tags[] = 'Dep=' . $fDepartamento;
         if ($fEstablecimiento) $tags[] = 'EESS=' . mb_strimwidth($fEstablecimiento, 0, 25, '...');
         if ($fProfesional)     $tags[] = 'Prof=' . $fProfesional;
-        if (empty($tags)) $tags[] = 'SIN FILTROS (todos los periodos)';
+        if (count($tags) === 1) $tags[] = 'SIN FILTROS (todos los periodos)';
         ?>
         <?php foreach ($tags as $t): ?>
             <span class="badge bg-light text-dark me-1"><?= htmlspecialchars($t) ?></span>
