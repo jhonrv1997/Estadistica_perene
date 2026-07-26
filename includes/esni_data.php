@@ -83,6 +83,8 @@ function esniResolverColumnas(PDO $pdo): array {
         'renaes'          => ['Renaes', 'renaes', 'Codigo_Renaes', 'CodigoRenaes'],
         'id_gruporiesgo'  => ['Id_GrupoRiesgo', 'id_gruporiesgo', 'GrupoRiesgo'],
         'rownnum_lab'     => ['I_ROWNUM_LAB', 'i_rownum_lab', 'RowNumLab'],
+        // Estrategia / UPS: el modulo ESNI solo debe leer filas con Id_Ups = 301204
+        'id_ups'          => ['Id_Ups', 'id_ups', 'ID_UPS', 'IdUps', 'id_Ups'],
     ];
 
     $resueltos = [];
@@ -149,6 +151,16 @@ function esniGetReglas(PDO $pdo, ?int $idLinea = null): array {
 function esniConstruirWhereFiltros(array $cols, array $filtros): array {
     $where = ["1=1"];
     $params = [];
+
+    // Filtro fijo de estrategia ESNI: Id_Ups = 301204.
+    // Se aplica SIEMPRE que la columna exista en la tabla origen y el filtro
+    // venga en $filtros (el modulo reporte_esni.php lo setea por defecto).
+    // Esto evita cargar datos de otras estrategias (VPH, Atencion, etc.)
+    // que comparten la tabla T_CONSOLIDADO_NUEVA_TRAMA_HISMINSA_DETALLADO.
+    if (!empty($filtros['id_ups']) && !empty($cols['id_ups'])) {
+        $where[] = "`{$cols['id_ups']}` = :id_ups";
+        $params[':id_ups'] = $filtros['id_ups'];
+    }
 
     if (!empty($filtros['anio']) && $cols['anio']) {
         $where[] = "`{$cols['anio']}` = :anio";
@@ -440,12 +452,26 @@ function esniEjecutarReporte(PDO $pdo, array $filtros, array $cols): array {
 
 /**
  * Obtiene la lista de anios disponibles en la tabla origen.
+ *
+ * @param PDO    $pdo
+ * @param array  $cols   Mapa de columnas resueltas (de esniResolverColumnas)
+ * @param string|null $idUps  Si se indica, filtra por Id_Ups (estrategia ESNI = 301204)
+ * @return array
  */
-function esniGetAniosDisponibles(PDO $pdo, array $cols): array {
+function esniGetAniosDisponibles(PDO $pdo, array $cols, ?string $idUps = null): array {
     if (!$cols['anio']) return [date('Y')];
     try {
         $tabla = $cols['_tabla'];
-        $stmt = $pdo->query("SELECT DISTINCT `{$cols['anio']}` AS anio FROM `{$tabla}` WHERE `{$cols['anio']}` IS NOT NULL ORDER BY anio DESC");
+        $where = ["`{$cols['anio']}` IS NOT NULL"];
+        $params = [];
+        // Filtro de estrategia: solo anios de la estrategia indicada (p.ej. ESNI=301204)
+        if ($idUps !== null && $idUps !== '' && !empty($cols['id_ups'])) {
+            $where[] = "`{$cols['id_ups']}` = :id_ups";
+            $params[':id_ups'] = $idUps;
+        }
+        $sql = "SELECT DISTINCT `{$cols['anio']}` AS anio FROM `{$tabla}` WHERE " . implode(' AND ', $where) . " ORDER BY anio DESC";
+        $stmt = $pdo->prepare($sql);
+        $stmt->execute($params);
         $r = $stmt->fetchAll(PDO::FETCH_COLUMN);
         return $r ?: [date('Y')];
     } catch (Throwable $e) {
@@ -455,12 +481,25 @@ function esniGetAniosDisponibles(PDO $pdo, array $cols): array {
 
 /**
  * Obtiene lista de establecimientos.
+ *
+ * @param PDO    $pdo
+ * @param array  $cols
+ * @param string|null $idUps  Si se indica, filtra por Id_Ups (estrategia ESNI = 301204)
+ * @return array
  */
-function esniGetEstablecimientos(PDO $pdo, array $cols): array {
+function esniGetEstablecimientos(PDO $pdo, array $cols, ?string $idUps = null): array {
     if (!$cols['establecimiento']) return [];
     try {
         $tabla = $cols['_tabla'];
-        $stmt = $pdo->query("SELECT DISTINCT `{$cols['establecimiento']}` AS v FROM `{$tabla}` WHERE `{$cols['establecimiento']}` IS NOT NULL ORDER BY v LIMIT 500");
+        $where = ["`{$cols['establecimiento']}` IS NOT NULL"];
+        $params = [];
+        if ($idUps !== null && $idUps !== '' && !empty($cols['id_ups'])) {
+            $where[] = "`{$cols['id_ups']}` = :id_ups";
+            $params[':id_ups'] = $idUps;
+        }
+        $sql = "SELECT DISTINCT `{$cols['establecimiento']}` AS v FROM `{$tabla}` WHERE " . implode(' AND ', $where) . " ORDER BY v LIMIT 500";
+        $stmt = $pdo->prepare($sql);
+        $stmt->execute($params);
         return $stmt->fetchAll(PDO::FETCH_COLUMN);
     } catch (Throwable $e) {
         return [];
@@ -469,12 +508,25 @@ function esniGetEstablecimientos(PDO $pdo, array $cols): array {
 
 /**
  * Obtiene lista de departamentos.
+ *
+ * @param PDO    $pdo
+ * @param array  $cols
+ * @param string|null $idUps  Si se indica, filtra por Id_Ups (estrategia ESNI = 301204)
+ * @return array
  */
-function esniGetDepartamentos(PDO $pdo, array $cols): array {
+function esniGetDepartamentos(PDO $pdo, array $cols, ?string $idUps = null): array {
     if (!$cols['departamento']) return [];
     try {
         $tabla = $cols['_tabla'];
-        $stmt = $pdo->query("SELECT DISTINCT `{$cols['departamento']}` AS v FROM `{$tabla}` WHERE `{$cols['departamento']}` IS NOT NULL ORDER BY v LIMIT 100");
+        $where = ["`{$cols['departamento']}` IS NOT NULL"];
+        $params = [];
+        if ($idUps !== null && $idUps !== '' && !empty($cols['id_ups'])) {
+            $where[] = "`{$cols['id_ups']}` = :id_ups";
+            $params[':id_ups'] = $idUps;
+        }
+        $sql = "SELECT DISTINCT `{$cols['departamento']}` AS v FROM `{$tabla}` WHERE " . implode(' AND ', $where) . " ORDER BY v LIMIT 100";
+        $stmt = $pdo->prepare($sql);
+        $stmt->execute($params);
         return $stmt->fetchAll(PDO::FETCH_COLUMN);
     } catch (Throwable $e) {
         return [];
@@ -483,12 +535,25 @@ function esniGetDepartamentos(PDO $pdo, array $cols): array {
 
 /**
  * Obtiene lista de profesionales.
+ *
+ * @param PDO    $pdo
+ * @param array  $cols
+ * @param string|null $idUps  Si se indica, filtra por Id_Ups (estrategia ESNI = 301204)
+ * @return array
  */
-function esniGetProfesionales(PDO $pdo, array $cols): array {
+function esniGetProfesionales(PDO $pdo, array $cols, ?string $idUps = null): array {
     if (!$cols['profesional']) return [];
     try {
         $tabla = $cols['_tabla'];
-        $stmt = $pdo->query("SELECT DISTINCT `{$cols['profesional']}` AS v FROM `{$tabla}` WHERE `{$cols['profesional']}` IS NOT NULL ORDER BY v LIMIT 500");
+        $where = ["`{$cols['profesional']}` IS NOT NULL"];
+        $params = [];
+        if ($idUps !== null && $idUps !== '' && !empty($cols['id_ups'])) {
+            $where[] = "`{$cols['id_ups']}` = :id_ups";
+            $params[':id_ups'] = $idUps;
+        }
+        $sql = "SELECT DISTINCT `{$cols['profesional']}` AS v FROM `{$tabla}` WHERE " . implode(' AND ', $where) . " ORDER BY v LIMIT 500";
+        $stmt = $pdo->prepare($sql);
+        $stmt->execute($params);
         return $stmt->fetchAll(PDO::FETCH_COLUMN);
     } catch (Throwable $e) {
         return [];
