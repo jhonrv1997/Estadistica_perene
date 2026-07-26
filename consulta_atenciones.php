@@ -86,7 +86,26 @@ if ($fZonaSanitaria !== '') {
 $establecimientos = $pdo->query("SELECT DISTINCT Nombre_Establecimiento FROM T_CONSOLIDADO_NUEVA_TRAMA_HISMINSA_DETALLADO WHERE Nombre_Establecimiento IS NOT NULL ORDER BY Nombre_Establecimiento")->fetchAll(PDO::FETCH_COLUMN);
 
 // Grupo de Edad dinamico desde la tabla
-$gruposEdad = $pdo->query("SELECT DISTINCT Grupo_Edad FROM T_CONSOLIDADO_NUEVA_TRAMA_HISMINSA_DETALLADO WHERE Grupo_Edad IS NOT NULL AND Grupo_Edad != '' ORDER BY Grupo_Edad")->fetchAll(PDO::FETCH_COLUMN);
+// Orden cronologico (no alfabetico) usando CASE para respetar el ciclo de vida.
+// Valores no contemplados se ubicaran al final (orden 99) y luego alfabeticamente.
+$gruposEdad = $pdo->query("
+    SELECT DISTINCT Grupo_Edad
+    FROM T_CONSOLIDADO_NUEVA_TRAMA_HISMINSA_DETALLADO
+    WHERE Grupo_Edad IS NOT NULL AND Grupo_Edad != ''
+    ORDER BY
+        CASE Grupo_Edad
+            WHEN '01 a 29 dias'    THEN 1
+            WHEN '01 a 11 meses'   THEN 2
+            WHEN '01 a 04 años'    THEN 3
+            WHEN '05 a 11 años'    THEN 4
+            WHEN '12 a 17 años'    THEN 5
+            WHEN '18 a 29 años'    THEN 6
+            WHEN '30 a 59 años'    THEN 7
+            WHEN '60 años a mas'   THEN 8
+            ELSE 99
+        END,
+        Grupo_Edad
+")->fetchAll(PDO::FETCH_COLUMN);
 
 // Genero
 $generos = $pdo->query("SELECT DISTINCT Id_Genero FROM T_CONSOLIDADO_NUEVA_TRAMA_HISMINSA_DETALLADO WHERE Id_Genero IS NOT NULL ORDER BY Id_Genero")->fetchAll(PDO::FETCH_COLUMN);
@@ -174,12 +193,29 @@ if ($fValorLab !== '') {
     }
 }
 if ($fCodigoItem !== '') {
-    // Coincidencia exacta por defecto; si termina con "*", busqueda parcial desde el inicio
-    if (str_ends_with($fCodigoItem, '*')) {
-        $citemVal = rtrim($fCodigoItem, '*');
-        $where .= " AND Codigo_Item LIKE :citem"; $params[':citem'] = $citemVal . '%';
-    } else {
-        $where .= " AND Codigo_Item = :citem"; $params[':citem'] = $fCodigoItem;
+    // Busqueda multiple de CIEX/CPT (Codigo_Item):
+    //   - Se aceptan varios codigos separados por coma (,) o por espacios.
+    //   - Cada codigo puede terminar con "*" para busqueda por prefijo (LIKE 'COD%').
+    //   - Si se ingresa un solo codigo, el comportamiento es identico al anterior.
+    //   - Las condiciones multiples se combinan con OR dentro de un parentesis.
+    // Ejemplos validos:  "A00"  |  "A00,A01,B01"  |  "A00* B01* C02"  |  "A00*,A01,B00*"
+    $tokens = preg_split('/[\s,]+/', $fCodigoItem);
+    $tokens = array_filter(array_map('trim', $tokens), fn($t) => $t !== '');
+    if (!empty($tokens)) {
+        $orParts = [];
+        $i = 0;
+        foreach ($tokens as $tok) {
+            $i++;
+            $key = ':citem' . $i;
+            if (str_ends_with($tok, '*')) {
+                $orParts[] = "Codigo_Item LIKE $key";
+                $params[$key] = rtrim($tok, '*') . '%';
+            } else {
+                $orParts[] = "Codigo_Item = $key";
+                $params[$key] = $tok;
+            }
+        }
+        $where .= " AND (" . implode(' OR ', $orParts) . ")";
     }
 }
 if ($fLote !== '') {
@@ -455,7 +491,7 @@ include 'includes/header.php';
                 </div>
                 <div class="col-lg-2 col-md-4 col-sm-6">
                     <label class="form-label">CIE-10 / CPT</label>
-                    <input type="text" name="codigo_item" class="form-control form-control-sm" placeholder="Ej: A00*" value="<?= htmlspecialchars($fCodigoItem) ?>">
+                    <input type="text" name="codigo_item" class="form-control form-control-sm" placeholder="Ej: A00*,A01,B01 (varios separados por coma)" value="<?= htmlspecialchars($fCodigoItem) ?>">
                 </div>
                 <div class="col-lg-2 col-md-4 col-sm-6">
                     <label class="form-label">Tipo Dx.</label>
@@ -561,7 +597,7 @@ include 'includes/header.php';
                 </div>
                 <div class="col-lg-2 col-md-4 col-sm-6">
                     <label class="form-label">C&oacute;digo Item</label>
-                    <input type="text" name="codigo_item" class="form-control form-control-sm" placeholder="Ej: A00*" value="<?= htmlspecialchars($fCodigoItem) ?>">
+                    <input type="text" name="codigo_item" class="form-control form-control-sm" placeholder="Ej: A00*,A01,B01 (varios separados por coma)" value="<?= htmlspecialchars($fCodigoItem) ?>">
                 </div>
                 <?php if (!empty($upsPreventivas)): ?>
                 <div class="col-lg-2 col-md-4 col-sm-6">
