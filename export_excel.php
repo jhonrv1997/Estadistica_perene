@@ -2,6 +2,14 @@
 /**
  * Sistema de Gestion de Datos HIS
  * Exportar resultados a Excel
+ *
+ * FIX: La logica de filtros ahora replica EXACTAMENTE la de consulta_atenciones.php,
+ * incluyendo:
+ *   - Busqueda multi-token de Codigo_Item (coma, espacio, wildcard *)
+ *   - Valor_Lab con soporte wildcard *
+ *   - Sub-pagina preventivas (filtro UPS / Fg_Tipo='P')
+ *   - Establecimiento: Codigo_Unico (general) o Nombre (preventivas)
+ *   - Zona sanitaria con subquery ZSPERENE
  */
 
 require_once 'includes/auth.php';
@@ -12,27 +20,36 @@ require_once 'includes/ExcelWriter.php';
 
 $pdo = getDBConnection();
 
-// Reconstruir filtros desde POST
-$fAnio = $_POST['filter_anio'] ?? '';
-$fMes = $_POST['filter_mes'] ?? '';
-$fZonaSanitaria = $_POST['filter_zona_sanitaria'] ?? '';
-$fDepartamento = $_POST['filter_departamento'] ?? '';
-$fUps = $_POST['filter_ups'] ?? '';
-$fEstablecimiento = $_POST['filter_establecimiento'] ?? '';
-$fGrupoEdad = $_POST['filter_grupo_edad'] ?? '';
-$fIdGenero = $_POST['filter_id_genero'] ?? '';
-$fOtraCondicion = $_POST['filter_otra_condicion'] ?? '';
-$fCodigoItem = trim($_POST['filter_codigo_item'] ?? '');
-$fTipoDiagnostico = $_POST['filter_tipo_diagnostico'] ?? '';
-$fLote = trim($_POST['filter_lote'] ?? '');
-$fNumPag = trim($_POST['filter_num_pag'] ?? '');
-$fNumReg = trim($_POST['filter_num_reg'] ?? '');
-$fValorLab = $_POST['filter_valor_lab'] ?? '';
-$fDocPersonal = trim($_POST['filter_doc_personal'] ?? '');
-$fDocPaciente = trim($_POST['filter_doc_paciente'] ?? '');
+// ============================================================
+// RECUPERAR FILTROS DESDE POST  (con mismos defaults que consulta_atenciones.php)
+// ============================================================
+$sub = $_POST['filter_sub'] ?? 'general';
+if (!in_array($sub, ['general', 'preventivas'], true)) {
+    $sub = 'general';
+}
+
+$fAnio           = trim($_POST['filter_anio'] ?? '');
+$fMes            = trim($_POST['filter_mes'] ?? '');
+$fZonaSanitaria  = trim($_POST['filter_zona_sanitaria'] ?? '');
+$fDepartamento   = trim($_POST['filter_departamento'] ?? '');
+$fUps            = trim($_POST['filter_ups'] ?? '');
+$fEstablecimiento = trim($_POST['filter_establecimiento'] ?? '');
+$fGrupoEdad      = trim($_POST['filter_grupo_edad'] ?? '');
+$fIdGenero       = trim($_POST['filter_id_genero'] ?? '');
+$fOtraCondicion  = trim($_POST['filter_otra_condicion'] ?? '');
+$fCodigoItem     = trim($_POST['filter_codigo_item'] ?? '');
+$fTipoDiagnostico = trim($_POST['filter_tipo_diagnostico'] ?? '');
+$fLote           = trim($_POST['filter_lote'] ?? '');
+$fNumPag         = trim($_POST['filter_num_pag'] ?? '');
+$fNumReg         = trim($_POST['filter_num_reg'] ?? '');
+$fValorLab       = trim($_POST['filter_valor_lab'] ?? '');
+$fDocPersonal    = trim($_POST['filter_doc_personal'] ?? '');
+$fDocPaciente    = trim($_POST['filter_doc_paciente'] ?? '');
 $fDocRegistrador = trim($_POST['filter_doc_registrador'] ?? '');
 
-// Construir consulta con filtros
+// ============================================================
+// CONSTRUIR WHERE — replica exacta de consulta_atenciones.php
+// ============================================================
 $where = "1=1";
 $params = [];
 
@@ -44,72 +61,148 @@ if ($fMes !== '') {
     $where .= " AND CAST(TRIM(Mes) AS UNSIGNED) = :mes";
     $params[':mes'] = intval($fMes);
 }
-if ($fEstablecimiento !== '') {
-    $where .= " AND Codigo_Unico = :establecimiento";
-    $params[':establecimiento'] = $fEstablecimiento;
+if ($fZonaSanitaria !== '') {
+    $where .= " AND Codigo_Unico IN (SELECT Codigo_Unico FROM ZSPERENE WHERE MicroRed = :microred)";
+    $params[':microred'] = $fZonaSanitaria;
 }
+
+// Establecimiento: en sub=general el valor es Codigo_Unico;
+// en sub=preventivas el valor es Nombre_Establecimiento.
+if ($fEstablecimiento !== '') {
+    if ($sub === 'general') {
+        $where .= " AND Codigo_Unico = :est";
+        $params[':est'] = $fEstablecimiento;
+    } else {
+        $where .= " AND Nombre_Establecimiento = :est";
+        $params[':est'] = $fEstablecimiento;
+    }
+}
+
 if ($fGrupoEdad !== '') {
-    $where .= " AND Grupo_Edad = :grupo_edad";
-    $params[':grupo_edad'] = $fGrupoEdad;
+    $where .= " AND Grupo_Edad = :gedad";
+    $params[':gedad'] = $fGrupoEdad;
 }
 if ($fIdGenero !== '') {
-    $where .= " AND Id_Genero = :id_genero";
-    $params[':id_genero'] = $fIdGenero;
+    $where .= " AND Id_Genero = :genero";
+    $params[':genero'] = $fIdGenero;
 }
 if ($fOtraCondicion !== '') {
-    $where .= " AND Descripcion_Otra_Condicion = :otra_condicion";
-    $params[':otra_condicion'] = $fOtraCondicion;
-}
-if ($fCodigoItem !== '') {
-    $where .= " AND Codigo_Item LIKE :codigo_item";
-    $params[':codigo_item'] = '%' . $fCodigoItem . '%';
+    $where .= " AND Descripcion_Otra_Condicion = :otra_cond";
+    $params[':otra_cond'] = $fOtraCondicion;
 }
 if ($fTipoDiagnostico !== '') {
-    $where .= " AND Tipo_Diagnostico = :tipo_diagnostico";
-    $params[':tipo_diagnostico'] = $fTipoDiagnostico;
+    $where .= " AND Tipo_Diagnostico = :td";
+    $params[':td'] = $fTipoDiagnostico;
 }
+
+// Valor_Lab: soporte wildcard con * (igual que consulta_atenciones.php)
+if ($fValorLab !== '') {
+    if (str_ends_with($fValorLab, '*')) {
+        $vlabVal = rtrim($fValorLab, '*');
+        $where .= " AND Valor_Lab LIKE :vlab";
+        $params[':vlab'] = $vlabVal . '%';
+    } else {
+        $where .= " AND Valor_Lab = :vlab";
+        $params[':vlab'] = $fValorLab;
+    }
+}
+
+// Codigo_Item: busqueda multi-token (coma, espacio, wildcard *)
+// Replica exacta de consulta_atenciones.php
+if ($fCodigoItem !== '') {
+    $tokens = preg_split('/[\s,]+/', $fCodigoItem);
+    $tokens = array_filter(array_map('trim', $tokens), fn($t) => $t !== '');
+    if (!empty($tokens)) {
+        $orParts = [];
+        $i = 0;
+        foreach ($tokens as $tok) {
+            $i++;
+            $key = ':citem' . $i;
+            if (str_ends_with($tok, '*')) {
+                $orParts[] = "Codigo_Item LIKE $key";
+                $params[$key] = rtrim($tok, '*') . '%';
+            } else {
+                $orParts[] = "Codigo_Item = $key";
+                $params[$key] = $tok;
+            }
+        }
+        $where .= " AND (" . implode(' OR ', $orParts) . ")";
+    }
+}
+
 if ($fLote !== '') {
     $where .= " AND Lote = :lote";
     $params[':lote'] = $fLote;
 }
 if ($fNumPag !== '') {
-    $where .= " AND Num_Pag = :num_pag";
-    $params[':num_pag'] = intval($fNumPag);
+    $where .= " AND Num_Pag = :numpag";
+    $params[':numpag'] = intval($fNumPag);
 }
 if ($fNumReg !== '') {
-    $where .= " AND Num_Reg = :num_reg";
-    $params[':num_reg'] = intval($fNumReg);
-}
-if ($fValorLab !== '') {
-    $where .= " AND Valor_Lab = :valor_lab";
-    $params[':valor_lab'] = $fValorLab;
-}
-if ($fDocPersonal !== '') {
-    $where .= " AND Numero_Documento_Personal LIKE :doc_personal";
-    $params[':doc_personal'] = '%' . $fDocPersonal . '%';
+    $where .= " AND Num_Reg = :numreg";
+    $params[':numreg'] = intval($fNumReg);
 }
 if ($fDocPaciente !== '') {
-    $where .= " AND Numero_Documento_Paciente LIKE :doc_paciente";
-    $params[':doc_paciente'] = '%' . $fDocPaciente . '%';
+    $where .= " AND Numero_Documento_Paciente LIKE :dpac";
+    $params[':dpac'] = '%' . $fDocPaciente . '%';
+}
+if ($fDocPersonal !== '') {
+    $where .= " AND Numero_Documento_Personal LIKE :dper";
+    $params[':dper'] = '%' . $fDocPersonal . '%';
 }
 if ($fDocRegistrador !== '') {
-    $where .= " AND Numero_Documento_Registrador LIKE :doc_registrador";
-    $params[':doc_registrador'] = '%' . $fDocRegistrador . '%';
-}
-if ($fZonaSanitaria !== '') {
-    $where .= " AND Codigo_Unico IN (SELECT Codigo_Unico FROM ZSPERENE WHERE MicroRed = :microred)";
-    $params[':microred'] = $fZonaSanitaria;
+    $where .= " AND Numero_Documento_Registrador LIKE :dreg";
+    $params[':dreg'] = '%' . $fDocRegistrador . '%';
 }
 if ($fDepartamento !== '') {
-    $where .= " AND Departamento_Establecimiento = :departamento";
-    $params[':departamento'] = $fDepartamento;
+    $where .= " AND Departamento_Establecimiento = :dep";
+    $params[':dep'] = $fDepartamento;
 }
 if ($fUps !== '') {
     $where .= " AND Id_Ups = :ups";
     $params[':ups'] = $fUps;
 }
 
-// Consulta de datos para exportar (sin limite)
+// ============================================================
+// FILTRO PREVENTIVAS (solo cuando sub=preventivas)
+// Replica exacta de consulta_atenciones.php
+// ============================================================
+if ($sub === 'preventivas') {
+    // Obtener UPS preventivas ( misma consulta que consulta_atenciones.php )
+    $upsPreventivas = [];
+    try {
+        $upsPreventivas = $pdo->query(
+            "SELECT DISTINCT Id_Ups, Descripcion_Ups
+             FROM T_CONSOLIDADO_NUEVA_TRAMA_HISMINSA_DETALLADO
+             WHERE Descripcion_Ups LIKE '%PREVENT%' OR Descripcion_Ups LIKE '%PROMOC%' OR Fg_Tipo = 'P'
+             ORDER BY Descripcion_Ups LIMIT 200"
+        )->fetchAll();
+    } catch (Exception $e) {
+        $upsPreventivas = [];
+    }
+
+    if (!empty($upsPreventivas)) {
+        $upsIds = array_column($upsPreventivas, 'Id_Ups');
+        $placeholders = [];
+        foreach ($upsIds as $i => $uid) {
+            if ($uid === null || $uid === '') continue;
+            $k = ':pu' . $i;
+            $placeholders[] = $k;
+            $params[$k] = $uid;
+        }
+        if (!empty($placeholders)) {
+            $where .= " AND (Id_Ups IN (" . implode(',', $placeholders) . ") OR Fg_Tipo = 'P' OR Descripcion_Ups LIKE '%PREVENT%' OR Descripcion_Ups LIKE '%PROMOC%')";
+        } else {
+            $where .= " AND (Fg_Tipo = 'P' OR Descripcion_Ups LIKE '%PREVENT%' OR Descripcion_Ups LIKE '%PROMOC%')";
+        }
+    } else {
+        $where .= " AND (Fg_Tipo = 'P' OR Descripcion_Ups LIKE '%PREVENT%' OR Descripcion_Ups LIKE '%PROMOC%')";
+    }
+}
+
+// ============================================================
+// CONSULTA DE DATOS (sin limite, para exportar todo)
+// ============================================================
 $campos = "Id_Cita, Anio, Mes, Dia, Fecha_Atencion, Lote, Num_Pag, Num_Reg,
            Codigo_Unico, Nombre_Establecimiento,
            Abrev_Tipo_Doc_Paciente, Numero_Documento_Paciente,
@@ -130,6 +223,9 @@ $dataStmt = $pdo->prepare($dataSql);
 $dataStmt->execute($params);
 $datos = $dataStmt->fetchAll();
 
+// ============================================================
+// GENERAR EXCEL
+// ============================================================
 // Encabezados del Excel
 $headers = [
     'Id Cita', 'Anio', 'Mes', 'Dia', 'Fecha Atencion', 'Lote', 'Num Pag', 'Num Reg',
@@ -203,10 +299,11 @@ foreach ($datos as $row) {
     ];
 }
 
-// Generar nombre de archivo
+// Generar nombre de archivo (incluye indicador de sub-pagina)
 $filename = 'HIS_Atenciones';
+if ($sub === 'preventivas') $filename .= '_Preventivas';
 if ($fAnio) $filename .= '_' . $fAnio;
-if ($fMes) $filename .= '_' . $fMes;
+if ($fMes)  $filename .= '_' . $fMes;
 $filename .= '_' . date('Ymd_His') . '.xlsx';
 
 // Crear y descargar Excel

@@ -652,8 +652,13 @@ include 'includes/header.php';
         <?php if ($totalRegistros > 0): ?>
         <form method="POST" action="export_excel.php" target="_blank">
             <?php foreach ($_GET as $key => $val): ?>
+                <?php if ($key === 'pagina') continue; // No pasar paginacion al export ?>
                 <input type="hidden" name="filter_<?= htmlspecialchars($key) ?>" value="<?= htmlspecialchars(is_array($val) ? '' : $val) ?>">
             <?php endforeach; ?>
+            <?php // Garantizar que sub siempre se pase correctamente ?>
+            <?php if (!isset($_GET['sub'])): ?>
+                <input type="hidden" name="filter_sub" value="<?= htmlspecialchars($sub) ?>">
+            <?php endif; ?>
             <button type="submit" class="btn btn-sm btn-success">
                 <i class="fas fa-file-excel me-1"></i> Exportar Excel
             </button>
