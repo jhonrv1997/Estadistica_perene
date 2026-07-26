@@ -324,8 +324,10 @@ CREATE TABLE ESNI_REGLA (
   sexo              ENUM('M','F','A') NOT NULL DEFAULT 'A',  -- restriccion de sexo
   aniomes_min       VARCHAR(6) NULL,                         -- filtro aniomes minimo (YYYYMM) - ej: 202301
   aniomes_max       VARCHAR(6) NULL,                         -- filtro aniomes maximo - ej: 202212
-  requiere_riesgo   TINYINT(1) NOT NULL DEFAULT 0,           -- 1=solo si id_gruporiesgo=2 (poblacion en riesgo)
-  excluye_riesgo    TINYINT(1) NOT NULL DEFAULT 0,           -- 1=solo si NO es poblacion en riesgo
+  requiere_riesgo        TINYINT(1) NOT NULL DEFAULT 0,           -- 1=solo si id_gruporiesgo=2 (poblacion en riesgo)
+  excluye_riesgo         TINYINT(1) NOT NULL DEFAULT 0,           -- 1=solo si NO es poblacion en riesgo
+  requiere_comorbilidad  TINYINT(1) NOT NULL DEFAULT 0,           -- 1=solo si el paciente tiene otro registro con cod_item=9999 (con comorbilidad)
+  excluye_comorbilidad   TINYINT(1) NOT NULL DEFAULT 0,           -- 1=solo si el paciente NO tiene registro con cod_item=9999 (sin comorbilidad)
   activo            TINYINT(1) NOT NULL DEFAULT 1,
   CONSTRAINT fk_regla_linea FOREIGN KEY (id_linea) REFERENCES ESNI_LINEA_REPORTE(id_linea) ON DELETE CASCADE,
   CONSTRAINT fk_regla_ge    FOREIGN KEY (id_grupo_edad) REFERENCES ESNI_GRUPO_EDAD(id_grupo_edad) ON DELETE SET NULL,
@@ -604,3 +606,20 @@ SET FOREIGN_KEY_CHECKS = 1;
 --   Database/install_esni_extra_rules.sql
 -- El usuario podra agregar mas reglas via esni_config.php
 -- =====================================================================
+
+-- =====================================================================
+-- MIGRACION: Comorbilidad (Codigo_Item = 9999)
+-- ---------------------------------------------------------------------
+-- Ejecutar este bloque UNA vez sobre instalaciones ya existentes para
+-- anadir el soporte de Comorbilidad a la tabla ESNI_REGLA.
+-- Es seguro re-ejecutarlo: las columnas se agregan solo si no existen.
+-- =====================================================================
+ALTER TABLE ESNI_REGLA
+  ADD COLUMN IF NOT EXISTS requiere_comorbilidad TINYINT(1) NOT NULL DEFAULT 0
+    COMMENT '1=solo si el paciente tiene otro registro con cod_item=9999 (con comorbilidad)'
+  AFTER excluye_riesgo;
+
+ALTER TABLE ESNI_REGLA
+  ADD COLUMN IF NOT EXISTS excluye_comorbilidad TINYINT(1) NOT NULL DEFAULT 0
+    COMMENT '1=solo si el paciente NO tiene registro con cod_item=9999 (sin comorbilidad)'
+  AFTER requiere_comorbilidad;
