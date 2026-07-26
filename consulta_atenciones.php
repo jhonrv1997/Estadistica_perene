@@ -3,7 +3,7 @@
  * Sistema de Gestion de Datos HIS
  * Pagina 03: Consulta de Atenciones
  * Sub-paginas:
- *   - general     -> Filtro General de atenciones (toda la data consolidada)
+ *   - general     -> Filtro General de atenciones (toda la Data consolidada)
  *   - preventivas -> Filtro de atenciones Preventivas (solo UPS / Codigo_Item de prevencion)
  *
  * Estructura: una sola pagina con tabs internos; el contenido se renderiza segun ?sub=
@@ -285,71 +285,86 @@ $pageTitle = $subInfo[$sub]['titulo'] . ' - Sistema HIS';
 include 'includes/header.php';
 ?>
 
+<!-- Estilos personalizados para encabezados celeste suave y filtros compactos -->
+<style>
+    .tabla-resultados thead th {
+        background-color: #d6e9f8 !important;  /* Celeste suave */
+        color: #2c3e50;
+        font-weight: 600;
+        text-align: center;
+        vertical-align: middle;
+    }
+    /* Compactar etiquetas y selects de filtros */
+    .filtro-compacto .form-label {
+        font-size: 0.72rem;
+        margin-bottom: 0.15rem;
+        font-weight: 600;
+        line-height: 1.1;
+    }
+    .filtro-compacto .form-select-sm,
+    .filtro-compacto .form-control-sm {
+        font-size: 0.78rem;
+        padding-top: 0.2rem;
+        padding-bottom: 0.2rem;
+    }
+    .filtro-compacto {
+        --bs-gutter-x: 0.5rem;
+    }
+    .filtro-compacto > [class*="col"] {
+        padding-right: 0.3rem;
+        padding-left: 0.3rem;
+    }
+    .card-body.filtro-body {
+        padding: 0.6rem 0.8rem;
+    }
+
+    /* ===== Coloracion suave por grupos logicos de columna en la tabla Resultados ===== */
+    .tabla-resultados tbody td { border: 1px solid #eef1f4; }
+    .tabla-resultados thead th { border: 1px solid #c9d6e2; }
+
+    /* Grupo 1: Datos de la atencion / establecimiento / lote */
+    .tabla-col-atencion {
+        background-color: #eef6fb !important;  /* Celeste muy suave */
+    }
+    /* Grupo 2: Datos del paciente */
+    .tabla-col-paciente {
+        background-color: #f4f8ef !important;  /* Verde muy suave */
+    }
+    /* Grupo 3: Diagnostico / Item / LAB / UPS */
+    .tabla-col-diagnostico {
+        background-color: #fdf5e9 !important;  /* Naranja muy suave */
+    }
+    /* Grupo 4: Personal de salud */
+    .tabla-col-personal {
+        background-color: #f5edf7 !important;  /* Lila muy suave */
+    }
+    /* Grupo 5: Registrador y fechas de gestion */
+    .tabla-col-registro {
+        background-color: #fdeeee !important;  /* Rosado muy suave */
+    }
+
+    /* Mantener el color del grupo al hacer hover (solo atenúa ligeramente) */
+    .tabla-resultados tbody tr:hover td {
+        filter: brightness(0.97);
+    }
+
+    /* Encabezado: mantiene el celeste suave original pero con borde refinado */
+    .tabla-resultados thead {
+        background-color: #d6e9f8;
+    }
+</style>
+
 <!-- Encabezado -->
 <div class="page-header-section">
     <h4><i class="fas <?= $subInfo[$sub]['icon'] ?> me-2"></i><?= $subInfo[$sub]['titulo'] ?></h4>
     <p class="subtitle"><?= $subInfo[$sub]['descripcion'] ?></p>
 </div>
 
-<!-- Tabs de sub-paginas -->
-<ul class="nav nav-pills subpage-tabs flex-wrap">
-    <li class="nav-item me-1">
-        <a class="nav-link <?= $sub === 'general' ? 'active' : '' ?>" href="consulta_atenciones.php?sub=general">
-            <i class="fas fa-list-alt me-1"></i> Filtro General
-        </a>
-    </li>
-    <li class="nav-item">
-        <a class="nav-link <?= $sub === 'preventivas' ? 'active' : '' ?>" href="consulta_atenciones.php?sub=preventivas">
-            <i class="fas fa-shield-alt me-1"></i> Filtro Preventivas
-        </a>
-    </li>
-</ul>
-
-<!-- Stats -->
-<?php if ($mostrarResultados): ?>
-<div class="row mb-4">
-    <div class="col-md-3 col-6 mb-3">
-        <div class="stat-card stat-primary">
-            <div class="stat-icon"><i class="fas fa-notes-medical"></i></div>
-            <div class="stat-info">
-                <span class="stat-value"><?= number_format($totalRegistros) ?></span>
-                <span class="stat-label">Atenciones</span>
-            </div>
-        </div>
-    </div>
-    <div class="col-md-3 col-6 mb-3">
-        <div class="stat-card stat-success">
-            <div class="stat-icon"><i class="fas fa-user-injured"></i></div>
-            <div class="stat-info">
-                <span class="stat-value"><?= number_format($stats['total_pacientes'] ?? 0) ?></span>
-                <span class="stat-label">Pacientes</span>
-            </div>
-        </div>
-    </div>
-    <div class="col-md-3 col-6 mb-3">
-        <div class="stat-card stat-info">
-            <div class="stat-icon"><i class="fas fa-user-md"></i></div>
-            <div class="stat-info">
-                <span class="stat-value"><?= number_format($stats['total_personal'] ?? 0) ?></span>
-                <span class="stat-label">Personal</span>
-            </div>
-        </div>
-    </div>
-    <div class="col-md-3 col-6 mb-3">
-        <div class="stat-card stat-warning">
-            <div class="stat-icon"><i class="fas fa-hospital"></i></div>
-            <div class="stat-info">
-                <span class="stat-value"><?= number_format($stats['total_establecimientos'] ?? 0) ?></span>
-                <span class="stat-label">Establecimientos</span>
-            </div>
-        </div>
-    </div>
-</div>
-<?php endif; ?>
+<!-- (Tabs de sub-paginas removidos para dar mas espacio a la tabla Resultados) -->
 
 <!-- Filtros -->
-<div class="card shadow-sm mb-4">
-    <div class="card-header bg-white d-flex justify-content-between align-items-center">
+<div class="card shadow-sm mb-3">
+    <div class="card-header bg-white d-flex justify-content-between align-items-center py-2">
         <h6 class="mb-0 fw-bold"><i class="fas fa-filter me-2 text-primary"></i>Filtros de Busqueda</h6>
         <div>
             <a href="consulta_atenciones.php?sub=<?= $sub ?>" class="btn btn-sm btn-outline-secondary me-1">
@@ -360,19 +375,20 @@ include 'includes/header.php';
             </button>
         </div>
     </div>
-    <div class="card-body">
+    <div class="card-body filtro-body">
         <form id="filterForm" method="GET" action="consulta_atenciones.php">
             <input type="hidden" name="sub" value="<?= htmlspecialchars($sub) ?>">
             <input type="hidden" name="buscar" value="1">
 
             <?php if ($sub === 'general'): ?>
             <!-- ============================================ -->
-            <!-- FILTROS SUB-PAGINA GENERAL (mejorado)       -->
+            <!-- FILTROS SUB-PAGINA GENERAL (compactado)      -->
             <!-- ============================================ -->
-            <div class="row g-3">
-                <!-- Fila 1: Anio, Mes, Zona Sanitaria, Establecimiento -->
-                <div class="col-lg-3 col-md-4 col-sm-6">
-                    <label class="form-label fw-semibold">Anio</label>
+
+            <!-- Bloque 1: Filtros principales (4 columnas en lg) -->
+            <div class="row g-2 filtro-compacto mb-2">
+                <div class="col-lg-3 col-md-6 col-sm-6">
+                    <label class="form-label">A&ntilde;o</label>
                     <select name="anio" class="form-select form-select-sm">
                         <option value="">-- Todos --</option>
                         <?php foreach ($anios as $a): ?>
@@ -380,115 +396,117 @@ include 'includes/header.php';
                         <?php endforeach; ?>
                     </select>
                 </div>
-                <div class="col-lg-3 col-md-4 col-sm-6">
-                    <label class="form-label fw-semibold">Mes</label>
+                <div class="col-lg-3 col-md-6 col-sm-6">
+                    <label class="form-label">Mes</label>
                     <select name="mes" class="form-select form-select-sm">
-                        <option value="">-- Todos --</option>
+                        <option value="">-- Todo --</option>
                         <?php for ($m = 1; $m <= 12; $m++): ?>
                             <option value="<?= $m ?>" <?= ($fMes !== '' && intval($fMes) === $m) ? 'selected' : '' ?>><?= getNombreMes($m) ?></option>
                         <?php endfor; ?>
                     </select>
                 </div>
-                <div class="col-lg-3 col-md-4 col-sm-6">
-                    <label class="form-label fw-semibold">Zona Sanitaria</label>
+                <div class="col-lg-3 col-md-6 col-sm-6">
+                    <label class="form-label">Zona Sanitaria</label>
                     <select name="zona_sanitaria" id="zonaSanitaria" class="form-select form-select-sm">
                         <?php foreach ($zonasSanitarias as $zs): ?>
                             <option value="<?= htmlspecialchars($zs) ?>" <?= $fZonaSanitaria === $zs ? 'selected' : '' ?>><?= htmlspecialchars($zs) ?></option>
                         <?php endforeach; ?>
                     </select>
                 </div>
-                <div class="col-lg-3 col-md-4 col-sm-6">
-                    <label class="form-label fw-semibold">Establecimiento</label>
+                <div class="col-lg-3 col-md-6 col-sm-6">
+                    <label class="form-label">Establecimiento</label>
                     <select name="establecimiento" id="establecimiento" class="form-select form-select-sm">
-                        <option value="">-- Todos --</option>
+                        <option value="">- Todos -</option>
                         <?php foreach ($establecimientosZona as $ez): ?>
                             <option value="<?= htmlspecialchars($ez['Codigo_Unico']) ?>" <?= $fEstablecimiento === $ez['Codigo_Unico'] ? 'selected' : '' ?>><?= htmlspecialchars($ez['Nombre_Establecimiento']) ?></option>
                         <?php endforeach; ?>
                     </select>
                 </div>
+            </div>
 
-                <!-- Fila 2: Grupo Edad, Genero, Otra Condicion, Codigo Item -->
-                <div class="col-lg-3 col-md-4 col-sm-6">
-                    <label class="form-label fw-semibold">Grupo de Edad</label>
+            <!-- Bloque 2: Filtros del paciente y diagnostico (6 columnas en lg -> 2 filas de 3) -->
+            <div class="row g-2 filtro-compacto mb-2">
+                <div class="col-lg-2 col-md-4 col-sm-6">
+                    <label class="form-label">Grupo Edad</label>
                     <select name="grupo_edad" class="form-select form-select-sm">
-                        <option value="">-- Todos --</option>
+                        <option value="">- Todos -</option>
                         <?php foreach ($gruposEdad as $ge): ?>
                             <option value="<?= htmlspecialchars($ge) ?>" <?= $fGrupoEdad === $ge ? 'selected' : '' ?>><?= htmlspecialchars($ge) ?></option>
                         <?php endforeach; ?>
                     </select>
                 </div>
-                <div class="col-lg-3 col-md-4 col-sm-6">
-                    <label class="form-label fw-semibold">Genero</label>
+                <div class="col-lg-2 col-md-4 col-sm-6">
+                    <label class="form-label">G&eacute;nero</label>
                     <select name="id_genero" class="form-select form-select-sm">
-                        <option value="">-- Todos --</option>
+                        <option value="">- Todos -</option>
                         <?php foreach ($generos as $g): ?>
                             <option value="<?= htmlspecialchars($g) ?>" <?= $fIdGenero === $g ? 'selected' : '' ?>><?= htmlspecialchars($g) ?></option>
                         <?php endforeach; ?>
                     </select>
                 </div>
-                <div class="col-lg-3 col-md-4 col-sm-6">
-                    <label class="form-label fw-semibold">Condicion Materna</label>
+                <div class="col-lg-2 col-md-4 col-sm-6">
+                    <label class="form-label">Cond. Materna</label>
                     <select name="otra_condicion" class="form-select form-select-sm">
-                        <option value="">-- Todos --</option>
+                        <option value="">- Todas -</option>
                         <?php foreach ($otrasCondiciones as $oc): ?>
                             <option value="<?= htmlspecialchars($oc) ?>" <?= $fOtraCondicion === $oc ? 'selected' : '' ?>><?= htmlspecialchars($oc) ?></option>
                         <?php endforeach; ?>
                     </select>
                 </div>
-                <div class="col-lg-3 col-md-4 col-sm-6">
-                    <label class="form-label fw-semibold">CIE-10 / CPT</label>
-                    <input type="text" name="codigo_item" class="form-control form-control-sm" placeholder="Ej: A00* para búsqueda parcial" value="<?= htmlspecialchars($fCodigoItem) ?>">
+                <div class="col-lg-2 col-md-4 col-sm-6">
+                    <label class="form-label">CIE-10 / CPT</label>
+                    <input type="text" name="codigo_item" class="form-control form-control-sm" placeholder="Ej: A00*" value="<?= htmlspecialchars($fCodigoItem) ?>">
                 </div>
-
-                <!-- Fila 3: Tipo Diagnostico, Valor Lab, Lote, Num Pag, Num Reg -->
-                <div class="col-lg-3 col-md-4 col-sm-6">
-                    <label class="form-label fw-semibold">Tipo Diagnostico</label>
+                <div class="col-lg-2 col-md-4 col-sm-6">
+                    <label class="form-label">Tipo Dx.</label>
                     <select name="tipo_diagnostico" class="form-select form-select-sm">
-                        <option value="">-- Todos --</option>
+                        <option value="">- Todos -</option>
                         <?php foreach ($tiposDiagnostico as $td): ?>
                             <option value="<?= htmlspecialchars($td) ?>" <?= $fTipoDiagnostico === $td ? 'selected' : '' ?>><?= htmlspecialchars($td) ?></option>
                         <?php endforeach; ?>
                     </select>
                 </div>
-                <div class="col-lg-3 col-md-4 col-sm-6">
-                    <label class="form-label fw-semibold">Valor Lab</label>
-                    <input type="text" name="valor_lab" class="form-control form-control-sm" placeholder="Ej: 150* para búsqueda parcial" value="<?= htmlspecialchars($fValorLab) ?>">
+                <div class="col-lg-2 col-md-4 col-sm-6">
+                    <label class="form-label">Valor Lab</label>
+                    <input type="text" name="valor_lab" class="form-control form-control-sm" placeholder="Ej: 150*" value="<?= htmlspecialchars($fValorLab) ?>">
                 </div>
-                <div class="col-lg-3 col-md-4 col-sm-6">
-                    <label class="form-label fw-semibold">Lote</label>
+            </div>
+
+            <!-- Bloque 3: Filtros administrativos (6 columnas en lg -> 1 fila de 6) -->
+            <div class="row g-2 filtro-compacto">
+                <div class="col-lg-2 col-md-4 col-sm-6">
+                    <label class="form-label">Lote</label>
                     <input type="text" name="lote" class="form-control form-control-sm" placeholder="Nro. Lote" value="<?= htmlspecialchars($fLote) ?>">
                 </div>
-                <div class="col-lg-3 col-md-4 col-sm-6">
-                    <label class="form-label fw-semibold">Num. Pag</label>
-                    <input type="text" name="num_pag" class="form-control form-control-sm" placeholder="Num. Pagina" value="<?= htmlspecialchars($fNumPag) ?>">
+                <div class="col-lg-2 col-md-4 col-sm-6">
+                    <label class="form-label">Num. Pag</label>
+                    <input type="text" name="num_pag" class="form-control form-control-sm" placeholder="Nro. Pag." value="<?= htmlspecialchars($fNumPag) ?>">
                 </div>
-                <div class="col-lg-3 col-md-4 col-sm-6">
-                    <label class="form-label fw-semibold">Num. Reg</label>
-                    <input type="text" name="num_reg" class="form-control form-control-sm" placeholder="Num. Registro" value="<?= htmlspecialchars($fNumReg) ?>">
+                <div class="col-lg-2 col-md-4 col-sm-6">
+                    <label class="form-label">Num. Reg</label>
+                    <input type="text" name="num_reg" class="form-control form-control-sm" placeholder="Nro. Reg." value="<?= htmlspecialchars($fNumReg) ?>">
                 </div>
-
-                <!-- Fila 4: Doc. Paciente, Doc. Personal, Doc. Registrador -->
-                <div class="col-lg-3 col-md-4 col-sm-6">
-                    <label class="form-label fw-semibold">Doc. Paciente</label>
-                    <input type="text" name="doc_paciente" class="form-control form-control-sm" placeholder="Nro. Documento" value="<?= htmlspecialchars($fDocPaciente) ?>">
+                <div class="col-lg-2 col-md-4 col-sm-6">
+                    <label class="form-label">Doc. Paciente</label>
+                    <input type="text" name="doc_paciente" class="form-control form-control-sm" placeholder="Nro. Doc." value="<?= htmlspecialchars($fDocPaciente) ?>">
                 </div>
-                <div class="col-lg-3 col-md-4 col-sm-6">
-                    <label class="form-label fw-semibold">Doc. Personal</label>
-                    <input type="text" name="doc_personal" class="form-control form-control-sm" placeholder="Nro. Documento" value="<?= htmlspecialchars($fDocPersonal) ?>">
+                <div class="col-lg-2 col-md-4 col-sm-6">
+                    <label class="form-label">Doc. Personal</label>
+                    <input type="text" name="doc_personal" class="form-control form-control-sm" placeholder="Nro. Doc." value="<?= htmlspecialchars($fDocPersonal) ?>">
                 </div>
-                <div class="col-lg-3 col-md-4 col-sm-6">
-                    <label class="form-label fw-semibold">Doc. Registrador</label>
-                    <input type="text" name="doc_registrador" class="form-control form-control-sm" placeholder="Nro. Documento" value="<?= htmlspecialchars($fDocRegistrador) ?>">
+                <div class="col-lg-2 col-md-4 col-sm-6">
+                    <label class="form-label">Doc. Registrador</label>
+                    <input type="text" name="doc_registrador" class="form-control form-control-sm" placeholder="Nro. Doc." value="<?= htmlspecialchars($fDocRegistrador) ?>">
                 </div>
             </div>
 
             <?php else: ?>
             <!-- ============================================ -->
-            <!-- FILTROS SUB-PAGINA PREVENTIVAS (original)   -->
+            <!-- FILTROS SUB-PAGINA PREVENTIVAS (compactado)  -->
             <!-- ============================================ -->
-            <div class="row g-3">
-                <div class="col-lg-3 col-md-4 col-sm-6">
-                    <label class="form-label fw-semibold">Anio</label>
+            <div class="row g-2 filtro-compacto">
+                <div class="col-lg-2 col-md-4 col-sm-6">
+                    <label class="form-label">A&ntilde;o</label>
                     <select name="anio" class="form-select form-select-sm">
                         <option value="">-- Todos --</option>
                         <?php foreach ($anios as $a): ?>
@@ -496,8 +514,8 @@ include 'includes/header.php';
                         <?php endforeach; ?>
                     </select>
                 </div>
-                <div class="col-lg-3 col-md-4 col-sm-6">
-                    <label class="form-label fw-semibold">Mes</label>
+                <div class="col-lg-2 col-md-4 col-sm-6">
+                    <label class="form-label">Mes</label>
                     <select name="mes" class="form-select form-select-sm">
                         <option value="">-- Todos --</option>
                         <?php for ($m = 1; $m <= 12; $m++): ?>
@@ -505,8 +523,8 @@ include 'includes/header.php';
                         <?php endfor; ?>
                     </select>
                 </div>
-                <div class="col-lg-3 col-md-4 col-sm-6">
-                    <label class="form-label fw-semibold">Departamento</label>
+                <div class="col-lg-2 col-md-4 col-sm-6">
+                    <label class="form-label">Departamento</label>
                     <select name="departamento" class="form-select form-select-sm">
                         <option value="">-- Todos --</option>
                         <?php foreach ($departamentos as $d): ?>
@@ -514,8 +532,8 @@ include 'includes/header.php';
                         <?php endforeach; ?>
                     </select>
                 </div>
-                <div class="col-lg-3 col-md-4 col-sm-6">
-                    <label class="form-label fw-semibold">Establecimiento</label>
+                <div class="col-lg-2 col-md-4 col-sm-6">
+                    <label class="form-label">Establecimiento</label>
                     <select name="establecimiento" class="form-select form-select-sm">
                         <option value="">-- Todos --</option>
                         <?php foreach ($establecimientos as $e): ?>
@@ -523,8 +541,8 @@ include 'includes/header.php';
                         <?php endforeach; ?>
                     </select>
                 </div>
-                <div class="col-lg-3 col-md-4 col-sm-6">
-                    <label class="form-label fw-semibold">Grupo de Edad</label>
+                <div class="col-lg-2 col-md-4 col-sm-6">
+                    <label class="form-label">Grupo Edad</label>
                     <select name="grupo_edad" class="form-select form-select-sm">
                         <option value="">-- Todos --</option>
                         <?php foreach ($gruposEdad as $ge): ?>
@@ -532,8 +550,8 @@ include 'includes/header.php';
                         <?php endforeach; ?>
                     </select>
                 </div>
-                <div class="col-lg-3 col-md-4 col-sm-6">
-                    <label class="form-label fw-semibold">Tipo Diagnostico</label>
+                <div class="col-lg-2 col-md-4 col-sm-6">
+                    <label class="form-label">Tipo Dx.</label>
                     <select name="tipo_diagnostico" class="form-select form-select-sm">
                         <option value="">-- Todos --</option>
                         <?php foreach ($tiposDiagnostico as $td): ?>
@@ -541,13 +559,13 @@ include 'includes/header.php';
                         <?php endforeach; ?>
                     </select>
                 </div>
-                <div class="col-lg-3 col-md-4 col-sm-6">
-                    <label class="form-label fw-semibold">Codigo Item</label>
-                    <input type="text" name="codigo_item" class="form-control form-control-sm" placeholder="Ej: A00* para búsqueda parcial" value="<?= htmlspecialchars($fCodigoItem) ?>">
+                <div class="col-lg-2 col-md-4 col-sm-6">
+                    <label class="form-label">C&oacute;digo Item</label>
+                    <input type="text" name="codigo_item" class="form-control form-control-sm" placeholder="Ej: A00*" value="<?= htmlspecialchars($fCodigoItem) ?>">
                 </div>
                 <?php if (!empty($upsPreventivas)): ?>
-                <div class="col-lg-3 col-md-4 col-sm-6">
-                    <label class="form-label fw-semibold">UPS Preventiva</label>
+                <div class="col-lg-2 col-md-4 col-sm-6">
+                    <label class="form-label">UPS Preventiva</label>
                     <select name="ups" class="form-select form-select-sm">
                         <option value="">-- Todas --</option>
                         <?php foreach ($upsPreventivas as $u): ?>
@@ -558,13 +576,13 @@ include 'includes/header.php';
                     </select>
                 </div>
                 <?php endif; ?>
-                <div class="col-lg-3 col-md-4 col-sm-6">
-                    <label class="form-label fw-semibold">Doc. Paciente</label>
-                    <input type="text" name="doc_paciente" class="form-control form-control-sm" placeholder="Nro. Documento" value="<?= htmlspecialchars($fDocPaciente) ?>">
+                <div class="col-lg-2 col-md-4 col-sm-6">
+                    <label class="form-label">Doc. Paciente</label>
+                    <input type="text" name="doc_paciente" class="form-control form-control-sm" placeholder="Nro. Doc." value="<?= htmlspecialchars($fDocPaciente) ?>">
                 </div>
-                <div class="col-lg-3 col-md-4 col-sm-6">
-                    <label class="form-label fw-semibold">Doc. Personal</label>
-                    <input type="text" name="doc_personal" class="form-control form-control-sm" placeholder="Nro. Documento" value="<?= htmlspecialchars($fDocPersonal) ?>">
+                <div class="col-lg-2 col-md-4 col-sm-6">
+                    <label class="form-label">Doc. Personal</label>
+                    <input type="text" name="doc_personal" class="form-control form-control-sm" placeholder="Nro. Doc." value="<?= htmlspecialchars($fDocPersonal) ?>">
                 </div>
             </div>
             <?php endif; ?>
@@ -614,102 +632,94 @@ include 'includes/header.php';
             </div>
         <?php else: ?>
             <div class="table-responsive" style="max-height: 65vh; overflow: auto;">
-                <table class="table table-hover table-sm mb-0" style="font-size: 0.73rem;">
-                    <thead class="table-light" style="position: sticky; top: 0; z-index: 2; background-color: #f8f9fa;">
+                <table class="table table-hover table-sm mb-0 tabla-resultados" style="font-size: 0.73rem;">
+                    <thead style="position: sticky; top: 0; z-index: 2;">
                         <tr>
                             <th>#</th>
-                            <th>FECHA ATC</th>
-                            <th>Establecimiento</th>
-                            <th>Lote</th>
-                            <th>N.P.</th>
-                            <th>N.R.</th>
-                            <th>TUR</th>
-                            <th>CE</th>
-                            <th>CS</th>
-                            <th>T. Doc.</th>
-                            <th>NUM. DOCUMENTO</th>
-                            <th>Nombres Paciente</th>
-                            <th>Ap. Paterno Pac.</th>
-                            <th>GEN</th>
-                            <th>T. Edad</th>
-                            <th>Edad</th>
-                            <th>FECHA NAC.</th>
-                            <th>CIEX/CPT</th>
-                            <th>Descripcion Item</th>
-                            <th>T.Dx</th>
-                            <th>LAB</th>
-                            <th>Tipo</th>
-                            <th>UPS</th>
-                            <th>Nombres Personal</th>
-                            <th>Ap. Paterno Per.</th>
-                            <th>Profesion</th>
-                            <th>Nombres Registrador</th>
-                            <th>Ap. Paterno Reg.</th>
-                            <th>F. Registro</th>
-                            <th>F. Modificacion</th>
+                            <th class="tabla-col-atencion">FECHA ATC</th>
+                            <th class="tabla-col-atencion">Establecimiento</th>
+                            <th class="tabla-col-atencion">Lote</th>
+                            <th class="tabla-col-atencion">N.P.</th>
+                            <th class="tabla-col-atencion">N.R.</th>
+                            <th class="tabla-col-atencion">TUR</th>
+                            <th class="tabla-col-atencion">CE</th>
+                            <th class="tabla-col-atencion">CS</th>
+                            <th class="tabla-col-paciente">T. Doc.</th>
+                            <th class="tabla-col-paciente">NUM. DOC.</th>
+                            <th class="tabla-col-paciente">NOMBRE PCTE.</th>
+                            <th class="tabla-col-paciente">APELLIDO PCTE</th>
+                            <th class="tabla-col-paciente">GEN</th>
+                            <th class="tabla-col-paciente">FECHA NAC.</th>
+                            <th class="tabla-col-paciente">Edad</th>
+                            <th class="tabla-col-paciente">T.E.</th>
+                            <th class="tabla-col-diagnostico">CIEX/CPT</th>
+                            <th class="tabla-col-diagnostico">Descripcion Item</th>
+                            <th class="tabla-col-diagnostico">T.Dx</th>
+                            <th class="tabla-col-diagnostico">LAB</th>
+                            <th class="tabla-col-diagnostico">UPS</th>
+                            <th class="tabla-col-personal">NOMBRE PERS.</th>
+                            <th class="tabla-col-personal">APELLIDO PERS.</th>
+                            <th class="tabla-col-personal">Profesion</th>
+                            <th class="tabla-col-registro">NOMBRE REG.</th>
+                            <th class="tabla-col-registro">APELLIDO REG.</th>
+                            <th class="tabla-col-registro">F. Registro</th>
+                            <th class="tabla-col-registro">F. Modificacion</th>
                         </tr>
                     </thead>
                     <tbody>
                         <?php foreach ($datos as $i => $row): ?>
                         <tr>
                             <td class="text-muted"><?= $offset + $i + 1 ?></td>
-                            <td><?= formatDate($row['Fecha_Atencion']) ?></td>
-                            <td title="<?= clean($row['Nombre_Establecimiento']) ?>">
+                            <td class="tabla-col-atencion"><?= formatDate($row['Fecha_Atencion']) ?></td>
+                            <td class="tabla-col-atencion" title="<?= clean($row['Nombre_Establecimiento']) ?>">
                                 <?= clean(mb_strimwidth($row['Nombre_Establecimiento'] ?? '', 0, 25, '...')) ?>
                             </td>
-                            <td><?= clean($row['Lote']) ?></td>
-                            <td><?= clean($row['Num_Pag']) ?></td>
-                            <td><?= clean($row['Num_Reg']) ?></td>
-                            <td><?= clean($row['Id_Turno']) ?></td>
-                            <td><?= clean($row['Id_Condicion_Establecimiento']) ?></td>
-                            <td><?= clean($row['Id_Condicion_Servicio']) ?></td>
-                            <td><small><?= clean($row['Abrev_Tipo_Doc_Paciente']) ?></small></td>
-                            <td><?= clean($row['Numero_Documento_Paciente']) ?></td>
-                            <td title="<?= clean($row['Nombres_Paciente']) ?>">
+                            <td class="tabla-col-atencion"><?= clean($row['Lote']) ?></td>
+                            <td class="tabla-col-atencion"><?= clean($row['Num_Pag']) ?></td>
+                            <td class="tabla-col-atencion"><?= clean($row['Num_Reg']) ?></td>
+                            <td class="tabla-col-atencion"><?= clean($row['Id_Turno']) ?></td>
+                            <td class="tabla-col-atencion"><?= clean($row['Id_Condicion_Establecimiento']) ?></td>
+                            <td class="tabla-col-atencion"><?= clean($row['Id_Condicion_Servicio']) ?></td>
+                            <td class="tabla-col-paciente"><small><?= clean($row['Abrev_Tipo_Doc_Paciente']) ?></small></td>
+                            <td class="tabla-col-paciente"><?= clean($row['Numero_Documento_Paciente']) ?></td>
+                            <td class="tabla-col-paciente" title="<?= clean($row['Nombres_Paciente']) ?>">
                                 <?= clean(mb_strimwidth($row['Nombres_Paciente'] ?? '', 0, 20, '...')) ?>
                             </td>
-                            <td title="<?= clean($row['Apellido_Paterno_Paciente']) ?>">
+                            <td class="tabla-col-paciente" title="<?= clean($row['Apellido_Paterno_Paciente']) ?>">
                                 <?= clean(mb_strimwidth($row['Apellido_Paterno_Paciente'] ?? '', 0, 18, '...')) ?>
                             </td>
-                            <td><small><?= clean($row['Id_Genero']) ?></small></td>
-                            <td><small><?= clean($row['Tipo_Edad']) ?></small></td>
-                            <td><?= clean($row['Edad_Reg']) ?></td>
-                            <td><?= formatDate($row['Fecha_Nacimiento_Paciente']) ?></td>
-                            <td><code><?= clean($row['Codigo_Item']) ?></code></td>
-                            <td title="<?= clean($row['Descripcion_Item']) ?>">
+                            <td class="tabla-col-paciente"><small><?= clean($row['Id_Genero']) ?></small></td>
+                            <!-- Nuevo orden: FECHA NAC., Edad, T.E. -->
+                            <td class="tabla-col-paciente"><?= formatDate($row['Fecha_Nacimiento_Paciente']) ?></td>
+                            <td class="tabla-col-paciente"><?= clean($row['Edad_Reg']) ?></td>
+                            <td class="tabla-col-paciente"><small><?= clean($row['Tipo_Edad']) ?></small></td>
+                            <!-- Fin del nuevo orden -->
+                            <td class="tabla-col-diagnostico"><code><?= clean($row['Codigo_Item']) ?></code></td>
+                            <td class="tabla-col-diagnostico" title="<?= clean($row['Descripcion_Item']) ?>">
                                 <?= clean(mb_strimwidth($row['Descripcion_Item'] ?? '', 0, 25, '...')) ?>
                             </td>
-                            <td><small><?= clean($row['Tipo_Diagnostico']) ?></small></td>
-                            <td><?= clean($row['Valor_Lab']) ?></td>
-                            <td>
-                                <?php if (($row['Fg_Tipo'] ?? '') === 'P'): ?>
-                                    <span class="badge bg-success">P</span>
-                                <?php elseif (($row['Fg_Tipo'] ?? '') === 'D'): ?>
-                                    <span class="badge bg-info text-dark">D</span>
-                                <?php else: ?>
-                                    <small class="text-muted"><?= clean($row['Fg_Tipo']) ?></small>
-                                <?php endif; ?>
-                            </td>
-                            <td title="<?= clean($row['Descripcion_Ups'] ?? '') ?>">
+                            <td class="tabla-col-diagnostico"><small><?= clean($row['Tipo_Diagnostico']) ?></small></td>
+                            <td class="tabla-col-diagnostico"><?= clean($row['Valor_Lab']) ?></td>
+                            <td class="tabla-col-diagnostico" title="<?= clean($row['Descripcion_Ups'] ?? '') ?>">
                                 <?= clean(mb_strimwidth($row['Descripcion_Ups'] ?? '', 0, 20, '...')) ?>
                             </td>
-                            <td title="<?= clean($row['Nombres_Personal'] ?? '') ?>">
+                            <td class="tabla-col-personal" title="<?= clean($row['Nombres_Personal'] ?? '') ?>">
                                 <?= clean(mb_strimwidth($row['Nombres_Personal'] ?? '', 0, 18, '...')) ?>
                             </td>
-                            <td title="<?= clean($row['Apellido_Paterno_Personal'] ?? '') ?>">
+                            <td class="tabla-col-personal" title="<?= clean($row['Apellido_Paterno_Personal'] ?? '') ?>">
                                 <?= clean(mb_strimwidth($row['Apellido_Paterno_Personal'] ?? '', 0, 18, '...')) ?>
                             </td>
-                            <td title="<?= clean($row['Descripcion_Profesion'] ?? '') ?>">
+                            <td class="tabla-col-personal" title="<?= clean($row['Descripcion_Profesion'] ?? '') ?>">
                                 <?= clean(mb_strimwidth($row['Descripcion_Profesion'] ?? '', 0, 18, '...')) ?>
                             </td>
-                            <td title="<?= clean($row['Nombres_Registrador'] ?? '') ?>">
+                            <td class="tabla-col-registro" title="<?= clean($row['Nombres_Registrador'] ?? '') ?>">
                                 <?= clean(mb_strimwidth($row['Nombres_Registrador'] ?? '', 0, 18, '...')) ?>
                             </td>
-                            <td title="<?= clean($row['Apellido_Paterno_Registrador'] ?? '') ?>">
+                            <td class="tabla-col-registro" title="<?= clean($row['Apellido_Paterno_Registrador'] ?? '') ?>">
                                 <?= clean(mb_strimwidth($row['Apellido_Paterno_Registrador'] ?? '', 0, 18, '...')) ?>
                             </td>
-                            <td><small><?= formatDateTime($row['Fecha_Registro']) ?></small></td>
-                            <td><small><?= formatDateTime($row['Fecha_Modificacion']) ?></small></td>
+                            <td class="tabla-col-registro"><small><?= formatDateTime($row['Fecha_Registro']) ?></small></td>
+                            <td class="tabla-col-registro"><small><?= formatDateTime($row['Fecha_Modificacion']) ?></small></td>
                         </tr>
                         <?php endforeach; ?>
                     </tbody>
