@@ -187,6 +187,26 @@ function esniConstruirWhereFiltros(array $cols, array $filtros): array {
 }
 
 /**
+ * Normaliza el codigo de tipo de edad del HIS al formato de ESNI_GRUPO_EDAD.
+ *
+ * La tabla consolidada HIS almacena Id_TipoEdad_Reg como codigo numerico:
+ *   '1' = Dias, '2' = Meses, '3' = Anios
+ * Pero ESNI_GRUPO_EDAD.tipo_edad usa letras:
+ *   'D' = Dias, 'M' = Meses, 'A' = Anios
+ *
+ * Esta funcion mapea ambos formatos para permitir la comparacion correcta.
+ */
+function esniNormalizarTipoEdad(?string $tipEdad): ?string {
+    if ($tipEdad === null || $tipEdad === '') return null;
+    $tipEdad = strtoupper(trim($tipEdad));
+    // Si ya esta en formato letra, devolver tal cual
+    if (in_array($tipEdad, ['D', 'M', 'A'], true)) return $tipEdad;
+    // Mapeo de codigo numerico HIS a letra ESNI
+    $mapa = ['1' => 'D', '2' => 'M', '3' => 'A'];
+    return $mapa[$tipEdad] ?? $tipEdad;
+}
+
+/**
  * Comprueba si un grupo de edad "encaja" con un valor de edad/tipo edad de fila.
  * Para simplificar, en modo basico se trabaja con Grupo_Edad textual;
  * en modo avanzado (edad_reg + tip_edad) se compara numericamente.
@@ -195,10 +215,14 @@ function esniEdadEncaja(array $regla, ?float $edadReg, ?string $tipEdad, ?string
     // Si la regla no tiene grupo_edad, encaja siempre
     if (empty($regla['grupo_edad_codigo'])) return true;
 
+    // Normalizar tip_edad: convertir codigo numerico HIS ('1','2','3')
+    // a formato letra ESNI ('D','M','A')
+    $tipEdadNorm = esniNormalizarTipoEdad($tipEdad);
+
     // Modo avanzado: si tenemos edad_reg y tip_edad, comparamos numericamente
-    if ($edadReg !== null && $tipEdad !== null && !empty($regla['ge_tipo_edad']) && $regla['ge_edad_min'] !== null) {
+    if ($edadReg !== null && $tipEdadNorm !== null && !empty($regla['ge_tipo_edad']) && $regla['ge_edad_min'] !== null) {
         $tipRegla = $regla['ge_tipo_edad'];
-        if ($tipEdad !== $tipRegla) return false;
+        if ($tipEdadNorm !== $tipRegla) return false;
         if ($edadReg < $regla['ge_edad_min']) return false;
         if ($regla['ge_edad_max'] !== null && $edadReg > $regla['ge_edad_max']) return false;
         return true;
@@ -373,16 +397,56 @@ function esniEjecutarReporte(PDO $pdo, array $filtros, array $cols): array {
 
     // Comorbilidad: construir conjunto de id_paciente que tienen al menos una
     // fila con cod_item=9999. Se usa para evaluar requiere/excluye_comorbilidad.
+    // IMPORTANTE: se usa una consulta SEPARADA sin el filtro I_ROWNUM_LAB=1
+    // porque los registros de comorbilidad (cod_item=9999) pueden tener
+    // I_ROWNUM_LAB > 1 en la tabla consolidada. Si usaramos solo las filas
+    // del query principal (con I_ROWNUM_LAB=1), los marcadores de comorbilidad
+    // se perderian y ambas lineas (con/sin comorbilidad) fallarian.
     $pacientesConComorbilidad = [];
-    if ($usaComorbilidad && !empty($cols['id_paciente'])) {
-        foreach ($filas as $f) {
-            $cod = isset($f['cod_item']) ? trim((string)$f['cod_item']) : '';
-            if ($cod !== $codComorbilidad) continue;
-            $idPac = isset($f['id_paciente']) && $f['id_paciente'] !== null && $f['id_paciente'] !== ''
-                ? (string)$f['id_paciente'] : null;
-            if ($idPac !== null) {
-                $pacientesConComorbilidad[$idPac] = true;
+    if ($usaComorbilidad && !empty($cols['id_paciente']) && !empty($cols['cod_item'])) {
+        try {
+            // Construir WHERE igual que el principal PERO:
+            //   - Solo filtrar por cod_item=9999
+            //   - SIN filtro I_ROWNUM_LAB (para capturar todas las filas de comorbilidad)
+            $whereComorb = $whereComun;
+            // Quitar el filtro de I_ROWNUM_LAB si existe (solo si la columna fue detectada)
+            if (!empty($cols['rownnum_lab'])) {
+                $whereComorb = preg_replace(
+                    '/\s*AND\s*`' . preg_quote($cols['rownnum_lab'], '/') . '`\s*=\s*1\s*/i',
+                    '', $whereComorb
+                );
             }
+            // Quitar el filtro IN de cod_items (lo reemplazamos por =9999)
+            $whereComorb = preg_replace(
+                '/\s*AND\s*`' . preg_quote($cols['cod_item'], '/') . '`\s*IN\s*\([^)]+\)\s*/i',
+                '', $whereComorb
+            );
+            $whereComorb .= " AND `{$cols['cod_item']}` = :cod_comorb";
+
+            $paramsComorb = $paramsComun;
+            // Limpiar parametros de cod_item del IN original
+            foreach ($paramsComorb as $k => $v) {
+                if (strpos($k, ':ci_') === 0) {
+                    unset($paramsComorb[$k]);
+                }
+            }
+            $paramsComorb[':cod_comorb'] = $codComorbilidad;
+
+            $sqlComorb = "SELECT DISTINCT `{$cols['id_paciente']}` AS id_paciente "
+                       . "FROM `{$tabla}` WHERE {$whereComorb}";
+            $stmtComorb = $pdo->prepare($sqlComorb);
+            $stmtComorb->execute($paramsComorb);
+            $comorbRows = $stmtComorb->fetchAll(PDO::FETCH_ASSOC);
+            foreach ($comorbRows as $cr) {
+                $idPac = isset($cr['id_paciente']) && $cr['id_paciente'] !== null && $cr['id_paciente'] !== ''
+                    ? (string)$cr['id_paciente'] : null;
+                if ($idPac !== null) {
+                    $pacientesConComorbilidad[$idPac] = true;
+                }
+            }
+        } catch (Throwable $e) {
+            // Si falla la consulta de comorbilidad, loguear pero continuar
+            // $pacientesConComorbilidad queda vacio (peor caso: CON COMORBILIDAD = 0)
         }
     }
 
