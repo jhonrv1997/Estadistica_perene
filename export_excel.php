@@ -1,15 +1,11 @@
 <?php
 /**
- * Sistema de Gestion de Datos HIS
- * Exportar resultados a Excel
+ * Sistema de Gestion de Datos HIS - Exportar a Excel (.xlsx REAL con autofiltros)
  *
- * FIX: La logica de filtros ahora replica EXACTAMENTE la de consulta_atenciones.php,
- * incluyendo:
- *   - Busqueda multi-token de Codigo_Item (coma, espacio, wildcard *)
- *   - Valor_Lab con soporte wildcard *
- *   - Sub-pagina preventivas (filtro UPS / Fg_Tipo='P')
- *   - Establecimiento: Codigo_Unico (general) o Nombre (preventivas)
- *   - Zona sanitaria con subquery ZSPERENE
+ * Requisitos:
+ *   - PHP >= 7.0 con extension ZipArchive habilitada
+ *   - Carpeta temporal del servidor escribible (sys_get_temp_dir())
+ *   - includes/ExcelWriter.php (clase corregida con autofiltros)
  */
 
 require_once 'includes/auth.php';
@@ -18,37 +14,63 @@ verificarAutenticacion();
 require_once 'includes/functions.php';
 require_once 'includes/ExcelWriter.php';
 
+// Polyfill de str_ends_with para PHP < 8.0
+if (!function_exists('str_ends_with')) {
+    function str_ends_with(string $haystack, string $needle): bool {
+        if ($needle === '') return true;
+        $len = strlen($needle);
+        return $len <= strlen($haystack) && substr($haystack, -$len) === $needle;
+    }
+}
+
+// Directorio temporal alternativo si el del sistema no es escribible
+if (!is_writable(sys_get_temp_dir())) {
+    $localTmp = __DIR__ . '/includes/tmp';
+    if (!is_dir($localTmp)) { @mkdir($localTmp, 0775, true); }
+    if (is_writable($localTmp)) {
+        putenv('TMPDIR=' . $localTmp);
+        putenv('TMP=' . $localTmp);   // Windows
+        putenv('TEMP=' . $localTmp);  // Windows
+    }
+}
+
 $pdo = getDBConnection();
 
 // ============================================================
-// RECUPERAR FILTROS DESDE POST  (con mismos defaults que consulta_atenciones.php)
+// RECUPERAR FILTROS DESDE POST
 // ============================================================
-$sub = $_POST['filter_sub'] ?? 'general';
+$sub = trim($_POST['filter_sub'] ?? 'general');
 if (!in_array($sub, ['general', 'preventivas'], true)) {
     $sub = 'general';
 }
 
-$fAnio           = trim($_POST['filter_anio'] ?? '');
-$fMes            = trim($_POST['filter_mes'] ?? '');
-$fZonaSanitaria  = trim($_POST['filter_zona_sanitaria'] ?? '');
-$fDepartamento   = trim($_POST['filter_departamento'] ?? '');
-$fUps            = trim($_POST['filter_ups'] ?? '');
-$fEstablecimiento = trim($_POST['filter_establecimiento'] ?? '');
-$fGrupoEdad      = trim($_POST['filter_grupo_edad'] ?? '');
-$fIdGenero       = trim($_POST['filter_id_genero'] ?? '');
-$fOtraCondicion  = trim($_POST['filter_otra_condicion'] ?? '');
-$fCodigoItem     = trim($_POST['filter_codigo_item'] ?? '');
-$fTipoDiagnostico = trim($_POST['filter_tipo_diagnostico'] ?? '');
-$fLote           = trim($_POST['filter_lote'] ?? '');
-$fNumPag         = trim($_POST['filter_num_pag'] ?? '');
-$fNumReg         = trim($_POST['filter_num_reg'] ?? '');
-$fValorLab       = trim($_POST['filter_valor_lab'] ?? '');
-$fDocPersonal    = trim($_POST['filter_doc_personal'] ?? '');
-$fDocPaciente    = trim($_POST['filter_doc_paciente'] ?? '');
-$fDocRegistrador = trim($_POST['filter_doc_registrador'] ?? '');
+$g = function (string $key) {
+    $raw = $_POST[$key] ?? '';
+    if (is_array($raw)) return implode(',', array_map('strval', $raw));
+    return trim((string)$raw);
+};
+
+$fAnio            = $g('filter_anio');
+$fMes             = $g('filter_mes');
+$fZonaSanitaria   = $g('filter_zona_sanitaria');
+$fDepartamento    = $g('filter_departamento');
+$fUps             = $g('filter_ups');
+$fEstablecimiento = $g('filter_establecimiento');
+$fGrupoEdad       = $g('filter_grupo_edad');
+$fIdGenero        = $g('filter_id_genero');
+$fOtraCondicion   = $g('filter_otra_condicion');
+$fCodigoItem      = $g('filter_codigo_item');
+$fTipoDiagnostico = $g('filter_tipo_diagnostico');
+$fLote            = $g('filter_lote');
+$fNumPag          = $g('filter_num_pag');
+$fNumReg          = $g('filter_num_reg');
+$fValorLab        = $g('filter_valor_lab');
+$fDocPersonal     = $g('filter_doc_personal');
+$fDocPaciente     = $g('filter_doc_paciente');
+$fDocRegistrador  = $g('filter_doc_registrador');
 
 // ============================================================
-// CONSTRUIR WHERE — replica exacta de consulta_atenciones.php
+// CONSTRUIR WHERE
 // ============================================================
 $where = "1=1";
 $params = [];
@@ -59,15 +81,12 @@ if ($fAnio !== '') {
 }
 if ($fMes !== '') {
     $where .= " AND CAST(TRIM(Mes) AS UNSIGNED) = :mes";
-    $params[':mes'] = intval($fMes);
+    $params[':mes'] = (int)$fMes;
 }
 if ($fZonaSanitaria !== '') {
     $where .= " AND Codigo_Unico IN (SELECT Codigo_Unico FROM ZSPERENE WHERE MicroRed = :microred)";
     $params[':microred'] = $fZonaSanitaria;
 }
-
-// Establecimiento: en sub=general el valor es Codigo_Unico;
-// en sub=preventivas el valor es Nombre_Establecimiento.
 if ($fEstablecimiento !== '') {
     if ($sub === 'general') {
         $where .= " AND Codigo_Unico = :est";
@@ -77,7 +96,6 @@ if ($fEstablecimiento !== '') {
         $params[':est'] = $fEstablecimiento;
     }
 }
-
 if ($fGrupoEdad !== '') {
     $where .= " AND Grupo_Edad = :gedad";
     $params[':gedad'] = $fGrupoEdad;
@@ -95,28 +113,22 @@ if ($fTipoDiagnostico !== '') {
     $params[':td'] = $fTipoDiagnostico;
 }
 
-// Valor_Lab: soporte wildcard con * (igual que consulta_atenciones.php)
 if ($fValorLab !== '') {
     if (str_ends_with($fValorLab, '*')) {
-        $vlabVal = rtrim($fValorLab, '*');
         $where .= " AND Valor_Lab LIKE :vlab";
-        $params[':vlab'] = $vlabVal . '%';
+        $params[':vlab'] = rtrim($fValorLab, '*') . '%';
     } else {
         $where .= " AND Valor_Lab = :vlab";
         $params[':vlab'] = $fValorLab;
     }
 }
 
-// Codigo_Item: busqueda multi-token (coma, espacio, wildcard *)
-// Replica exacta de consulta_atenciones.php
 if ($fCodigoItem !== '') {
     $tokens = preg_split('/[\s,]+/', $fCodigoItem);
     $tokens = array_filter(array_map('trim', $tokens), fn($t) => $t !== '');
     if (!empty($tokens)) {
         $orParts = [];
-        $i = 0;
-        foreach ($tokens as $tok) {
-            $i++;
+        foreach ($tokens as $i => $tok) {
             $key = ':citem' . $i;
             if (str_ends_with($tok, '*')) {
                 $orParts[] = "Codigo_Item LIKE $key";
@@ -136,11 +148,11 @@ if ($fLote !== '') {
 }
 if ($fNumPag !== '') {
     $where .= " AND Num_Pag = :numpag";
-    $params[':numpag'] = intval($fNumPag);
+    $params[':numpag'] = (int)$fNumPag;
 }
 if ($fNumReg !== '') {
     $where .= " AND Num_Reg = :numreg";
-    $params[':numreg'] = intval($fNumReg);
+    $params[':numreg'] = (int)$fNumReg;
 }
 if ($fDocPaciente !== '') {
     $where .= " AND Numero_Documento_Paciente LIKE :dpac";
@@ -163,45 +175,35 @@ if ($fUps !== '') {
     $params[':ups'] = $fUps;
 }
 
-// ============================================================
-// FILTRO PREVENTIVAS (solo cuando sub=preventivas)
-// Replica exacta de consulta_atenciones.php
-// ============================================================
+// FILTRO PREVENTIVAS
 if ($sub === 'preventivas') {
-    // Obtener UPS preventivas ( misma consulta que consulta_atenciones.php )
     $upsPreventivas = [];
     try {
         $upsPreventivas = $pdo->query(
-            "SELECT DISTINCT Id_Ups, Descripcion_Ups
-             FROM T_CONSOLIDADO_NUEVA_TRAMA_HISMINSA_DETALLADO
+            "SELECT DISTINCT Id_Ups FROM T_CONSOLIDADO_NUEVA_TRAMA_HISMINSA_DETALLADO
              WHERE Descripcion_Ups LIKE '%PREVENT%' OR Descripcion_Ups LIKE '%PROMOC%' OR Fg_Tipo = 'P'
              ORDER BY Descripcion_Ups LIMIT 200"
-        )->fetchAll();
+        )->fetchAll(PDO::FETCH_COLUMN);
     } catch (Exception $e) {
         $upsPreventivas = [];
     }
-
-    if (!empty($upsPreventivas)) {
-        $upsIds = array_column($upsPreventivas, 'Id_Ups');
-        $placeholders = [];
-        foreach ($upsIds as $i => $uid) {
-            if ($uid === null || $uid === '') continue;
-            $k = ':pu' . $i;
-            $placeholders[] = $k;
-            $params[$k] = $uid;
-        }
-        if (!empty($placeholders)) {
-            $where .= " AND (Id_Ups IN (" . implode(',', $placeholders) . ") OR Fg_Tipo = 'P' OR Descripcion_Ups LIKE '%PREVENT%' OR Descripcion_Ups LIKE '%PROMOC%')";
-        } else {
-            $where .= " AND (Fg_Tipo = 'P' OR Descripcion_Ups LIKE '%PREVENT%' OR Descripcion_Ups LIKE '%PROMOC%')";
-        }
+    $placeholders = [];
+    foreach ($upsPreventivas as $i => $uid) {
+        if ($uid === null || $uid === '') continue;
+        $k = ':pu' . $i;
+        $placeholders[] = $k;
+        $params[$k] = $uid;
+    }
+    if (!empty($placeholders)) {
+        $where .= " AND (Id_Ups IN (" . implode(',', $placeholders) . ")"
+                 . " OR Fg_Tipo = 'P' OR Descripcion_Ups LIKE '%PREVENT%' OR Descripcion_Ups LIKE '%PROMOC%')";
     } else {
         $where .= " AND (Fg_Tipo = 'P' OR Descripcion_Ups LIKE '%PREVENT%' OR Descripcion_Ups LIKE '%PROMOC%')";
     }
 }
 
 // ============================================================
-// CONSULTA DE DATOS (sin limite, para exportar todo)
+// CONSULTA DE DATOS (sin limite)
 // ============================================================
 $campos = "Id_Cita, Anio, Mes, Dia, Fecha_Atencion, Lote, Num_Pag, Num_Reg,
            Codigo_Unico, Nombre_Establecimiento,
@@ -219,94 +221,59 @@ $campos = "Id_Cita, Anio, Mes, Dia, Fecha_Atencion, Lote, Num_Pag, Num_Reg,
            Fecha_Registro, Fecha_Modificacion";
 
 $dataSql = "SELECT {$campos} FROM T_CONSOLIDADO_NUEVA_TRAMA_HISMINSA_DETALLADO WHERE {$where} ORDER BY Fecha_Atencion DESC";
+
 $dataStmt = $pdo->prepare($dataSql);
 $dataStmt->execute($params);
-$datos = $dataStmt->fetchAll();
+$datos = $dataStmt->fetchAll(PDO::FETCH_ASSOC);
 
 // ============================================================
-// GENERAR EXCEL
+// GENERAR EXCEL .xlsx REAL con autofiltros
 // ============================================================
-// Encabezados del Excel
 $headers = [
-    'Id Cita', 'Anio', 'Mes', 'Dia', 'Fecha Atencion', 'Lote', 'Num Pag', 'Num Reg',
-    'Codigo Unico', 'Establecimiento',
-    'T. Doc. Pac.', 'Doc. Paciente', 'Ape. Pat. Paciente', 'Ape. Mat. Paciente', 'Nombres Paciente',
-    'Fecha Nacimiento', 'Genero', 'Tipo Edad', 'Edad', 'Grupo Edad', 'Etnia', 'Financiador',
-    'Doc. Personal', 'T. Doc. Per.', 'Ape. Pat. Personal', 'Ape. Mat. Personal', 'Nombres Personal',
-    'Profesion', 'Condicion',
-    'Doc. Registrador', 'Ape. Pat. Reg.', 'Ape. Mat. Reg.', 'Nombres Registrador',
-    'Codigo Item', 'Descripcion Item', 'Tipo', 'Tipo Diagnostico', 'Valor Lab',
-    'Peso', 'Talla', 'Hemoglobina', 'Perim. Abdominal', 'Perim. Cefalico',
-    'Otra Condicion', 'Centro Poblado', 'UPS',
-    'Fecha Registro', 'Fecha Modificacion'
+    'Id Cita','Anio','Mes','Dia','Fecha Atencion','Lote','Num Pag','Num Reg',
+    'Codigo Unico','Establecimiento',
+    'T. Doc. Pac.','Doc. Paciente','Ape. Pat. Paciente','Ape. Mat. Paciente','Nombres Paciente',
+    'Fecha Nacimiento','Genero','Tipo Edad','Edad','Grupo Edad','Etnia','Financiador',
+    'Doc. Personal','T. Doc. Per.','Ape. Pat. Personal','Ape. Mat. Personal','Nombres Personal',
+    'Profesion','Condicion',
+    'Doc. Registrador','Ape. Pat. Reg.','Ape. Mat. Reg.','Nombres Registrador',
+    'Codigo Item','Descripcion Item','Tipo','Tipo Diagnostico','Valor Lab',
+    'Peso','Talla','Hemoglobina','Perim. Abdominal','Perim. Cefalico',
+    'Otra Condicion','Centro Poblado','UPS','Fecha Registro','Fecha Modificacion'
 ];
+$widths = [15,6,4,4,14,6,8,8,12,30,8,15,18,18,25,14,8,8,6,15,15,15,15,8,18,18,25,25,15,15,18,18,25,12,35,6,10,8,10,10,10,10,20,25,30,18,18];
 
-// Anchos de columna
-$widths = [15, 6, 4, 4, 14, 6, 8, 8, 12, 30, 8, 15, 18, 18, 25, 14, 8, 8, 6, 15, 15, 15, 15, 8, 18, 18, 25, 25, 15, 15, 18, 18, 25, 12, 35, 6, 10, 8, 10, 10, 10, 10, 20, 25, 30, 18, 18];
-
-// Preparar datos para el Excel
 $excelData = [];
 foreach ($datos as $row) {
     $excelData[] = [
-        $row['Id_Cita'],
-        $row['Anio'],
-        $row['Mes'],
-        $row['Dia'],
-        formatDate($row['Fecha_Atencion']),
-        $row['Lote'],
-        $row['Num_Pag'],
-        $row['Num_Reg'],
-        $row['Codigo_Unico'],
-        $row['Nombre_Establecimiento'],
-        $row['Abrev_Tipo_Doc_Paciente'],
-        $row['Numero_Documento_Paciente'],
-        $row['Apellido_Paterno_Paciente'],
-        $row['Apellido_Materno_Paciente'],
-        $row['Nombres_Paciente'],
-        formatDate($row['Fecha_Nacimiento_Paciente']),
-        $row['Id_Genero'],
-        $row['Tipo_Edad'],
-        $row['Edad_Reg'],
-        $row['Grupo_Edad'],
-        $row['Descripcion_Etnia'],
-        $row['Descripcion_Financiador'],
-        $row['Numero_Documento_Personal'],
-        $row['Abrev_Tipo_Doc_Personal'],
-        $row['Apellido_Paterno_Personal'],
-        $row['Apellido_Materno_Personal'],
-        $row['Nombres_Personal'],
-        $row['Descripcion_Profesion'],
-        $row['Descripcion_Condicion'],
-        $row['Numero_Documento_Registrador'],
-        $row['Apellido_Paterno_Registrador'],
-        $row['Apellido_Materno_Registrador'],
-        $row['Nombres_Registrador'],
-        $row['Codigo_Item'],
-        $row['Descripcion_Item'],
-        $row['Fg_Tipo'],
-        $row['Tipo_Diagnostico'],
-        $row['Valor_Lab'],
-        $row['Peso'],
-        $row['Talla'],
-        $row['Hemoglobina'],
-        $row['Perimetro_Abdominal'],
-        $row['Perimetro_Cefalico'],
-        $row['Descripcion_Otra_Condicion'],
-        $row['Descripcion_Centro_Poblado'],
-        $row['Descripcion_Ups'],
-        formatDateTime($row['Fecha_Registro']),
-        formatDateTime($row['Fecha_Modificacion'])
+        $row['Id_Cita'] ?? '', $row['Anio'] ?? '', $row['Mes'] ?? '', $row['Dia'] ?? '',
+        formatDate($row['Fecha_Atencion'] ?? ''),
+        $row['Lote'] ?? '', $row['Num_Pag'] ?? '', $row['Num_Reg'] ?? '',
+        $row['Codigo_Unico'] ?? '', $row['Nombre_Establecimiento'] ?? '',
+        $row['Abrev_Tipo_Doc_Paciente'] ?? '', $row['Numero_Documento_Paciente'] ?? '',
+        $row['Apellido_Paterno_Paciente'] ?? '', $row['Apellido_Materno_Paciente'] ?? '', $row['Nombres_Paciente'] ?? '',
+        formatDate($row['Fecha_Nacimiento_Paciente'] ?? ''),
+        $row['Id_Genero'] ?? '', $row['Tipo_Edad'] ?? '', $row['Edad_Reg'] ?? '', $row['Grupo_Edad'] ?? '',
+        $row['Descripcion_Etnia'] ?? '', $row['Descripcion_Financiador'] ?? '',
+        $row['Numero_Documento_Personal'] ?? '', $row['Abrev_Tipo_Doc_Personal'] ?? '',
+        $row['Apellido_Paterno_Personal'] ?? '', $row['Apellido_Materno_Personal'] ?? '', $row['Nombres_Personal'] ?? '',
+        $row['Descripcion_Profesion'] ?? '', $row['Descripcion_Condicion'] ?? '',
+        $row['Numero_Documento_Registrador'] ?? '', $row['Apellido_Paterno_Registrador'] ?? '', $row['Apellido_Materno_Registrador'] ?? '', $row['Nombres_Registrador'] ?? '',
+        $row['Codigo_Item'] ?? '', $row['Descripcion_Item'] ?? '', $row['Fg_Tipo'] ?? '', $row['Tipo_Diagnostico'] ?? '', $row['Valor_Lab'] ?? '',
+        $row['Peso'] ?? '', $row['Talla'] ?? '', $row['Hemoglobina'] ?? '',
+        $row['Perimetro_Abdominal'] ?? '', $row['Perimetro_Cefalico'] ?? '',
+        $row['Descripcion_Otra_Condicion'] ?? '', $row['Descripcion_Centro_Poblado'] ?? '', $row['Descripcion_Ups'] ?? '',
+        formatDateTime($row['Fecha_Registro'] ?? ''), formatDateTime($row['Fecha_Modificacion'] ?? '')
     ];
 }
 
-// Generar nombre de archivo (incluye indicador de sub-pagina)
 $filename = 'HIS_Atenciones';
 if ($sub === 'preventivas') $filename .= '_Preventivas';
 if ($fAnio) $filename .= '_' . $fAnio;
 if ($fMes)  $filename .= '_' . $fMes;
 $filename .= '_' . date('Ymd_His') . '.xlsx';
 
-// Crear y descargar Excel
+// Generar y descargar .xlsx REAL
 $excel = new ExcelWriter();
 $excel->addSheet('Atenciones HIS', $headers, $excelData, $widths);
 $excel->download($filename);
