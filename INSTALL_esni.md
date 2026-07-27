@@ -147,7 +147,10 @@ El reporte muestra las 14 secciones oficiales MINSA con los siguientes layouts:
 |----------|--------|--------|
 | A | Menores de 1 anio | Lista simple (26 lineas: BCG, HVB, IPV, PENTA, RXN, ROTA, NEUMO, INF, RIESGO) |
 | B | De 1 anio | Lista simple (13 lineas: NEUMO 1a, SPR, VAR, INF, NEUMO 12-23m, AMA, HEP_A, SPR 2da, REF DPT, REF APO) |
-| C | De 2 a 4 anos | Lista simple (16 lineas: INF comorb/sin comorb, NEUMO comorb, AMA, VNO, REF DPT 4a, REF APO 4a) |
+| C | De 2 anios | Lista simple (16 lineas: INF comorb/sin comorb, NEUMO comorb, AMA, VNO, REF DPT 4a, REF APO 4a) |
+| D | De 3 anios | Lista simple|
+| E1 | De 4 anios | Lista simple|
+| E2 | De 5 a 7 anios | Lista simple|
 | H | dT Mujeres 10-49 anos | Matriz por dosis (3 columnas: D1, D2, D3) |
 | H2 | Gestantes TDAP | Matriz por dosis (4 columnas: dT D1-D3 + TDAP) |
 | I | dT Varones en riesgo | Matriz por dosis (3 columnas: D1, D2, D3) |
