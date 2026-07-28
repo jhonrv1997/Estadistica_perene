@@ -147,15 +147,15 @@ El reporte muestra las 14 secciones oficiales MINSA con los siguientes layouts:
 |----------|--------|--------|
 | A | Menores de 1 anio | Lista simple (26 lineas: BCG, HVB, IPV, PENTA, RXN, ROTA, NEUMO, INF, RIESGO) |
 | B | De 1 anio | Lista simple (13 lineas: NEUMO 1a, SPR, VAR, INF, NEUMO 12-23m, AMA, HEP_A, SPR 2da, REF DPT, REF APO) |
-| C | De 2 anios | Lista simple (16 lineas: INF comorb/sin comorb, NEUMO comorb, AMA, VNO, REF DPT 4a, REF APO 4a) |
-| D | De 3 anios | Lista simple|
-| E1 | De 4 anios | Lista simple|
-| E2 | De 5 a 7 anios | Lista simple|
+| C | De 2 anios | Lista simple (16 lineas: INF comorb/sin comorb, NEUMO comorb, AMA, SPR, Varicela, REF Pentavalente, REF IPV) |
+| D | De 3 anios | Lista simple (lineas: INF comorb/sin comorb, NEUMO comorb, AMA, SPR, REF Pentavalente, REF IPV)|
+| E1 | De 4 anios | Lista simple (lineas: INF comorb/sin comorb, NEUMO comorb, AMA, SPR, Refuerzo Antipolio (IPV), REF Pentavalente, Refuerzo DPT, Refuerzo Antipolio (APO)|
+| E2 | De 5 a 7 anios | Lista simple (lineas: SPR, Refuerzo DPT|
 | H | dT Mujeres 10-49 anos | Matriz por dosis (3 columnas: D1, D2, D3) |
 | H2 | Gestantes TDAP | Matriz por dosis (4 columnas: dT D1-D3 + TDAP) |
 | I | dT Varones en riesgo | Matriz por dosis (3 columnas: D1, D2, D3) |
-| J | Influenza otros grupos | Total unico por grupo |
-| K | Sarampion-Rubeola | Total unico por grupo |
+| J | Influenza otros grupos | Solo con Comorbilidad(05 a 11, 12 a 17, 18 a 29, 30 a 49, 50 a 59); SIN Comorbilidad(05 a 11, 12 a 17, 18 a 29, 30 a 49, 50 a 59); Mayores de 60|
+| K | SPR-SARAMPION | Total unico por grupo (5 a 10, 11 a 59), Trabajador de Salud (Valor_Lab=ST)|
 | L | Hepatitis B 5-59 anos | Matriz por dosis |
 | M | Antiamarilica | Total unico por grupo |
 | N | Antipolio Oral | Matriz por edad (3 columnas: 02, 03, 04 anos) |
