@@ -150,7 +150,7 @@ El reporte muestra las 14 secciones oficiales MINSA con los siguientes layouts:
 | C | De 2 anios | Lista simple (16 lineas: INF comorb/sin comorb, NEUMO comorb, AMA, SPR, Varicela, REF Pentavalente, REF IPV) |
 | D | De 3 anios | Lista simple (lineas: INF comorb/sin comorb, NEUMO comorb, AMA, SPR, REF Pentavalente, REF IPV)|
 | E1 | De 4 anios | Lista simple (lineas: INF comorb/sin comorb, NEUMO comorb, AMA, SPR, Refuerzo Antipolio (IPV), REF Pentavalente, Refuerzo DPT, Refuerzo Antipolio (APO)|
-| E2 | De 5 a 7 anios | Lista simple (lineas: SPR, Refuerzo DPT|
+| E2 | De 5 a 7 anios | Lista simple (lineas: SPR, Refuerzo DPT)|
 | H | dT Mujeres 10-49 anos | Matriz por dosis (3 columnas: D1, D2, D3) |
 | H2 | Gestantes TDAP | Matriz por dosis (4 columnas: dT D1-D3 + TDAP) |
 | I | dT Varones en riesgo | Matriz por dosis (3 columnas: D1, D2, D3) |
