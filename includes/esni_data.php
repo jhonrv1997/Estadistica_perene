@@ -397,39 +397,22 @@ function esniEjecutarReporte(PDO $pdo, array $filtros, array $cols): array {
 
     // Comorbilidad: construir conjunto de id_paciente que tienen al menos una
     // fila con cod_item=9999. Se usa para evaluar requiere/excluye_comorbilidad.
-    // IMPORTANTE: se usa una consulta SEPARADA sin el filtro I_ROWNUM_LAB=1
-    // porque los registros de comorbilidad (cod_item=9999) pueden tener
-    // I_ROWNUM_LAB > 1 en la tabla consolidada. Si usaramos solo las filas
-    // del query principal (con I_ROWNUM_LAB=1), los marcadores de comorbilidad
-    // se perderian y ambas lineas (con/sin comorbilidad) fallarian.
+    //
+    // IMPORTANTE: se construye el WHERE DESDE CERO llamando a
+    // esniConstruirWhereFiltros() en lugar de modificar el WHERE principal
+    // con regex. Esto evita que un regex fragil sobre el IN (...) corrompa
+    // el SQL y haga que la consulta falle silenciosamente, dejando
+    // $pacientesConComorbilidad vacio (lo que causaria 0 en ambas lineas).
+    //
+    // Ademas, NO se incluye el filtro I_ROWNUM_LAB=1 porque los registros
+    // de comorbilidad (cod_item=9999) pueden tener I_ROWNUM_LAB > 1.
     $pacientesConComorbilidad = [];
     if ($usaComorbilidad && !empty($cols['id_paciente']) && !empty($cols['cod_item'])) {
         try {
-            // Construir WHERE igual que el principal PERO:
-            //   - Solo filtrar por cod_item=9999
-            //   - SIN filtro I_ROWNUM_LAB (para capturar todas las filas de comorbilidad)
-            $whereComorb = $whereComun;
-            // Quitar el filtro de I_ROWNUM_LAB si existe (solo si la columna fue detectada)
-            if (!empty($cols['rownnum_lab'])) {
-                $whereComorb = preg_replace(
-                    '/\s*AND\s*`' . preg_quote($cols['rownnum_lab'], '/') . '`\s*=\s*1\s*/i',
-                    '', $whereComorb
-                );
-            }
-            // Quitar el filtro IN de cod_items (lo reemplazamos por =9999)
-            $whereComorb = preg_replace(
-                '/\s*AND\s*`' . preg_quote($cols['cod_item'], '/') . '`\s*IN\s*\([^)]+\)\s*/i',
-                '', $whereComorb
-            );
+            // Construir WHERE comun (anio, mes, EE.SS., departamento, profesional, id_ups)
+            [$whereComorb, $paramsComorb] = esniConstruirWhereFiltros($cols, $filtros);
+            // Agregar SOLO el filtro cod_item = 9999 (sin IN ni I_ROWNUM_LAB)
             $whereComorb .= " AND `{$cols['cod_item']}` = :cod_comorb";
-
-            $paramsComorb = $paramsComun;
-            // Limpiar parametros de cod_item del IN original
-            foreach ($paramsComorb as $k => $v) {
-                if (strpos($k, ':ci_') === 0) {
-                    unset($paramsComorb[$k]);
-                }
-            }
             $paramsComorb[':cod_comorb'] = $codComorbilidad;
 
             $sqlComorb = "SELECT DISTINCT `{$cols['id_paciente']}` AS id_paciente "
@@ -445,10 +428,13 @@ function esniEjecutarReporte(PDO $pdo, array $filtros, array $cols): array {
                 }
             }
         } catch (Throwable $e) {
-            // Si falla la consulta de comorbilidad, loguear pero continuar
-            // $pacientesConComorbilidad queda vacio (peor caso: CON COMORBILIDAD = 0)
+            // Si falla la consulta de comorbilidad, loguear pero continuar.
+            // $pacientesConComorbilidad queda vacio:
+            //   - Lineas CON comorbilidad (requiere=1) no contaran nada (correcto).
+            //   - Lineas SIN comorbilidad (excluye=1) contaran a todos (tolerante).
         }
     }
+
 
     // Recorrer filas y aplicar motor de reglas
     foreach ($filas as $f) {
