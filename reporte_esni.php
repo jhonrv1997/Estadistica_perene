@@ -481,8 +481,8 @@ function renderMatrizDosis(array $sec): string {
             <thead>
                 <tr>
                     <th class="text-start">Grupo Edad</th>
-                    <th>Vacuna</th>
-                    <?php foreach ($dosisCols as $dc): ?><th><?= $dc ?></th><?php endforeach; ?>
+                    <th class="text-start">Vacuna</th>
+                    <?php foreach ($dosisCols as $dc): ?><th class="text-end"><?= $dc ?></th><?php endforeach; ?>
                     <th class="text-end">Total</th>
                 </tr>
             </thead>
@@ -491,8 +491,8 @@ function renderMatrizDosis(array $sec): string {
                     $tot = array_sum($g['dosis']);
                 ?>
                 <tr class="<?= $tot > 0 ? '' : 'text-muted' ?>">
-                    <td><?= htmlspecialchars($g['edad']) ?></td>
-                    <td><span class="esni-cod-pill"><?= htmlspecialchars($g['vacuna']) ?></span></td>
+                    <td class="text-start"><?= htmlspecialchars($g['edad']) ?></td>
+                    <td class="text-start"><span class="esni-cod-pill"><?= htmlspecialchars($g['vacuna']) ?></span></td>
                     <?php foreach ($dosisCols as $dc): ?>
                         <td class="text-end"><?= isset($g['dosis'][$dc]) ? number_format($g['dosis'][$dc]) : '<span class="text-muted">-</span>' ?></td>
                     <?php endforeach; ?>
