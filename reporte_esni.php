@@ -12,7 +12,7 @@
  *      contra la tabla consolidada MySQL usando las reglas configurables.
  *   3) Se muestran las 14 secciones (A, B, C, H, H2, I, J, K, L, M, N, O, P, VPH)
  *      con el mismo layout que el Excel oficial "ReporteActividadesEsni2019.xlsx".
- *   4) Boton Exportar Excel -> genera el .xlsx con la misma distribucion.
+ *   4) Boton Exportar Excel -> genera el .xlsx con la misma distribución.
  *
  * El administrador puede agregar/modificar vacunas, dosis, grupos de edad, lineas
  * y reglas en esni_config.php sin tocar codigo SQL ni PHP.
@@ -324,7 +324,7 @@ include 'includes/header.php';
 <div class="alert alert-info d-flex align-items-center">
     <i class="fas fa-info-circle me-3 fa-2x"></i>
     <div>
-        <strong>El reporte se ejecuto correctamente pero no se encontro ninguna dosis que coincida con las reglas configuradas.</strong><br>
+        <strong>El reporte se ejecutó correctamente pero no se encontro ninguna dosis que coincida con las reglas configuradas.</strong><br>
         Posibles causas:
         <ul class="mb-0 mt-1 small">
             <li>Los codigos de item HIS en los datos no coinciden con los codigos configurados en las reglas ESNI (ver diagnostico de cobertura arriba).</li>
@@ -406,8 +406,8 @@ function renderLista(array $sec): string {
                     <td><span class="esni-cod-pill"><?= htmlspecialchars($lin['dosis_codigo'] ?: '-') ?></span></td>
                     <td><small><?= htmlspecialchars($lin['grupo_edad_codigo'] ?: '-') ?></small></td>
                     <td class="text-center">
-                        <?php if ($lin['sexo'] === 'M'): ?><span class="badge bg-info">M</span>
-                        <?php elseif ($lin['sexo'] === 'F'): ?><span class="badge bg-warning text-dark">V</span>
+                        <?php if ($lin['sexo'] === 'F'): ?><span class="badge bg-info">F</span>
+                        <?php elseif ($lin['sexo'] === 'M'): ?><span class="badge bg-warning text-dark">V</span>
                         <?php else: ?><span class="text-muted">A</span><?php endif; ?>
                     </td>
                     <td class="text-end fw-bold <?= $lin['cantidad'] > 0 ? 'text-success' : 'text-muted' ?>"><?= number_format($lin['cantidad']) ?></td>
@@ -571,9 +571,9 @@ function renderMatrizSexo(array $sec): string {
     ];
     $rowMap = [];
     foreach ($sec['lineas'] as $lin) {
-        if ($lin['sexo'] === 'M') {
+        if ($lin['sexo'] === 'F') {
             $k = 'F_' . $lin['dosis_codigo'];
-        } elseif ($lin['sexo'] === 'F') {
+        } elseif ($lin['sexo'] === 'M') {
             $k = 'M_' . $lin['dosis_codigo'];
         } else continue;
         if (isset($cols[$k])) $rowMap[$k] = $lin;
@@ -628,4 +628,4 @@ function renderMatrizSexo(array $sec): string {
     </div>
 </div>
 
-<?php include 'includes/footer.php'; ?>
+<?php include 'includes/footer.php';

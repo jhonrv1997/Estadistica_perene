@@ -65,7 +65,7 @@ foreach ($reporte['secciones'] as $sec) {
             $lin['vacuna_codigo'] ?: '-',
             $lin['dosis_codigo'] ?: '-',
             $lin['grupo_edad_codigo'] ?: '-',
-            $lin['sexo'] === 'M' ? 'Mujer' : ($lin['sexo'] === 'F' ? 'Varon' : 'Ambos'),
+            $lin['sexo'] === 'F' ? 'Mujer' : ($lin['sexo'] === 'M' ? 'Varon' : 'Ambos'),
             (int)$lin['cantidad'],
         ];
     }
