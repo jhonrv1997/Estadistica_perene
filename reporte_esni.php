@@ -441,7 +441,39 @@ function renderMatrizDosis(array $sec): string {
         }
         $grupos[$key]['dosis'][$lin['dosis_codigo']] = $lin['cantidad'];
     }
-    $dosisCols = ['D1', 'D2', 'D3', 'D4', 'REF1', 'REF2', 'DU'];
+
+    // ====== CORRECCION: columnas dinamicas segun las dosis reales de la seccion ======
+    // Antes: $dosisCols = ['D1', 'D2', 'D3', 'D4', 'REF1', 'REF2', 'DU'];  <-- siempre mostraba 7 columnas
+    //
+    // Ahora: se construye dinamicamente a partir de las dosis realmente configuradas
+    // en las lineas de esta seccion (tabla ESNI_LINEA_REPORTE -> ESNI_DOSIS).
+    // De esta manera, si la seccion solo tiene D1/D2/D3, la matriz mostrara
+    // exclusivamente esas 3 columnas. Si otra seccion tiene DU o REF, se
+    // incluiran automaticamente. Respeta el principio data-driven del modulo.
+    //
+    // Orden logico MINSA aplicado a las dosis presentes:
+    $ordenDosis = ['D1' => 1, 'D2' => 2, 'D3' => 3, 'D4' => 4, 'DU' => 5,
+                   'REF1' => 6, 'REF2' => 7, 'REF3' => 8, 'TOT' => 9];
+    $presentes = [];
+    foreach ($sec['lineas'] as $lin) {
+        if (!empty($lin['dosis_codigo']) && !in_array($lin['dosis_codigo'], $presentes, true)) {
+            $presentes[] = $lin['dosis_codigo'];
+        }
+    }
+    // Ordenar las dosis presentes segun el orden logico definido arriba.
+    // Las dosis no contempladas en $ordenDosis se colocan al final, en orden alfabetico.
+    usort($presentes, function ($a, $b) use ($ordenDosis) {
+        $ia = $ordenDosis[$a] ?? 999;
+        $ib = $ordenDosis[$b] ?? 999;
+        if ($ia === $ib) return strcmp($a, $b);
+        return $ia <=> $ib;
+    });
+
+    // Fallback: si por algun motivo no se detectaron dosis (lineas sin id_dosis),
+    // se usa el default oficial MINSA: D1, D2, D3.
+    $dosisCols = !empty($presentes) ? $presentes : ['D1', 'D2', 'D3'];
+    // ================================================================================
+
     ob_start();
     ?>
     <div class="table-responsive">
