@@ -591,7 +591,8 @@ elseif ($tab === 'reglas'):
     $fLin = $_GET['filter_linea'] ?? '';
     $where = $fLin !== '' ? "WHERE r.id_linea = " . (int)$fLin : "";
     $reglas = $pdo->query("SELECT r.*, l.etiqueta, l.id_seccion, s.codigo AS seccion_codigo,
-                                  g.codigo AS grupo_edad
+                                  g.codigo AS grupo_edad, g.nombre AS grupo_edad_nombre,
+                                  g.tipo_edad AS ge_tipo_edad, g.edad_min AS ge_edad_min, g.edad_max AS ge_edad_max
                            FROM ESNI_REGLA r
                            INNER JOIN ESNI_LINEA_REPORTE l ON l.id_linea=r.id_linea
                            INNER JOIN ESNI_SECCION_REPORTE s ON s.id_seccion=l.id_seccion
@@ -671,7 +672,19 @@ elseif ($tab === 'reglas'):
                             <td title="<?= clean($r['etiqueta']) ?>"><?= clean(mb_strimwidth($r['etiqueta'], 0, 30, '...')) ?></td>
                             <td><strong class="mono-pill"><?= clean($r['cod_item']) ?></strong></td>
                             <td><span class="mono-pill"><?= clean($r['valor_lab'] ?? '(cualq)') ?></span></td>
-                            <td><small class="mono-pill"><?= clean($r['grupo_edad'] ?? '-') ?></small></td>
+                            <td><small class="mono-pill"><?php
+                                if (!empty($r['grupo_edad'])) {
+                                    $rango = '';
+                                    if ($r['ge_edad_min'] !== null || $r['ge_edad_max'] !== null) {
+                                        $rango = ' [' . ($r['ge_edad_min'] !== null ? $r['ge_edad_min'] : '0')
+                                               . '-' . ($r['ge_edad_max'] !== null ? $r['ge_edad_max'] : '∞')
+                                               . ' ' . ($r['ge_tipo_edad'] ?: '?') . ']';
+                                    }
+                                    echo clean($r['grupo_edad'] . $rango);
+                                } else {
+                                    echo '<span class="badge bg-warning text-dark" title="Esta regla no filtra por edad: contara filas de TODAS las edades que cumplan el resto de condiciones">SIN RANGO</span>';
+                                }
+                            ?></small></td>
                             <td class="text-center"><?= $r['sexo'] === 'F' ? 'F' : ($r['sexo'] === 'M' ? 'V' : 'A') ?></td>
                             <td class="text-center"><?= $r['requiere_riesgo'] ? '<i class="fas fa-check text-success"></i>' : ($r['excluye_riesgo'] ? '<i class="fas fa-ban text-danger"></i>' : '-') ?></td>
                             <td class="text-center" title="Requiere comorbilidad (cod_item=9999) / Excluye comorbilidad"><?= $r['requiere_comorbilidad'] ? '<i class="fas fa-virus text-warning" title="Requiere comorbilidad"></i>' : ($r['excluye_comorbilidad'] ? '<i class="fas fa-shield-virus text-primary" title="Excluye comorbilidad"></i>' : '-') ?></td>
