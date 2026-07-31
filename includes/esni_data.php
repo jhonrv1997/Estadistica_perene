@@ -207,43 +207,52 @@ function esniNormalizarTipoEdad(?string $tipEdad): ?string {
 }
 
 /**
- * Comprueba si un grupo de edad "encaja" con un valor de edad/tipo edad de fila.
- * Para simplificar, en modo basico se trabaja con Grupo_Edad textual;
- * en modo avanzado (edad_reg + tip_edad) se compara numericamente.
+ * Comprueba si un grupo de edad "encaja" con la edad de una fila HIS.
+ *
+ * IMPORTANTE: el filtrado por rango de edad se hace EXCLUSIVAMENTE en modo
+ * numerico, usando Edad_Reg + Tipo_Edad de la tabla HIS, contra el rango
+ * (edad_min / edad_max / tipo_edad) configurado en ESNI_GRUPO_EDAD (vinculado
+ * a la regla mediante ESNI_REGLA.id_grupo_edad).
+ *
+ * La columna textual `Grupo_Edad` de la trama HIS se IGNORA para el filtrado
+ * por rango: es solo informativa y su valor puede no coincidir con el esquema
+ * ESNI. Por eso NO existe un "modo basico" basado en texto:
+ *   - Si la regla NO define grupo de edad (id_grupo_edad NULL): encaja siempre
+ *     (no hay restriccion de rango etario). Util SOLO para lineas que no
+ *     dependen de un rango etario (p.ej. dosis unica global).
+ *   - Si la regla SI define grupo de edad, la fila debe traer Edad_Reg y
+ *     Tipo_Edad; si no los trae, NO encaja (no se cuenta una fila de edad
+ *     desconocida dentro de un rango concreto).
+ *   - Tipo_Edad de la fila (A=Anios, M=meses, D=dias) debe coincidir con el
+ *     tipo_edad del grupo configurado; si no coincide, no encaja.
+ *   - La edad numerica debe cumplir edad_min <= edad <= edad_max (si edad_max
+ *     es NULL, solo se aplica el minimo).
  */
-function esniEdadEncaja(array $regla, ?float $edadReg, ?string $tipEdad, ?string $grupoEdadTexto): bool {
-    // Si la regla no tiene grupo_edad, encaja siempre
+function esniEdadEncaja(array $regla, ?float $edadReg, ?string $tipEdad, ?string $grupoEdadTexto = null): bool {
+    // Si la regla no tiene grupo_edad definido (id_grupo_edad NULL), encaja
+    // siempre: no hay restriccion de rango etario.
     if (empty($regla['grupo_edad_codigo'])) return true;
 
-    // Normalizar tip_edad: convertir codigo numerico HIS ('1','2','3')
-    // a formato letra ESNI ('D','M','A')
+    // Normalizar Tipo_Edad de la fila: acepta letra ESNI ('A','M','D') o el
+    // codigo numerico HIS ('3'=Anios, '2'=Meses, '1'=Dias).
     $tipEdadNorm = esniNormalizarTipoEdad($tipEdad);
 
-    // Modo avanzado: si tenemos edad_reg y tip_edad, comparamos numericamente
-    if ($edadReg !== null && $tipEdadNorm !== null && !empty($regla['ge_tipo_edad']) && $regla['ge_edad_min'] !== null) {
-        $tipRegla = $regla['ge_tipo_edad'];
-        if ($tipEdadNorm !== $tipRegla) return false;
-        if ($edadReg < $regla['ge_edad_min']) return false;
-        if ($regla['ge_edad_max'] !== null && $edadReg > $regla['ge_edad_max']) return false;
-        return true;
-    }
+    // Si la fila no trae Edad_Reg y/o Tipo_Edad, no se puede comprobar el
+    // rango: NO encaja (no se cuenta una fila de edad desconocida).
+    if ($edadReg === null || $tipEdadNorm === null) return false;
 
-    // Modo basico: comparamos por texto del grupo de edad
-    if ($grupoEdadTexto === null) return false;
-    $codigoRegla = $regla['grupo_edad_codigo'];
-    $nombreRegla = $regla['grupo_edad_nombre'] ?? '';
+    // El grupo configurado debe tener tipo_edad y edad_min definidos para que
+    // el rango sea aplicable. Si por datos erroneos no los tiene, no encaja.
+    if (empty($regla['ge_tipo_edad']) || $regla['ge_edad_min'] === null) return false;
 
-    // Match exacto o por contiene
-    $texto = strtoupper(trim($grupoEdadTexto));
-    if (strpos($texto, strtoupper($codigoRegla)) !== false) return true;
-    if (strpos($texto, strtoupper($nombreRegla)) !== false) return true;
+    // El tipo de edad debe coincidir (Anios con Anios, Meses con Meses, ...).
+    if ($tipEdadNorm !== $regla['ge_tipo_edad']) return false;
 
-    // Mapeo manual para casos comunes
-    $simplificado = esniNormalizarGrupoEdad($texto);
-    $reglaNorm = esniNormalizarGrupoEdad(strtoupper($nombreRegla . ' ' . $codigoRegla));
-    if ($simplificado && $reglaNorm && strpos($reglaNorm, $simplificado) !== false) return true;
+    // Validar rango numerico [edad_min, edad_max].
+    if ($edadReg < $regla['ge_edad_min']) return false;
+    if ($regla['ge_edad_max'] !== null && $edadReg > $regla['ge_edad_max']) return false;
 
-    return false;
+    return true;
 }
 
 /**
@@ -471,9 +480,12 @@ function esniEjecutarReporte(PDO $pdo, array $filtros, array $cols): array {
                 }
             }
 
-            // 2) Sexo
-            if ($r['sexo'] !== 'A' && $sexoFila !== null) {
-                if (strtoupper($r['sexo']) !== $sexoFila) continue;
+            // 2) Sexo. Si la regla pide Mujer (F) o Varon (M), la fila debe
+            //    tener Id_Genero y coincidir. Una fila sin sexo no se cuenta
+            //    en una linea que exige un sexo concreto (evita inflar la
+            //    seccion F "mujeres" con filas sin Id_Genero).
+            if ($r['sexo'] !== 'A') {
+                if ($sexoFila === null || $sexoFila !== strtoupper($r['sexo'])) continue;
             }
 
             // 3) Rango aniomes (solo si tenemos aniomes calculado)
