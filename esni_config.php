@@ -94,7 +94,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $esquemaOK) {
                 break;
 
             case 'crear_seccion':
-                esniCrearSeccion($pdo, $_POST['codigo'], $_POST['titulo'], $_POST['descricao'] ?? '', $_POST['layout'], (int)($_POST['orden'] ?? 99));
+                esniCrearSeccion($pdo, $_POST['codigo'], $_POST['titulo'], $_POST['descripcion'] ?? '', $_POST['layout'], (int)($_POST['orden'] ?? 99));
                 $mensaje = "Seccion creada.";
                 $mensajeTipo = 'success';
                 break;
@@ -172,7 +172,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $esquemaOK) {
 
             case 'guardar_parametro':
                 $stmt = $pdo->prepare("INSERT INTO ESNI_PARAMETRO (clave, valor, descripcion) VALUES (?, ?, ?)
-                                       ON DUPLICATE KEY UPDATE valor = VALUES(valor), descricao = VALUES(descricao), fecha_actualizado = NOW()");
+                                       ON DUPLICATE KEY UPDATE valor = VALUES(valor), descripcion = VALUES(descripcion), fecha_actualizado = NOW()");
                 $stmt->execute([$_POST['clave'], $_POST['valor'], $_POST['descripcion'] ?? '']);
                 $mensaje = "Parametro guardado.";
                 $mensajeTipo = 'success';
@@ -395,12 +395,12 @@ elseif ($tab === 'grupos'):
                             <td><?= clean($g['nombre']) ?></td>
                             <td><small><?= $tipos[$g['tipo_edad']] ?? $g['tipo_edad'] ?></small></td>
                             <td><small><?= $g['edad_min'] !== null ? $g['edad_min'] : '-' ?> - <?= $g['edad_max'] !== null ? $g['edad_max'] : '-' ?></small></td>
-                            <td><?= $g['ativo'] ? '<span class="badge bg-success">Activo</span>' : '<span class="badge bg-secondary">Inactivo</span>' ?></td>
+                            <td><?= $g['activo'] ? '<span class="badge bg-success">Activo</span>' : '<span class="badge bg-secondary">Inactivo</span>' ?></td>
                             <td class="text-end">
                                 <button class="btn btn-sm btn-outline-primary" data-bs-toggle="modal" data-bs-target="#editModal"
                                     data-tipo="grupo" data-id="<?= $g['id_grupo_edad'] ?>" data-codigo="<?= clean($g['codigo']) ?>"
                                     data-nombre="<?= clean($g['nombre']) ?>" data-tipo-edad="<?= $g['tipo_edad'] ?>"
-                                    data-edad-min="<?= $g['edad_min'] ?>" data-edad-max="<?= $g['edad_max'] ?>" data-ativo="<?= $g['ativo'] ?>"><i class="fas fa-edit"></i></button>
+                                    data-edad-min="<?= $g['edad_min'] ?>" data-edad-max="<?= $g['edad_max'] ?>" data-activo="<?= $g['activo'] ?>"><i class="fas fa-edit"></i></button>
                                 <form method="POST" class="d-inline" onsubmit="return confirm('Eliminar grupo de edad?')">
                                     <input type="hidden" name="accion" value="eliminar_grupo">
                                     <input type="hidden" name="id_grupo_edad" value="<?= $g['id_grupo_edad'] ?>">
@@ -431,7 +431,7 @@ elseif ($tab === 'secciones'):
                     <input type="hidden" name="accion" value="crear_seccion">
                     <div class="mb-2"><label class="form-label small fw-semibold">Codigo</label><input type="text" name="codigo" class="form-control form-control-sm" required placeholder="ej: A, B, H, VPH, o nuevo: Q2"></div>
                     <div class="mb-2"><label class="form-label small fw-semibold">Titulo</label><input type="text" name="titulo" class="form-control form-control-sm" required placeholder="ej: A. - MENORES DE 01 ANIO"></div>
-                    <div class="mb-2"><label class="form-label small fw-semibold">Descripcion</label><textarea name="descricao" class="form-control form-control-sm" rows="2"></textarea></div>
+                    <div class="mb-2"><label class="form-label small fw-semibold">Descripcion</label><textarea name="descripcion" class="form-control form-control-sm" rows="2"></textarea></div>
                     <div class="mb-2"><label class="form-label small fw-semibold">Layout</label>
                         <select name="layout" class="form-select form-select-sm">
                             <?php foreach ($layouts as $k => $v): ?><option value="<?= $k ?>"><?= $v ?></option><?php endforeach; ?>
@@ -458,12 +458,12 @@ elseif ($tab === 'secciones'):
                             <td><small><?= $layouts[$s['layout']] ?? $s['layout'] ?></small></td>
                             <td><?= $s['orden'] ?></td>
                             <td><a href="?tab=lineas&filter_seccion=<?= $s['id_seccion'] ?>" class="badge bg-info"><?= $s['num_lineas'] ?></a></td>
-                            <td><?= $s['ativo'] ? '<span class="badge bg-success">Activo</span>' : '<span class="badge bg-secondary">Inactivo</span>' ?></td>
+                            <td><?= $s['activo'] ? '<span class="badge bg-success">Activo</span>' : '<span class="badge bg-secondary">Inactivo</span>' ?></td>
                             <td class="text-end">
                                 <button class="btn btn-sm btn-outline-primary" data-bs-toggle="modal" data-bs-target="#editModal"
                                     data-tipo="seccion" data-id="<?= $s['id_seccion'] ?>" data-codigo="<?= clean($s['codigo']) ?>"
                                     data-titulo="<?= clean($s['titulo']) ?>" data-descricao="<?= clean($s['descripcion']) ?>"
-                                    data-layout="<?= $s['layout'] ?>" data-orden="<?= $s['orden'] ?>" data-ativo="<?= $s['ativo'] ?>"><i class="fas fa-edit"></i></button>
+                                    data-layout="<?= $s['layout'] ?>" data-orden="<?= $s['orden'] ?>" data-activo="<?= $s['activo'] ?>"><i class="fas fa-edit"></i></button>
                                 <form method="POST" class="d-inline" onsubmit="return confirm('Eliminar seccion? Se eliminaran todas sus lineas y reglas en cascada.')">
                                     <input type="hidden" name="accion" value="eliminar_seccion">
                                     <input type="hidden" name="id_seccion" value="<?= $s['id_seccion'] ?>">
@@ -482,9 +482,9 @@ elseif ($tab === 'secciones'):
 <?php
 // ====== TAB: LINEAS ======
 elseif ($tab === 'lineas'):
-    $vacunas = $pdo->query("SELECT id_vacuna, codigo, nome FROM ESNI_VACUNA ORDER BY codigo")->fetchAll();
-    $dosis = $pdo->query("SELECT id_dosis, codigo, nome FROM ESNI_DOSIS ORDER BY orden")->fetchAll();
-    $grupos = $pdo->query("SELECT id_grupo_edad, codigo, nome FROM ESNI_GRUPO_EDAD ORDER BY codigo")->fetchAll();
+    $vacunas = $pdo->query("SELECT id_vacuna, codigo, nombre FROM ESNI_VACUNA ORDER BY codigo")->fetchAll();
+    $dosis = $pdo->query("SELECT id_dosis, codigo, nombre FROM ESNI_DOSIS ORDER BY orden")->fetchAll();
+    $grupos = $pdo->query("SELECT id_grupo_edad, codigo, nombre FROM ESNI_GRUPO_EDAD ORDER BY codigo")->fetchAll();
     $secciones = $pdo->query("SELECT id_seccion, codigo, titulo FROM ESNI_SECCION_REPORTE ORDER BY orden")->fetchAll();
     $fSec = $_GET['filter_seccion'] ?? '';
     $where = $fSec !== '' ? "WHERE l.id_seccion = " . (int)$fSec : "";
@@ -511,17 +511,17 @@ elseif ($tab === 'lineas'):
                     <div class="mb-2"><label class="form-label small fw-semibold">Etiqueta (texto a mostrar)</label><input type="text" name="etiqueta" class="form-control form-control-sm" required placeholder="ej: BCG - 24 HORAS"></div>
                     <div class="mb-2"><label class="form-label small fw-semibold">Vacuna</label>
                         <select name="id_vacuna" class="form-select form-select-sm"><option value="">-- Sin vacuna --</option>
-                            <?php foreach ($vacunas as $v): ?><option value="<?= $v['id_vacuna'] ?>"><?= clean($v['codigo']) ?> - <?= clean($v['nome']) ?></option><?php endforeach; ?>
+                            <?php foreach ($vacunas as $v): ?><option value="<?= $v['id_vacuna'] ?>"><?= clean($v['codigo']) ?> - <?= clean($v['nombre']) ?></option><?php endforeach; ?>
                         </select>
                     </div>
                     <div class="mb-2"><label class="form-label small fw-semibold">Dosis</label>
                         <select name="id_dosis" class="form-select form-select-sm"><option value="">-- Sin dosis --</option>
-                            <?php foreach ($dosis as $d): ?><option value="<?= $d['id_dosis'] ?>"><?= clean($d['codigo']) ?> - <?= clean($d['nome']) ?></option><?php endforeach; ?>
+                            <?php foreach ($dosis as $d): ?><option value="<?= $d['id_dosis'] ?>"><?= clean($d['codigo']) ?> - <?= clean($d['nombre']) ?></option><?php endforeach; ?>
                         </select>
                     </div>
                     <div class="mb-2"><label class="form-label small fw-semibold">Grupo Edad</label>
                         <select name="id_grupo_edad" class="form-select form-select-sm"><option value="">-- Sin grupo edad --</option>
-                            <?php foreach ($grupos as $g): ?><option value="<?= $g['id_grupo_edad'] ?>"><?= clean($g['codigo']) ?> - <?= clean($g['nome']) ?></option><?php endforeach; ?>
+                            <?php foreach ($grupos as $g): ?><option value="<?= $g['id_grupo_edad'] ?>"><?= clean($g['codigo']) ?> - <?= clean($g['nombre']) ?></option><?php endforeach; ?>
                         </select>
                     </div>
                     <div class="row">
@@ -565,7 +565,7 @@ elseif ($tab === 'lineas'):
                                     data-tipo="linea" data-id="<?= $l['id_linea'] ?>" data-etiqueta="<?= clean($l['etiqueta']) ?>"
                                     data-id-seccion="<?= $l['id_seccion'] ?>" data-id-vacuna="<?= $l['id_vacuna'] ?>"
                                     data-id-dosis="<?= $l['id_dosis'] ?>" data-id-grupo-edad="<?= $l['id_grupo_edad'] ?>"
-                                    data-sexo="<?= $l['sexo'] ?>" data-orden="<?= $l['orden'] ?>" data-ativo="<?= $l['ativo'] ?>"><i class="fas fa-edit"></i></button>
+                                    data-sexo="<?= $l['sexo'] ?>" data-orden="<?= $l['orden'] ?>" data-activo="<?= $l['activo'] ?>"><i class="fas fa-edit"></i></button>
                                 <form method="POST" class="d-inline" onsubmit="return confirm('Eliminar linea? Se eliminaran sus reglas en cascada.')">
                                     <input type="hidden" name="accion" value="eliminar_linea">
                                     <input type="hidden" name="id_linea" value="<?= $l['id_linea'] ?>">
@@ -584,9 +584,9 @@ elseif ($tab === 'lineas'):
 <?php
 // ====== TAB: REGLAS ======
 elseif ($tab === 'reglas'):
-    $vacunas = $pdo->query("SELECT id_vacuna, codigo, nome FROM ESNI_VACUNA ORDER BY codigo")->fetchAll();
-    $dosis = $pdo->query("SELECT id_dosis, codigo, nome FROM ESNI_DOSIS ORDER BY orden")->fetchAll();
-    $grupos = $pdo->query("SELECT id_grupo_edad, codigo, nome FROM ESNI_GRUPO_EDAD ORDER BY codigo")->fetchAll();
+    $vacunas = $pdo->query("SELECT id_vacuna, codigo, nombre FROM ESNI_VACUNA ORDER BY codigo")->fetchAll();
+    $dosis = $pdo->query("SELECT id_dosis, codigo, nombre FROM ESNI_DOSIS ORDER BY orden")->fetchAll();
+    $grupos = $pdo->query("SELECT id_grupo_edad, codigo, nombre FROM ESNI_GRUPO_EDAD ORDER BY codigo")->fetchAll();
     $secciones = $pdo->query("SELECT id_seccion, codigo, titulo FROM ESNI_SECCION_REPORTE ORDER BY orden")->fetchAll();
     $fLin = $_GET['filter_linea'] ?? '';
     $where = $fLin !== '' ? "WHERE r.id_linea = " . (int)$fLin : "";
@@ -615,7 +615,7 @@ elseif ($tab === 'reglas'):
                     <div class="mb-2"><label class="form-label small fw-semibold">valor_lab (dosis)</label><input type="text" name="valor_lab" class="form-control form-control-sm" placeholder="ej: 1, 01, D1, DU (vacio = cualquiera)"></div>
                     <div class="mb-2"><label class="form-label small fw-semibold">Grupo edad requerido</label>
                         <select name="id_grupo_edad" class="form-select form-select-sm"><option value="">-- Sin restriccion --</option>
-                            <?php foreach ($grupos as $g): ?><option value="<?= $g['id_grupo_edad'] ?>"><?= clean($g['codigo']) ?> - <?= clean($g['nome']) ?></option><?php endforeach; ?>
+                            <?php foreach ($grupos as $g): ?><option value="<?= $g['id_grupo_edad'] ?>"><?= clean($g['codigo']) ?> - <?= clean($g['nombre']) ?></option><?php endforeach; ?>
                         </select>
                     </div>
                     <div class="row">
@@ -674,7 +674,7 @@ elseif ($tab === 'reglas'):
                             <td><small class="mono-pill"><?= clean($r['grupo_edad'] ?? '-') ?></small></td>
                             <td class="text-center"><?= $r['sexo'] === 'F' ? 'F' : ($r['sexo'] === 'M' ? 'V' : 'A') ?></td>
                             <td class="text-center"><?= $r['requiere_riesgo'] ? '<i class="fas fa-check text-success"></i>' : ($r['excluye_riesgo'] ? '<i class="fas fa-ban text-danger"></i>' : '-') ?></td>
-                            <td class="text-center" title="Requiere comorbilidad (cod_item=9999) / Excluye comorbilidad"><?= $r['requiere_comorbilidade'] ? '<i class="fas fa-virus text-warning" title="Requiere comorbilidade"></i>' : ($r['excluye_comorbilidade'] ? '<i class="fas fa-shield-virus text-primary" title="Excluye comorbilidade"></i>' : '-') ?></td>
+                            <td class="text-center" title="Requiere comorbilidad (cod_item=9999) / Excluye comorbilidad"><?= $r['requiere_comorbilidad'] ? '<i class="fas fa-virus text-warning" title="Requiere comorbilidad"></i>' : ($r['excluye_comorbilidad'] ? '<i class="fas fa-shield-virus text-primary" title="Excluye comorbilidad"></i>' : '-') ?></td>
                             <td><small><?= clean($r['aniomes_min'] ?? '') ?>-<?= clean($r['aniomes_max'] ?? '') ?></small></td>
                             <td class="text-end">
                                 <button class="btn btn-sm btn-outline-primary" data-bs-toggle="modal" data-bs-target="#editModal"
@@ -683,8 +683,8 @@ elseif ($tab === 'reglas'):
                                     data-id-grupo-edad="<?= $r['id_grupo_edad'] ?>" data-sexo="<?= $r['sexo'] ?>"
                                     data-aniomes-min="<?= clean($r['aniomes_min'] ?? '') ?>" data-aniomes-max="<?= clean($r['aniomes_max'] ?? '') ?>"
                                     data-requiere-riesgo="<?= $r['requiere_riesgo'] ?>" data-excluye-riesgo="<?= $r['excluye_riesgo'] ?>"
-                                    data-requiere-comorbilidad="<?= $r['requiere_comorbilidade'] ?? 0 ?>" data-excluye-comorbilidad="<?= $r['excluye_comorbilidade'] ?? 0 ?>"
-                                    data-ativo="<?= $r['ativo'] ?>"><i class="fas fa-edit"></i></button>
+                                    data-requiere-comorbilidad="<?= $r['requiere_comorbilidad'] ?? 0 ?>" data-excluye-comorbilidad="<?= $r['excluye_comorbilidad'] ?? 0 ?>"
+                                    data-activo="<?= $r['activo'] ?>"><i class="fas fa-edit"></i></button>
                                 <form method="POST" class="d-inline" onsubmit="return confirm('Eliminar regla?')">
                                     <input type="hidden" name="accion" value="eliminar_regla">
                                     <input type="hidden" name="id_regla" value="<?= $r['id_regla'] ?>">
@@ -703,7 +703,7 @@ elseif ($tab === 'reglas'):
 <?php
 // ====== TAB: PARAMETROS ======
 elseif ($tab === 'parametros'):
-    $params = $pdo->query("SELECT * FROM ESNI_PARAMETRO ORDER BY chave")->fetchAll();
+    $params = $pdo->query("SELECT * FROM ESNI_PARAMETRO ORDER BY clave")->fetchAll();
 ?>
 <div class="row">
     <div class="col-lg-4">
@@ -714,7 +714,7 @@ elseif ($tab === 'parametros'):
                     <input type="hidden" name="accion" value="guardar_parametro">
                     <div class="mb-2"><label class="form-label small fw-semibold">Clave</label><input type="text" name="clave" class="form-control form-control-sm" required placeholder="ej: tabela_origen, columna_cod_item"></div>
                     <div class="mb-2"><label class="form-label small fw-semibold">Valor</label><input type="text" name="valor" class="form-control form-control-sm" placeholder="ej: T_CONSOLIDADO_NUEVA_TRAMA_HISMINSA_DETALLADO"></div>
-                    <div class="mb-2"><label class="form-label small fw-semibold">Descripcion</label><input type="text" name="descricao" class="form-control form-control-sm"></div>
+                    <div class="mb-2"><label class="form-label small fw-semibold">Descripcion</label><input type="text" name="descripcion" class="form-control form-control-sm"></div>
                     <button class="btn btn-sm btn-his w-100"><i class="fas fa-save me-1"></i>Guardar Parametro</button>
                 </form>
             </div>
@@ -731,15 +731,15 @@ elseif ($tab === 'parametros'):
                         <tr>
                             <td><span class="mono-pill"><?= clean($p['clave']) ?></span></td>
                             <td><code><?= clean($p['valor']) ?></code></td>
-                            <td><small class="text-muted"><?= clean($p['descricao']) ?></small></td>
+                            <td><small class="text-muted"><?= clean($p['descripcion']) ?></small></td>
                             <td><small class="text-muted"><?= clean($p['fecha_actualizado']) ?></small></td>
                             <td class="text-end">
                                 <button class="btn btn-sm btn-outline-primary" data-bs-toggle="modal" data-bs-target="#editModal"
-                                    data-tipo="parametro" data-chave="<?= clean($p['clave']) ?>" data-valor="<?= clean($p['valor']) ?>"
-                                    data-descricao="<?= clean($p['descrition']) ?>"><i class="fas fa-edit"></i></button>
+                                    data-tipo="parametro" data-clave="<?= clean($p['clave']) ?>" data-valor="<?= clean($p['valor']) ?>"
+                                    data-descricao="<?= clean($p['descripcion']) ?>"><i class="fas fa-edit"></i></button>
                                 <form method="POST" class="d-inline" onsubmit="return confirm('Eliminar parametro?')">
                                     <input type="hidden" name="accion" value="eliminar_parametro">
-                                    <input type="hidden" name="chave" value="<?= clean($p['chave']) ?>">
+                                    <input type="hidden" name="clave" value="<?= clean($p['clave']) ?>">
                                     <button class="btn btn-sm btn-outline-danger"><i class="fas fa-trash"></i></button>
                                 </form>
                             </td>
@@ -785,10 +785,10 @@ document.getElementById('editModal').addEventListener('show.bs.modal', function 
             <input type="hidden" name="accion" value="editar_vacuna">
             <input type="hidden" name="id_vacuna" value="${v('id')}">
             <div class="mb-2"><label class="form-label small fw-semibold">Codigo</label><input type="text" name="codigo" class="form-control form-control-sm" value="${v('codigo')}" required></div>
-            <div class="mb-2"><label class="form-label small fw-semibold">Nome</label><input type="text" name="nome" class="form-control form-control-sm" value="${v('nome')}" required></div>
-            <div class="mb-2"><label class="form-label small fw-semibold">Descricao</label><input type="text" name="descricao" class="form-control form-control-sm" value="${v('descricao')}"></div>
-            <div class="mb-2"><label class="form-label small fw-semibold">Cor</label><input type="color" name="cor" class="form-control form-control-color" value="${v('cor')}"></div>
-            <div class="form-check mb-3"><input type="checkbox" name="ativo" value="1" class="form-check-input" id="act" ${checked('ativo')}><label class="form-check-label" for="act">Ativo</label></div>
+            <div class="mb-2"><label class="form-label small fw-semibold">Nombre</label><input type="text" name="nombre" class="form-control form-control-sm" value="${v('nombre')}" required></div>
+            <div class="mb-2"><label class="form-label small fw-semibold">Descripcion</label><input type="text" name="descripcion" class="form-control form-control-sm" value="${v('descripcion')}"></div>
+            <div class="mb-2"><label class="form-label small fw-semibold">Color</label><input type="color" name="color" class="form-control form-control-color" value="${v('color')}"></div>
+            <div class="form-check mb-3"><input type="checkbox" name="activo" value="1" class="form-check-input" id="act" ${checked('activo')}><label class="form-check-label" for="act">Activo</label></div>
             <button class="btn btn-sm btn-his"><i class="fas fa-save me-1"></i>Guardar</button>
         </form>`;
     } else if (tipo === 'dose') {
@@ -797,9 +797,9 @@ document.getElementById('editModal').addEventListener('show.bs.modal', function 
             <input type="hidden" name="accion" value="editar_dosis">
             <input type="hidden" name="id_dosis" value="${v('id')}">
             <div class="mb-2"><label class="form-label small fw-semibold">Codigo</label><input type="text" name="codigo" class="form-control form-control-sm" value="${v('codigo')}" required></div>
-            <div class="mb-2"><label class="form-label small fw-semibold">Nome</label><input type="text" name="nome" class="form-control form-control-sm" value="${v('nome')}" required></div>
+            <div class="mb-2"><label class="form-label small fw-semibold">Nombre</label><input type="text" name="nombre" class="form-control form-control-sm" value="${v('nombre')}" required></div>
             <div class="mb-2"><label class="form-label small fw-semibold">Orden</label><input type="number" name="orden" class="form-control form-control-sm" value="${v('orden')}"></div>
-            <div class="form-check mb-3"><input type="checkbox" name="ativo" value="1" class="form-check-input" id="act" ${checked('ativo')}><label class="form-check-label" for="act">Ativo</label></div>
+            <div class="form-check mb-3"><input type="checkbox" name="activo" value="1" class="form-check-input" id="act" ${checked('activo')}><label class="form-check-label" for="act">Activo</label></div>
             <button class="btn btn-sm btn-his"><i class="fas fa-save me-1"></i>Guardar</button>
         </form>`;
     } else if (tipo === 'grupo') {
@@ -808,7 +808,7 @@ document.getElementById('editModal').addEventListener('show.bs.modal', function 
             <input type="hidden" name="accion" value="editar_grupo">
             <input type="hidden" name="id_grupo_edad" value="${v('id')}">
             <div class="mb-2"><label class="form-label small fw-semibold">Codigo</label><input type="text" name="codigo" class="form-control form-control-sm" value="${v('codigo')}" required></div>
-            <div class="mb-2"><label class="form-label small fw-semibold">Nome</label><input type="text" name="nome" class="form-control form-control-sm" value="${v('nome')}" required></div>
+            <div class="mb-2"><label class="form-label small fw-semibold">Nombre</label><input type="text" name="nombre" class="form-control form-control-sm" value="${v('nombre')}" required></div>
             <div class="mb-2"><label class="form-label small fw-semibold">Tipo edad</label>
                 <select name="tipo_edad" class="form-select form-select-sm">
                     <option value="D" ${v('tipo-edad')==='D'?'selected':''}>Dias</option>
@@ -819,7 +819,7 @@ document.getElementById('editModal').addEventListener('show.bs.modal', function 
             </div>
             <div class="row"><div class="col-6 mb-2"><label class="form-label small fw-semibold">Edad min</label><input type="number" name="edad_min" class="form-control form-control-sm" value="${v('edad-min')}"></div>
                 <div class="col-6 mb-2"><label class="form-label small fw-semibold">Edad max</label><input type="number" name="edad_max" class="form-control form-control-sm" value="${v('edad-max')}"></div></div>
-            <div class="form-check mb-3"><input type="checkbox" name="ativo" value="1" class="form-check-input" id="act" ${checked('ativo')}><label class="form-check-label" for="act">Ativo</label></div>
+            <div class="form-check mb-3"><input type="checkbox" name="activo" value="1" class="form-check-input" id="act" ${checked('activo')}><label class="form-check-label" for="act">Activo</label></div>
             <button class="btn btn-sm btn-his"><i class="fas fa-save me-1"></i>Guardar</button>
         </form>`;
     } else if (tipo === 'seccion') {
@@ -829,7 +829,7 @@ document.getElementById('editModal').addEventListener('show.bs.modal', function 
             <input type="hidden" name="id_seccion" value="${v('id')}">
             <div class="mb-2"><label class="form-label small fw-semibold">Codigo</label><input type="text" name="codigo" class="form-control form-control-sm" value="${v('codigo')}" required></div>
             <div class="mb-2"><label class="form-label small fw-semibold">Titulo</label><input type="text" name="titulo" class="form-control form-control-sm" value="${v('titulo')}" required></div>
-            <div class="mb-2"><label class="form-label small fw-semibold">Descricao</label><textarea name="descricao" class="form-control form-control-sm" rows="2">${v('descricao')}</textarea></div>
+            <div class="mb-2"><label class="form-label small fw-semibold">Descripcion</label><textarea name="descripcion" class="form-control form-control-sm" rows="2">${v('descricao')}</textarea></div>
             <div class="mb-2"><label class="form-label small fw-semibold">Layout</label>
                 <select name="layout" class="form-select form-select-sm">
                     <option value="lista" ${v('layout')==='lista'?'selected':''}>Lista simple</option>
@@ -840,7 +840,7 @@ document.getElementById('editModal').addEventListener('show.bs.modal', function 
                 </select>
             </div>
             <div class="mb-2"><label class="form-label small fw-semibold">Orden</label><input type="number" name="orden" class="form-control form-control-sm" value="${v('orden')}"></div>
-            <div class="form-check mb-3"><input type="checkbox" name="ativo" value="1" class="form-check-input" id="act" ${checked('ativo')}><label class="form-check-label" for="act">Ativo</label></div>
+            <div class="form-check mb-3"><input type="checkbox" name="activo" value="1" class="form-check-input" id="act" ${checked('activo')}><label class="form-check-label" for="act">Activo</label></div>
             <button class="btn btn-sm btn-his"><i class="fas fa-save me-1"></i>Guardar</button>
         </form>`;
     } else if (tipo === 'linea') {
@@ -861,7 +861,7 @@ document.getElementById('editModal').addEventListener('show.bs.modal', function 
                     <option value="M" ${v('sexo')==='M'?'selected':''}>Varon</option>
                 </select></div>
                 <div class="col-6 mb-2"><label class="form-label small fw-semibold">Orden</label><input type="number" name="orden" class="form-control form-control-sm" value="${v('orden')}"></div></div>
-            <div class="form-check mb-3"><input type="checkbox" name="ativo" value="1" class="form-check-input" id="act" ${checked('ativo')}><label class="form-check-label" for="act">Ativo</label></div>
+            <div class="form-check mb-3"><input type="checkbox" name="activo" value="1" class="form-check-input" id="act" ${checked('activo')}><label class="form-check-label" for="act">Activo</label></div>
             <button class="btn btn-sm btn-his"><i class="fas fa-save me-1"></i>Guardar</button>
             <small class="text-muted d-block mt-2">Para cambiar las FK (vacuna/dosis/grupo), use el campo ID numerico. Para ver las opciones, vaya a las pestanas correspondientes.</small>
         </form>`;
@@ -884,18 +884,18 @@ document.getElementById('editModal').addEventListener('show.bs.modal', function 
                 <div class="col-4 mb-2"><label class="form-label small fw-semibold">A-Mes max</label><input type="text" name="aniomes_max" class="form-control form-control-sm" value="${v('aniomes-max')}" placeholder="YYYYMM"></div></div>
             <div class="form-check"><input type="checkbox" name="requiere_riesgo" value="1" class="form-check-input" id="rr" ${checked('requiere-riesgo')}><label class="form-check-label" for="rr">Requiere poblacion en riesgo</label></div>
             <div class="form-check"><input type="checkbox" name="excluye_riesgo" value="1" class="form-check-input" id="er" ${checked('excluye-riesgo')}><label class="form-check-label" for="er">Excluye poblacion en riesgo</label></div>
-            <div class="form-check"><input type="checkbox" name="requiere_comorbilidad" value="1" class="form-check-input" id="rc" ${checked('requiere-comorbilidade')}><label class="form-check-label" for="rc">Requiere comorbilidade (paciente con otro registro <code>cod_item=9999</code>)</label></div>
-            <div class="form-check"><input type="checkbox" name="excluye_comorbilidad" value="1" class="form-check-input" id="ec" ${checked('excluye-comorbilidade')}><label class="form-check-label" for="ec">Excluye comorbilidade (paciente SEM registro <code>cod_item=9999</code>)</label></div>
-            <div class="form-check mb-3"><input type="checkbox" name="ativo" value="1" class="form-check-input" id="act" ${checked('ativo')}><label class="form-check-label" for="act">Ativo</label></div>
+            <div class="form-check"><input type="checkbox" name="requiere_comorbilidad" value="1" class="form-check-input" id="rc" ${checked('requiere-comorbilidad')}><label class="form-check-label" for="rc">Requiere comorbilidad (paciente con otro registro <code>cod_item=9999</code>)</label></div>
+            <div class="form-check"><input type="checkbox" name="excluye_comorbilidad" value="1" class="form-check-input" id="ec" ${checked('excluye-comorbilidad')}><label class="form-check-label" for="ec">Excluye comorbilidad (paciente SEM registro <code>cod_item=9999</code>)</label></div>
+            <div class="form-check mb-3"><input type="checkbox" name="activo" value="1" class="form-check-input" id="act" ${checked('activo')}><label class="form-check-label" for="act">Activo</label></div>
             <button class="btn btn-sm btn-his"><i class="fas fa-save me-1"></i>Guardar</button>
         </form>`;
     } else if (tipo === 'parametro') {
         title.textContent = 'Editar Parametro';
         html = `<form method="POST">
             <input type="hidden" name="accion" value="guardar_parametro">
-            <div class="mb-2"><label class="form-label small fw-semibold">Clave</label><input type="text" name="chave" class="form-control form-control-sm" value="${v('chave')}" required></div>
+            <div class="mb-2"><label class="form-label small fw-semibold">Clave</label><input type="text" name="clave" class="form-control form-control-sm" value="${v('clave')}" required></div>
             <div class="mb-2"><label class="form-label small fw-semibold">Valor</label><input type="text" name="valor" class="form-control form-control-sm" value="${v('valor')}"></div>
-            <div class="mb-2"><label class="form-label small fw-semibold">Descripcion</label><input type="text" name="descricao" class="form-control form-control-sm" value="${v('descricao')}"></div>
+            <div class="mb-2"><label class="form-label small fw-semibold">Descripcion</label><input type="text" name="descripcion" class="form-control form-control-sm" value="${v('descripcion')}"></div>
             <button class="btn btn-sm btn-his"><i class="fas fa-save me-1"></i>Guardar</button>
         </form>`;
     }
