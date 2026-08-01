@@ -407,7 +407,7 @@ if ($mostrarResultados) {
                MAX(CASE WHEN Id_Correlativo_Lab = 4 THEN Valor_Lab END) AS LAB4";
 
     // MEJORA #7: Usar LIMIT y OFFSET como parametros vinculados
-    $dataSql = "SELECT {$camposSelect} FROM T_CONSOLIDADO_NUEVA_TRAMA_HISMINSA_DETALLADO WHERE {$where} GROUP BY Id_Cita, Codigo_Item ORDER BY MAX(Fecha_Atencion) DESC LIMIT :limit OFFSET :offset";
+    $dataSql = "SELECT {$camposSelect} FROM T_CONSOLIDADO_NUEVA_TRAMA_HISMINSA_DETALLADO WHERE {$where} GROUP BY Id_Cita, Codigo_Item ORDER BY Id_Cita LIMIT :limit OFFSET :offset";
     $dataStmt = $pdo->prepare($dataSql);
     // Vincular LIMIT y OFFSET como PDO::PARAM_INT
     foreach ($params as $key => $val) {
