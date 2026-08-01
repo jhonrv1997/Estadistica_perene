@@ -75,6 +75,7 @@ function esniResolverColumnas(PDO $pdo): array {
         'sexo'            => ['Id_Genero', 'id_genero', 'sexo', 'Sexo', 'Genero'],
         'id_paciente'     => ['Id_Paciente', 'id_paciente', 'id_persona', 'Id_Persona'],
         'establecimiento' => ['Nombre_Establecimiento', 'nombre_establecimiento', 'NombreEstablecimiento'],
+        'codigo_unico'    => ['Codigo_Unico', 'codigo_unico', 'CodigoUnico'],
         'departamento'    => ['Departamento_Establecimiento', 'departamento', 'Departamento'],
         'anio'            => ['Anio', 'anio', 'AnioMov'],
         'mes'             => ['Mes', 'mes'],
@@ -171,8 +172,18 @@ function esniConstruirWhereFiltros(array $cols, array $filtros): array {
         $params[':mes'] = intval($filtros['mes']);
     }
     if (!empty($filtros['establecimiento']) && $cols['establecimiento']) {
-        $where[] = "`{$cols['establecimiento']}` = :est";
-        $params[':est'] = $filtros['establecimiento'];
+        // El filtro de establecimiento ahora llega como un Codigo_Unico (valor del
+        // <option> cargado desde la tabla ZSPERENE). Se filtra por la columna
+        // Codigo_Unico de la tabla origen, que coincide con el Codigo_Unico de
+        // ZSPERENE. Si por algun motivo no existiera la columna codigo_unico,
+        // se hace un fallback al filtro por Nombre_Establecimiento.
+        if (!empty($cols['codigo_unico'])) {
+            $where[] = "`{$cols['codigo_unico']}` = :est";
+            $params[':est'] = $filtros['establecimiento'];
+        } else {
+            $where[] = "`{$cols['establecimiento']}` = :est";
+            $params[':est'] = $filtros['establecimiento'];
+        }
     }
     if (!empty($filtros['departamento']) && $cols['departamento']) {
         $where[] = "`{$cols['departamento']}` = :dep";
@@ -606,6 +617,38 @@ function esniGetEstablecimientos(PDO $pdo, array $cols, ?string $idUps = null): 
         $stmt = $pdo->prepare($sql);
         $stmt->execute($params);
         return $stmt->fetchAll(PDO::FETCH_COLUMN);
+    } catch (Throwable $e) {
+        return [];
+    }
+}
+
+/**
+ * Obtiene la lista de establecimientos desde la tabla ZSPERENE (catalogo).
+ *
+ * A diferencia de esniGetEstablecimientos() (que hace un DISTINCT sobre la gran
+ * tabla consolidada HIS, operacion lenta que saturaba la base de datos al cargar
+ * la pagina), esta funcion lee el catalogo ZSPERENE, que es pequeno y rapido.
+ *
+ * Devuelve un array asociativo: [ Codigo_Unico => Nombre_Establecimiento ].
+ * El Codigo_Unico se usa como valor del <option> para filtrar el reporte por
+ * la columna Codigo_Unico de la tabla T_CONSOLIDADO_NUEVA_TRAMA_HISMINSA_DETALLADO,
+ * que coincide con el Codigo_Unico de ZSPERENE.
+ */
+function esniGetEstablecimientosZS(PDO $pdo): array {
+    try {
+        $sql = "SELECT Codigo_Unico, Nombre_Establecimiento
+                FROM ZSPERENE
+                WHERE Codigo_Unico IS NOT NULL
+                  AND Nombre_Establecimiento IS NOT NULL
+                  AND TRIM(Nombre_Establecimiento) <> ''
+                ORDER BY Nombre_Establecimiento";
+        $stmt = $pdo->query($sql);
+        $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        $out = [];
+        foreach ($rows as $r) {
+            $out[trim($r['Codigo_Unico'])] = trim($r['Nombre_Establecimiento']);
+        }
+        return $out;
     } catch (Throwable $e) {
         return [];
     }
