@@ -400,7 +400,7 @@ if ($mostrarResultados) {
                MAX(Numero_Documento_Personal) AS Numero_Documento_Personal, MAX(Nombres_Personal) AS Nombres_Personal, MAX(Apellido_Paterno_Personal) AS Apellido_Paterno_Personal,
                MAX(Descripcion_Profesion) AS Descripcion_Profesion,
                MAX(Numero_Documento_Registrador) AS Numero_Documento_Registrador, MAX(Nombres_Registrador) AS Nombres_Registrador, MAX(Apellido_Paterno_Registrador) AS Apellido_Paterno_Registrador,
-               MAX(Fecha_Registro) AS Fecha_Registro, MAX(Fecha_Modificacion) AS Fecha_Modificacion,
+               MAX(Fecha_Registro) AS Fecha_Registro,
                MAX(CASE WHEN Id_Correlativo_Lab = 1 THEN Valor_Lab END) AS LAB1,
                MAX(CASE WHEN Id_Correlativo_Lab = 2 THEN Valor_Lab END) AS LAB2,
                MAX(CASE WHEN Id_Correlativo_Lab = 3 THEN Valor_Lab END) AS LAB3,
@@ -771,6 +771,7 @@ include 'includes/header.php';
                             <th>#</th>
                             <th class="tabla-col-atencion">FECHA ATC</th>
                             <th class="tabla-col-atencion">Establecimiento</th>
+                            <th class="tabla-col-atencion">UPS</th>
                             <th class="tabla-col-atencion">Lote</th>
                             <th class="tabla-col-atencion">N.P.</th>
                             <th class="tabla-col-atencion">N.R.</th>
@@ -792,14 +793,12 @@ include 'includes/header.php';
                             <th class="tabla-col-diagnostico">LAB2</th>
                             <th class="tabla-col-diagnostico">LAB3</th>
                             <th class="tabla-col-diagnostico">LAB4</th>
-                            <th class="tabla-col-diagnostico">UPS</th>
                             <th class="tabla-col-personal">NOMBRE PERS.</th>
                             <th class="tabla-col-personal">APELLIDO PERS.</th>
                             <th class="tabla-col-personal">Profesion</th>
                             <th class="tabla-col-registro">NOMBRE REG.</th>
                             <th class="tabla-col-registro">APELLIDO REG.</th>
                             <th class="tabla-col-registro">F. Registro</th>
-                            <th class="tabla-col-registro">F. Modificacion</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -809,6 +808,9 @@ include 'includes/header.php';
                             <td class="tabla-col-atencion"><?= formatDate($row['Fecha_Atencion']) ?></td>
                             <td class="tabla-col-atencion" title="<?= clean($row['Nombre_Establecimiento']) ?>">
                                 <?= clean(mb_strimwidth($row['Nombre_Establecimiento'] ?? '', 0, 25, '...')) ?>
+                            </td>
+                            <td class="tabla-col-atencion" title="<?= clean($row['Descripcion_Ups'] ?? '') ?>">
+                                <?= clean(mb_strimwidth($row['Descripcion_Ups'] ?? '', 0, 20, '...')) ?>
                             </td>
                             <td class="tabla-col-atencion"><?= clean($row['Lote']) ?></td>
                             <td class="tabla-col-atencion"><?= clean($row['Num_Pag']) ?></td>
@@ -837,9 +839,6 @@ include 'includes/header.php';
                             <td class="tabla-col-diagnostico"><?= clean($row['LAB2']) ?></td>
                             <td class="tabla-col-diagnostico"><?= clean($row['LAB3']) ?></td>
                             <td class="tabla-col-diagnostico"><?= clean($row['LAB4']) ?></td>
-                            <td class="tabla-col-diagnostico" title="<?= clean($row['Descripcion_Ups'] ?? '') ?>">
-                                <?= clean(mb_strimwidth($row['Descripcion_Ups'] ?? '', 0, 20, '...')) ?>
-                            </td>
                             <td class="tabla-col-personal" title="<?= clean($row['Nombres_Personal'] ?? '') ?>">
                                 <?= clean(mb_strimwidth($row['Nombres_Personal'] ?? '', 0, 18, '...')) ?>
                             </td>
@@ -856,7 +855,6 @@ include 'includes/header.php';
                                 <?= clean(mb_strimwidth($row['Apellido_Paterno_Registrador'] ?? '', 0, 18, '...')) ?>
                             </td>
                             <td class="tabla-col-registro"><small><?= formatDateTime($row['Fecha_Registro']) ?></small></td>
-                            <td class="tabla-col-registro"><small><?= formatDateTime($row['Fecha_Modificacion']) ?></small></td>
                         </tr>
                         <?php endforeach; ?>
                     </tbody>
