@@ -276,7 +276,7 @@ $offset = 0;
 $porPagina = 50;
 
 if ($mostrarResultados) {
-    $countSql = "SELECT COUNT(*) FROM T_CONSOLIDADO_NUEVA_TRAMA_HISMINSA_DETALLADO WHERE " . $where;
+    $countSql = "SELECT COUNT(*) FROM (SELECT Id_Cita, Codigo_Item FROM T_CONSOLIDADO_NUEVA_TRAMA_HISMINSA_DETALLADO WHERE {$where} GROUP BY Id_Cita, Codigo_Item) AS sub";
     $countStmt = $pdo->prepare($countSql);
     $countStmt->execute($params);
     $totalRegistros = (int)$countStmt->fetchColumn();
@@ -285,23 +285,30 @@ if ($mostrarResultados) {
     $offset = ($pagina - 1) * $porPagina;
     $totalPaginas = ceil($totalRegistros / $porPagina);
 
-    // Campos ampliados segun requerimiento para la tabla general
-    $campos = "Id_Cita, Anio, Mes, Dia, Fecha_Atencion,
-               Lote, Num_Pag, Num_Reg,
-               Id_Turno, Id_Condicion_Establecimiento, Id_Condicion_Servicio,
-               Codigo_Unico, Nombre_Establecimiento,
-               Abrev_Tipo_Doc_Paciente, Numero_Documento_Paciente,
-               Nombres_Paciente, Apellido_Paterno_Paciente,
-               Fecha_Nacimiento_Paciente, Id_Genero, Tipo_Edad, Edad_Reg,
-               Grupo_Edad,
-               Codigo_Item, Descripcion_Item, Tipo_Diagnostico, Valor_Lab, Fg_Tipo,
-               Descripcion_Ups,
-               Numero_Documento_Personal, Nombres_Personal, Apellido_Paterno_Personal,
-               Descripcion_Profesion,
-               Numero_Documento_Registrador, Nombres_Registrador, Apellido_Paterno_Registrador,
-               Fecha_Registro, Fecha_Modificacion";
+    // Campos con pivot de Valor_Lab en LAB1-LAB4 segun Id_Correlativo_Lab
+    // Se agrupa por (Id_Cita, Codigo_Item) y se usa MAX() para los demas campos
+    // para consolidar los valores LAB de distintos Id_Correlativo_Item en una sola fila
+    $camposSelect = "Id_Cita, Codigo_Item,
+               MAX(Anio) AS Anio, MAX(Mes) AS Mes, MAX(Dia) AS Dia, MAX(Fecha_Atencion) AS Fecha_Atencion,
+               MAX(Lote) AS Lote, MAX(Num_Pag) AS Num_Pag, MAX(Num_Reg) AS Num_Reg,
+               MAX(Id_Turno) AS Id_Turno, MAX(Id_Condicion_Establecimiento) AS Id_Condicion_Establecimiento, MAX(Id_Condicion_Servicio) AS Id_Condicion_Servicio,
+               MAX(Codigo_Unico) AS Codigo_Unico, MAX(Nombre_Establecimiento) AS Nombre_Establecimiento,
+               MAX(Abrev_Tipo_Doc_Paciente) AS Abrev_Tipo_Doc_Paciente, MAX(Numero_Documento_Paciente) AS Numero_Documento_Paciente,
+               MAX(Nombres_Paciente) AS Nombres_Paciente, MAX(Apellido_Paterno_Paciente) AS Apellido_Paterno_Paciente,
+               MAX(Fecha_Nacimiento_Paciente) AS Fecha_Nacimiento_Paciente, MAX(Id_Genero) AS Id_Genero, MAX(Tipo_Edad) AS Tipo_Edad, MAX(Edad_Reg) AS Edad_Reg,
+               MAX(Grupo_Edad) AS Grupo_Edad,
+               MAX(Descripcion_Item) AS Descripcion_Item, MAX(Tipo_Diagnostico) AS Tipo_Diagnostico, MAX(Fg_Tipo) AS Fg_Tipo,
+               MAX(Descripcion_Ups) AS Descripcion_Ups,
+               MAX(Numero_Documento_Personal) AS Numero_Documento_Personal, MAX(Nombres_Personal) AS Nombres_Personal, MAX(Apellido_Paterno_Personal) AS Apellido_Paterno_Personal,
+               MAX(Descripcion_Profesion) AS Descripcion_Profesion,
+               MAX(Numero_Documento_Registrador) AS Numero_Documento_Registrador, MAX(Nombres_Registrador) AS Nombres_Registrador, MAX(Apellido_Paterno_Registrador) AS Apellido_Paterno_Registrador,
+               MAX(Fecha_Registro) AS Fecha_Registro, MAX(Fecha_Modificacion) AS Fecha_Modificacion,
+               MAX(CASE WHEN Id_Correlativo_Lab = '1' THEN Valor_Lab END) AS LAB1,
+               MAX(CASE WHEN Id_Correlativo_Lab = '2' THEN Valor_Lab END) AS LAB2,
+               MAX(CASE WHEN Id_Correlativo_Lab = '3' THEN Valor_Lab END) AS LAB3,
+               MAX(CASE WHEN Id_Correlativo_Lab = '4' THEN Valor_Lab END) AS LAB4";
 
-    $dataSql = "SELECT {$campos} FROM T_CONSOLIDADO_NUEVA_TRAMA_HISMINSA_DETALLADO WHERE {$where} ORDER BY Fecha_Atencion DESC LIMIT {$porPagina} OFFSET {$offset}";
+    $dataSql = "SELECT {$camposSelect} FROM T_CONSOLIDADO_NUEVA_TRAMA_HISMINSA_DETALLADO WHERE {$where} GROUP BY Id_Cita, Codigo_Item ORDER BY MAX(Fecha_Atencion) DESC LIMIT {$porPagina} OFFSET {$offset}";
     $dataStmt = $pdo->prepare($dataSql);
     $dataStmt->execute($params);
     $datos = $dataStmt->fetchAll();
@@ -696,7 +703,10 @@ include 'includes/header.php';
                             <th class="tabla-col-diagnostico">CIEX/CPT</th>
                             <th class="tabla-col-diagnostico">Descripcion Item</th>
                             <th class="tabla-col-diagnostico">T.Dx</th>
-                            <th class="tabla-col-diagnostico">LAB</th>
+                            <th class="tabla-col-diagnostico">LAB1</th>
+                            <th class="tabla-col-diagnostico">LAB2</th>
+                            <th class="tabla-col-diagnostico">LAB3</th>
+                            <th class="tabla-col-diagnostico">LAB4</th>
                             <th class="tabla-col-diagnostico">UPS</th>
                             <th class="tabla-col-personal">NOMBRE PERS.</th>
                             <th class="tabla-col-personal">APELLIDO PERS.</th>
@@ -740,7 +750,10 @@ include 'includes/header.php';
                                 <?= clean(mb_strimwidth($row['Descripcion_Item'] ?? '', 0, 25, '...')) ?>
                             </td>
                             <td class="tabla-col-diagnostico"><small><?= clean($row['Tipo_Diagnostico']) ?></small></td>
-                            <td class="tabla-col-diagnostico"><?= clean($row['Valor_Lab']) ?></td>
+                            <td class="tabla-col-diagnostico"><?= clean($row['LAB1']) ?></td>
+                            <td class="tabla-col-diagnostico"><?= clean($row['LAB2']) ?></td>
+                            <td class="tabla-col-diagnostico"><?= clean($row['LAB3']) ?></td>
+                            <td class="tabla-col-diagnostico"><?= clean($row['LAB4']) ?></td>
                             <td class="tabla-col-diagnostico" title="<?= clean($row['Descripcion_Ups'] ?? '') ?>">
                                 <?= clean(mb_strimwidth($row['Descripcion_Ups'] ?? '', 0, 20, '...')) ?>
                             </td>

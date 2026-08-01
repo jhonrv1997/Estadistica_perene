@@ -22,14 +22,25 @@ if (!esniEsquemaInstalado($pdo)) {
     die('Esquema ESNI no instalado. Ejecute Database/install_esni.sql primero.');
 }
 
+// Estrategia fija del modulo ESNI: solo Id_Ups = 301204 (Inmunizaciones)
+define('ESNI_ID_UPS', '301204');
+
 // Filtros
 $filtros = [
     'anio'            => trim($_GET['anio'] ?? ''),
     'mes'             => trim($_GET['mes'] ?? ''),
     'establecimiento' => trim($_GET['establecimiento'] ?? ''),
-    'departamento'    => trim($_GET['departamento'] ?? ''),
     'profesional'     => trim($_GET['profesional'] ?? ''),
+    'id_ups'          => ESNI_ID_UPS,
 ];
+
+// El valor de "establecimiento" llega como Codigo_Unico (cargado desde ZSPERENE).
+// Se resuelve el nombre para mostrarlo en los metadatos del Excel.
+$nombreEstablecimientoExport = '';
+if ($filtros['establecimiento'] !== '') {
+    $estExport = esniGetEstablecimientosZS($pdo);
+    $nombreEstablecimientoExport = $estExport[$filtros['establecimiento']] ?? $filtros['establecimiento'];
+}
 
 $cols = esniResolverColumnas($pdo);
 $reporte = esniEjecutarReporte($pdo, $filtros, $cols);
@@ -46,8 +57,7 @@ $ew = new ExcelWriter();
 $filtrosTxt = [];
 if (!empty($filtros['anio']))            $filtrosTxt[] = 'Anio: ' . $filtros['anio'];
 if (!empty($filtros['mes']))             $filtrosTxt[] = 'Mes: ' . getNombreMes((int)$filtros['mes']);
-if (!empty($filtros['departamento']))    $filtrosTxt[] = 'Departamento: ' . $filtros['departamento'];
-if (!empty($filtros['establecimiento'])) $filtrosTxt[] = 'EE.SS.: ' . $filtros['establecimiento'];
+if (!empty($filtros['establecimiento'])) $filtrosTxt[] = 'EE.SS.: ' . $nombreEstablecimientoExport;
 if (!empty($filtros['profesional']))     $filtrosTxt[] = 'Profesional: ' . $filtros['profesional'];
 $filtrosStr = empty($filtrosTxt) ? 'TODOS' : implode(' | ', $filtrosTxt);
 

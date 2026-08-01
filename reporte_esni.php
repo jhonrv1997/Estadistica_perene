@@ -45,31 +45,34 @@ define('ESNI_ID_UPS', '301204');
 $fAnio            = trim($_GET['anio'] ?? '');
 $fMes             = trim($_GET['mes'] ?? '');
 $fEstablecimiento = trim($_GET['establecimiento'] ?? '');
-$fDepartamento    = trim($_GET['departamento'] ?? '');
 $fProfesional     = trim($_GET['profesional'] ?? '');
 
 $filtros = [
     'anio'            => $fAnio,
     'mes'             => $fMes,
     'establecimiento' => $fEstablecimiento,
-    'departamento'    => $fDepartamento,
     'profesional'     => $fProfesional,
     // Fijo para el modulo ESNI: solo estrategia Id_Ups = 301204
     'id_ups'          => ESNI_ID_UPS,
 ];
 
-// Listas para los selectores (filtradas por Id_Ups = 301204)
+// Listas para los selectores
 $anios           = esniGetAniosDisponibles($pdo, $cols, ESNI_ID_UPS);
 if (empty($anios)) $anios = [date('Y')];
 if ($fAnio === '' && !empty($anios)) $fAnio = $anios[0];
 $filtros['anio'] = $fAnio;
 
-$establecimientos = esniGetEstablecimientos($pdo, $cols, ESNI_ID_UPS);
-$departamentos    = esniGetDepartamentos($pdo, $cols, ESNI_ID_UPS);
+// Establecimientos cargados desde el catalogo ZSPERENE (rapido) en lugar de
+// hacer un DISTINCT sobre la gran tabla HIS, lo cual saturaba la base de datos
+// al cargar la pagina. La clave es el Codigo_Unico (valor del <option>) y el
+// valor el Nombre_Establecimiento.
+$establecimientos = esniGetEstablecimientosZS($pdo);
 $profesionales    = esniGetProfesionales($pdo, $cols, ESNI_ID_UPS);
 
-// Ejecutar reporte solo si se solicita (boton Generar) o si hay filtros
-$ejecutar = isset($_GET['generar']) || $fAnio !== '' || $fMes !== '' || $fEstablecimiento !== '' || $fDepartamento !== '' || $fProfesional !== '';
+// Ejecutar reporte SOLO cuando el usuario pulse "Generar reporte".
+// Esto evita saturar la base de datos con la consulta del motor de reglas
+// cada vez que se carga la pagina sin haber pedido el reporte explicitamente.
+$ejecutar = isset($_GET['generar']);
 $reporte = null;
 $debugSQL = null;
 $diagnostico = null;
@@ -164,6 +167,8 @@ include 'includes/header.php';
                 <code>T_CONSOLIDADO_NUEVA_TRAMA_HISMINSA_DETALLADO</code>
                 con <code>Id_Ups = <?= htmlspecialchars(ESNI_ID_UPS) ?></code>
                 (Inmunizaciones / ESNI), para evitar cargar datos de otras estrategias.
+                La lista de establecimientos se obtiene del catalogo
+                <code>ZSPERENE</code>.
             </span>
         </div>
         <form id="filterForm" method="GET" action="reporte_esni.php">
@@ -187,21 +192,12 @@ include 'includes/header.php';
                         <?php endfor; ?>
                     </select>
                 </div>
-                <div class="col-lg-3 col-md-6 col-sm-12">
-                    <label class="form-label fw-semibold small"><i class="fas fa-map-marker-alt me-1"></i>Departamento</label>
-                    <select name="departamento" class="form-select form-select-sm">
-                        <option value="">-- Todos --</option>
-                        <?php foreach ($departamentos as $d): ?>
-                            <option value="<?= htmlspecialchars($d) ?>" <?= $fDepartamento === $d ? 'selected' : '' ?>><?= htmlspecialchars($d) ?></option>
-                        <?php endforeach; ?>
-                    </select>
-                </div>
-                <div class="col-lg-3 col-md-6 col-sm-12">
+                <div class="col-lg-4 col-md-8 col-sm-12">
                     <label class="form-label fw-semibold small"><i class="fas fa-hospital me-1"></i>Establecimiento</label>
                     <select name="establecimiento" class="form-select form-select-sm">
                         <option value="">-- Todos --</option>
-                        <?php foreach ($establecimientos as $e): ?>
-                            <option value="<?= htmlspecialchars($e) ?>" <?= $fEstablecimiento === $e ? 'selected' : '' ?>><?= htmlspecialchars($e) ?></option>
+                        <?php foreach ($establecimientos as $codUnico => $nombre): ?>
+                            <option value="<?= htmlspecialchars($codUnico) ?>" <?= $fEstablecimiento === $codUnico ? 'selected' : '' ?>><?= htmlspecialchars($nombre) ?></option>
                         <?php endforeach; ?>
                     </select>
                 </div>
@@ -249,11 +245,10 @@ include 'includes/header.php';
         <?php
         $tags = [];
         $tags[] = 'Id_Ups=' . ESNI_ID_UPS . ' (ESNI)'; // Fijo por modulo
-        if ($fAnio)            $tags[] = 'Anio=' . $fAnio;
-        if ($fMes)             $tags[] = 'Mes=' . getNombreMes($fMes);
-        if ($fDepartamento)    $tags[] = 'Dep=' . $fDepartamento;
-        if ($fEstablecimiento) $tags[] = 'EESS=' . mb_strimwidth($fEstablecimiento, 0, 25, '...');
-        if ($fProfesional)     $tags[] = 'Prof=' . $fProfesional;
+        if ($fAnio)             $tags[] = 'Anio=' . $fAnio;
+        if ($fMes)              $tags[] = 'Mes=' . getNombreMes($fMes);
+        if ($fEstablecimiento)  $tags[] = 'EESS=' . mb_strimwidth($establecimientos[$fEstablecimiento] ?? $fEstablecimiento, 0, 30, '...');
+        if ($fProfesional)      $tags[] = 'Prof=' . $fProfesional;
         if (count($tags) === 1) $tags[] = 'SIN FILTROS (todos los periodos)';
         ?>
         <?php foreach ($tags as $t): ?>
@@ -330,7 +325,7 @@ include 'includes/header.php';
             <li>Los codigos de item HIS en los datos no coinciden con los codigos configurados en las reglas ESNI (ver diagnostico de cobertura arriba).</li>
             <li>Los <code>Valor_Lab</code> de las filas HIS no coinciden con los valores esperados por las reglas (por ejemplo: la regla espera <code>'1'</code> pero los datos tienen <code>'DU'</code>).</li>
             <li>Los grupos de edad de las filas HIS no encajan con los grupos configurados en las reglas.</li>
-            <li>No hay datos HIS para el periodo/establecimiento/departamento seleccionado en los filtros.</li>
+            <li>No hay datos HIS para el periodo/establecimiento seleccionado en los filtros.</li>
         </ul>
     </div>
 </div>
