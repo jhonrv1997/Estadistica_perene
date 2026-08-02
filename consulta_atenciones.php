@@ -249,32 +249,113 @@ if ($fOtraCondicion !== '') {
 if ($fTipoDiagnostico !== '') {
     $where .= " AND Tipo_Diagnostico = :td"; $params[':td'] = $fTipoDiagnostico;
 }
-if ($fValorLab !== '') {
-    if (str_ends_with($fValorLab, '*')) {
-        $vlabVal = rtrim($fValorLab, '*');
-        $where .= " AND Valor_Lab LIKE :vlab"; $params[':vlab'] = $vlabVal . '%';
-    } else {
-        $where .= " AND Valor_Lab = :vlab"; $params[':vlab'] = $fValorLab;
-    }
-}
+// ============================================================
+// FILTRO COMBINADO codigo_item + valor_lab
+// ------------------------------------------------------------
+// Casos soportados:
+//   1) MODO EMPAREJADO (por posicion):
+//        codigo_item = "C0009,C0010"  y  valor_lab = "1,4"
+//      Ambos con 2+ tokens y la misma cantidad.
+//      SQL generado:
+//        AND ((Codigo_Item = 'C0009' AND Valor_Lab = '1')
+//          OR (Codigo_Item = 'C0010' AND Valor_Lab = '4'))
+//
+//   2) MODO INDEPENDIENTE (comportamiento historico):
+//        - Solo codigo_item con multiples valores -> OR entre Codigo_Item
+//        - Solo valor_lab con multiples valores   -> OR entre Valor_Lab
+//        - Ambos con 1 token cada uno            -> condiciones AND simples
+//      Cada token admite sufijo '*' como comodin de prefijo (LIKE).
+// ============================================================
+$codigoItemTokens = [];
 if ($fCodigoItem !== '') {
-    $tokens = preg_split('/[\s,]+/', $fCodigoItem);
-    $tokens = array_filter(array_map('trim', $tokens), fn($t) => $t !== '');
-    if (!empty($tokens)) {
-        $orParts = [];
-        $i = 0;
-        foreach ($tokens as $tok) {
-            $i++;
-            $key = ':citem' . $i;
+    $codigoItemTokens = preg_split('/[\s,]+/', $fCodigoItem);
+    $codigoItemTokens = array_values(array_filter(array_map('trim', $codigoItemTokens), fn($t) => $t !== ''));
+}
+$valorLabTokens = [];
+if ($fValorLab !== '') {
+    $valorLabTokens = preg_split('/[\s,]+/', $fValorLab);
+    $valorLabTokens = array_values(array_filter(array_map('trim', $valorLabTokens), fn($t) => $t !== ''));
+}
+
+// El modo emparejado solo aplica cuando AMBOS campos traen 2 o mas valores
+// y la cantidad de tokens coincide.
+$modoEmparejado = (count($codigoItemTokens) >= 2)
+    && (count($valorLabTokens) >= 2)
+    && (count($codigoItemTokens) === count($valorLabTokens));
+
+if ($modoEmparejado) {
+    // Construir clausulas (Codigo_Item = Xi AND Valor_Lab = Yi) por cada par posicional
+    $pares = [];
+    foreach ($codigoItemTokens as $idx => $tokItem) {
+        $tokLab = $valorLabTokens[$idx];
+
+        // Clausula para Codigo_Item (admite '*' como comodin)
+        $kItem = ':pciitem' . $idx;
+        if (str_ends_with($tokItem, '*')) {
+            $clauseItem = "Codigo_Item LIKE $kItem";
+            $params[$kItem] = rtrim($tokItem, '*') . '%';
+        } else {
+            $clauseItem = "Codigo_Item = $kItem";
+            $params[$kItem] = $tokItem;
+        }
+
+        // Clausula para Valor_Lab (admite '*' como comodin)
+        $kLab = ':pcvlab' . $idx;
+        if (str_ends_with($tokLab, '*')) {
+            $clauseLab = "Valor_Lab LIKE $kLab";
+            $params[$kLab] = rtrim($tokLab, '*') . '%';
+        } else {
+            $clauseLab = "Valor_Lab = $kLab";
+            $params[$kLab] = $tokLab;
+        }
+
+        $pares[] = "($clauseItem AND $clauseLab)";
+    }
+    $where .= " AND (" . implode(' or ', $pares) . ")";
+} else {
+    // MODO INDEPENDIENTE: aplicar filtros por separado (comportamiento previo)
+
+    // Filtro Valor_Lab (ahora tambien acepta multiples valores separados por coma)
+    if (!empty($valorLabTokens)) {
+        if (count($valorLabTokens) === 1) {
+            $tok = $valorLabTokens[0];
             if (str_ends_with($tok, '*')) {
-                $orParts[] = "Codigo_Item LIKE $key";
-                $params[$key] = rtrim($tok, '*') . '%';
+                $where .= " AND Valor_Lab LIKE :vlab";
+                $params[':vlab'] = rtrim($tok, '*') . '%';
             } else {
-                $orParts[] = "Codigo_Item = $key";
-                $params[$key] = $tok;
+                $where .= " AND Valor_Lab = :vlab";
+                $params[':vlab'] = $tok;
+            }
+        } else {
+            $orVlab = [];
+            foreach ($valorLabTokens as $i => $tok) {
+                $k = ':vlab' . $i;
+                if (str_ends_with($tok, '*')) {
+                    $orVlab[] = "Valor_Lab LIKE $k";
+                    $params[$k] = rtrim($tok, '*') . '%';
+                } else {
+                    $orVlab[] = "Valor_Lab = $k";
+                    $params[$k] = $tok;
+                }
+            }
+            $where .= " AND (" . implode(' OR ', $orVlab) . ")";
+        }
+    }
+
+    // Filtro Codigo_Item (multiples valores separados por coma, OR)
+    if (!empty($codigoItemTokens)) {
+        $orItem = [];
+        foreach ($codigoItemTokens as $i => $tok) {
+            $k = ':citem' . $i;
+            if (str_ends_with($tok, '*')) {
+                $orItem[] = "Codigo_Item LIKE $k";
+                $params[$k] = rtrim($tok, '*') . '%';
+            } else {
+                $orItem[] = "Codigo_Item = $k";
+                $params[$k] = $tok;
             }
         }
-        $where .= " AND (" . implode(' OR ', $orParts) . ")";
+        $where .= " AND (" . implode(' OR ', $orItem) . ")";
     }
 }
 if ($fLote !== '') {
@@ -587,7 +668,7 @@ include 'includes/header.php';
                 </div>
                 <div class="col-lg-2 col-md-4 col-sm-6">
                     <label class="form-label">CIE-10 / CPT</label>
-                    <input type="text" name="codigo_item" class="form-control form-control-sm" placeholder="Ej: A00*,A01,B01" value="<?= htmlspecialchars($fCodigoItem) ?>">
+                    <input type="text" name="codigo_item" class="form-control form-control-sm" placeholder="Ej: C0009,C0010 (pareado con valor_lab)" value="<?= htmlspecialchars($fCodigoItem) ?>">
                 </div>
                 <div class="col-lg-2 col-md-4 col-sm-6">
                     <label class="form-label">Tipo Dx.</label>
@@ -600,7 +681,7 @@ include 'includes/header.php';
                 </div>
                 <div class="col-lg-2 col-md-4 col-sm-6">
                     <label class="form-label">Valor Lab</label>
-                    <input type="text" name="valor_lab" class="form-control form-control-sm" placeholder="Ej: 150*" value="<?= htmlspecialchars($fValorLab) ?>">
+                    <input type="text" name="valor_lab" class="form-control form-control-sm" placeholder="Ej: 1,4 (pareado con codigo_item)" value="<?= htmlspecialchars($fValorLab) ?>">
                 </div>
             </div>
 
@@ -690,7 +771,7 @@ include 'includes/header.php';
                 </div>
                 <div class="col-lg-2 col-md-4 col-sm-6">
                     <label class="form-label">C&oacute;digo Item</label>
-                    <input type="text" name="codigo_item" class="form-control form-control-sm" placeholder="Ej: A00*,A01" value="<?= htmlspecialchars($fCodigoItem) ?>">
+                    <input type="text" name="codigo_item" class="form-control form-control-sm" placeholder="Ej: C0009,C0010 (pareado con valor_lab)" value="<?= htmlspecialchars($fCodigoItem) ?>">
                 </div>
                 <?php if (!empty($upsPreventivas)): ?>
                 <div class="col-lg-2 col-md-4 col-sm-6">
