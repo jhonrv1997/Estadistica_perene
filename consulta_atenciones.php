@@ -256,9 +256,15 @@ if ($fTipoDiagnostico !== '') {
 //   1) MODO EMPAREJADO (por posicion):
 //        codigo_item = "C0009,C0010"  y  valor_lab = "1,4"
 //      Ambos con 2+ tokens y la misma cantidad.
-//      SQL generado:
-//        AND ((Codigo_Item = 'C0009' AND Valor_Lab = '1')
-//          OR (Codigo_Item = 'C0010' AND Valor_Lab = '4'))
+//      SQL generado (garantiza que TODOS los pares existan en la MISMA Id_Cita):
+//        AND Id_Cita IN (
+//          SELECT sub.Id_Cita
+//          FROM T_CONSOLIDADO_NUEVA_TRAMA_HISMINSA_DETALLADO sub
+//          WHERE ((sub.Codigo_Item = 'C0009' AND sub.Valor_Lab = '1')
+//              OR (sub.Codigo_Item = 'C0010' AND sub.Valor_Lab = '4'))
+//          GROUP BY sub.Id_Cita
+//          HAVING COUNT(DISTINCT CONCAT(sub.Codigo_Item,'|',COALESCE(sub.Valor_Lab,''))) = 2
+//        )
 //
 //   2) MODO INDEPENDIENTE (comportamiento historico):
 //        - Solo codigo_item con multiples valores -> OR entre Codigo_Item
@@ -284,34 +290,58 @@ $modoEmparejado = (count($codigoItemTokens) >= 2)
     && (count($codigoItemTokens) === count($valorLabTokens));
 
 if ($modoEmparejado) {
-    // Construir clausulas (Codigo_Item = Xi AND Valor_Lab = Yi) por cada par posicional
-    $pares = [];
+    // MODO EMPAREJADO: garantizar que TODOS los pares (Codigo_Item, Valor_Lab)
+    // existan en la MISMA Id_Cita, usando subquery con GROUP BY + HAVING.
+    //
+    // Genera:
+    //   AND Id_Cita IN (
+    //     SELECT sub.Id_Cita
+    //     FROM T_CONSOLIDADO_NUEVA_TRAMA_HISMINSA_DETALLADO sub
+    //     WHERE ((sub.Codigo_Item = :pciitem0 AND sub.Valor_Lab = :pcvlab0)
+    //         OR (sub.Codigo_Item = :pciitem1 AND sub.Valor_Lab = :pcvlab1) ...)
+    //     GROUP BY sub.Id_Cita
+    //     HAVING COUNT(DISTINCT CONCAT(sub.Codigo_Item,'|',COALESCE(sub.Valor_Lab,''))) = N
+    //   )
+    $numPares = count($codigoItemTokens);
+
+    // Construir las clausulas OR internas de la subquery
+    $paresOr = [];
     foreach ($codigoItemTokens as $idx => $tokItem) {
         $tokLab = $valorLabTokens[$idx];
 
         // Clausula para Codigo_Item (admite '*' como comodin)
         $kItem = ':pciitem' . $idx;
         if (str_ends_with($tokItem, '*')) {
-            $clauseItem = "Codigo_Item LIKE $kItem";
+            $clauseItem = "sub.Codigo_Item LIKE $kItem";
             $params[$kItem] = rtrim($tokItem, '*') . '%';
         } else {
-            $clauseItem = "Codigo_Item = $kItem";
+            $clauseItem = "sub.Codigo_Item = $kItem";
             $params[$kItem] = $tokItem;
         }
 
         // Clausula para Valor_Lab (admite '*' como comodin)
         $kLab = ':pcvlab' . $idx;
         if (str_ends_with($tokLab, '*')) {
-            $clauseLab = "Valor_Lab LIKE $kLab";
+            $clauseLab = "sub.Valor_Lab LIKE $kLab";
             $params[$kLab] = rtrim($tokLab, '*') . '%';
         } else {
-            $clauseLab = "Valor_Lab = $kLab";
+            $clauseLab = "sub.Valor_Lab = $kLab";
             $params[$kLab] = $tokLab;
         }
 
-        $pares[] = "($clauseItem AND $clauseLab)";
+        $paresOr[] = "($clauseItem AND $clauseLab)";
     }
-    $where .= " AND (" . implode(' or ', $pares) . ")";
+
+    $orClause = implode(' OR ', $paresOr);
+    $havingCount = $numPares; // cantidad de pares que deben coincidir
+
+    $where .= " AND Id_Cita IN (
+        SELECT sub.Id_Cita
+        FROM T_CONSOLIDADO_NUEVA_TRAMA_HISMINSA_DETALLADO sub
+        WHERE ($orClause)
+        GROUP BY sub.Id_Cita
+        HAVING COUNT(DISTINCT CONCAT(sub.Codigo_Item, '|', COALESCE(sub.Valor_Lab, ''))) = $havingCount
+    )";
 } else {
     // MODO INDEPENDIENTE: aplicar filtros por separado (comportamiento previo)
 
