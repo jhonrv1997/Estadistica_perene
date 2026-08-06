@@ -499,7 +499,7 @@ elseif ($tab === 'lineas'):
 <div class="row">
     <div class="col-lg-4">
         <div class="config-card">
-            <div class="config-card-header"><span><i class="fas fa-plus me-2"></i>Nova Linea</span></div>
+            <div class="config-card-header"><span><i class="fas fa-plus me-2"></i>Nueva Linea</span></div>
             <div class="card-body">
                 <form method="POST">
                     <input type="hidden" name="accion" value="crear_linea">
