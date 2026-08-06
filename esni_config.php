@@ -603,7 +603,7 @@ elseif ($tab === 'reglas'):
 <div class="row">
     <div class="col-lg-4">
         <div class="config-card">
-            <div class="config-card-header"><span><i class="fas fa-plus me-2"></i>Nova Regla</span></div>
+            <div class="config-card-header"><span><i class="fas fa-plus me-2"></i>Nueva Regla</span></div>
             <div class="card-body">
                 <form method="POST">
                     <input type="hidden" name="accion" value="crear_regla">
