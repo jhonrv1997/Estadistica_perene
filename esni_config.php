@@ -608,8 +608,17 @@ elseif ($tab === 'reglas'):
                 <form method="POST">
                     <input type="hidden" name="accion" value="crear_regla">
                     <div class="mb-2"><label class="form-label small fw-semibold">Linea del reporte</label>
+                        <?php if ($fLin !== ''): ?>
+                            <div class="alert alert-info py-1 px-2 mb-1 small">
+                                <i class="fas fa-filter me-1"></i> Preseleccionado desde "Ver reglas" (ID: <?= (int)$fLin ?>)
+                            </div>
+                        <?php endif; ?>
                         <select name="id_linea" class="form-select form-select-sm" required>
-                            <?php foreach ($lineas as $l): ?><option value="<?= $l['id_linea'] ?>">[<?= clean($l['sec']) ?>] <?= clean($l['etiqueta']) ?></option><?php endforeach; ?>
+                            <?php foreach ($lineas as $l):
+                                $selected = ($fLin !== '' && (int)$l['id_linea'] === (int)$fLin) ? ' selected' : '';
+                            ?>
+                                <option value="<?= $l['id_linea'] ?>"<?= $selected ?>>[<?= clean($l['sec']) ?>] <?= clean($l['etiqueta']) ?></option>
+                            <?php endforeach; ?>
                         </select>
                     </div>
                     <div class="mb-2"><label class="form-label small fw-semibold">cod_item (HIS)</label><input type="text" name="cod_item" class="form-control form-control-sm" required placeholder="ej: 90585, Z232, 90744"></div>
