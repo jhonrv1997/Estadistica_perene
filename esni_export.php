@@ -68,13 +68,25 @@ $n = 0;
 foreach ($reporte['secciones'] as $sec) {
     foreach ($sec['lineas'] as $lin) {
         $n++;
+        // Fix: si la linea no tiene id_grupo_edad (grupos poblacionales
+        // especiales como "Personal de Salud" o "Gestantes"), usar la etiqueta
+        // de la linea como fallback en la columna "Grupo Edad" en lugar de
+        // mostrar "-". Coherente con el renderizado HTML de reporte_esni.php.
+        $codGrupoExp = $lin['grupo_edad_codigo'] ?? '';
+        $nomGrupoExp = $lin['grupo_edad_nombre'] ?? '';
+        if ($codGrupoExp !== '') {
+            $txtGrupoExp = $nomGrupoExp !== '' ? $nomGrupoExp : $codGrupoExp;
+        } else {
+            $txtGrupoExp = preg_replace('/^\*\s*/', '', trim($lin['etiqueta'] ?? ''));
+            if ($txtGrupoExp === '') $txtGrupoExp = '-';
+        }
         $rows[] = [
             $n,
             $sec['codigo'],
             $lin['etiqueta'],
             $lin['vacuna_codigo'] ?: '-',
             $lin['dosis_codigo'] ?: '-',
-            $lin['grupo_edad_codigo'] ?: '-',
+            $txtGrupoExp,
             $lin['sexo'] === 'F' ? 'Mujer' : ($lin['sexo'] === 'M' ? 'Varon' : 'Ambos'),
             (int)$lin['cantidad'],
         ];

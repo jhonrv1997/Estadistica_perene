@@ -399,7 +399,21 @@ function renderLista(array $sec): string {
                     </td>
                     <td><span class="esni-cod-pill"><?= htmlspecialchars($lin['vacuna_codigo'] ?: '-') ?></span></td>
                     <td><span class="esni-cod-pill"><?= htmlspecialchars($lin['dosis_codigo'] ?: '-') ?></span></td>
-                    <td><small><?= htmlspecialchars($lin['grupo_edad_codigo'] ?: '-') ?></small></td>
+                    <td><small><?php
+                        // Mostrar grupo de edad legible; si la linea no tiene
+                        // id_grupo_edad (grupos poblacionales especiales como
+                        // "Personal de Salud" o "Gestantes"), usar la etiqueta
+                        // de la linea como fallback, limpiando el prefijo "* ".
+                        $codGrupoLin = $lin['grupo_edad_codigo'] ?? '';
+                        $nomGrupoLin = $lin['grupo_edad_nombre'] ?? '';
+                        if ($codGrupoLin !== '') {
+                            $txtGrupoLin = $nomGrupoLin !== '' ? $nomGrupoLin : $codGrupoLin;
+                        } else {
+                            $txtGrupoLin = preg_replace('/^\*\s*/', '', trim($lin['etiqueta'] ?? ''));
+                            if ($txtGrupoLin === '') $txtGrupoLin = '-';
+                        }
+                        echo htmlspecialchars($txtGrupoLin);
+                    ?></small></td>
                     <td class="text-center">
                         <?php if ($lin['sexo'] === 'F'): ?><span class="badge bg-info">F</span>
                         <?php elseif ($lin['sexo'] === 'M'): ?><span class="badge bg-warning text-dark">V</span>
@@ -422,15 +436,51 @@ function renderLista(array $sec): string {
 }
 
 function renderMatrizDosis(array $sec): string {
-    // Agrupar lineas por vacuna + grupo edad, columnas = dosis
+    // Agrupar lineas por vacuna + grupo edad, columnas = dosis.
+    //
+    // IMPORTANTE: algunas lineas de la seccion J (Hepatitis B) y otras secciones
+    // NO tienen id_grupo_edad configurado porque representan grupos poblacionales
+    // especiales (p.ej. "Personal de Salud", "Gestantes") en lugar de rangos
+    // etarios. En esos casos el LEFT JOIN con ESNI_GRUPO_EDAD deja
+    // grupo_edad_codigo/grupo_edad_nombre como NULL, y el renderizado anterior
+    // mostraba "-" en la columna "Grupo Edad" y ademas agrupaba todas estas
+    // lineas en una sola fila (misma clave vacuna|-) perdiendo la distincion
+    // entre Personal de Salud y Gestantes.
+    //
+    // Para corregirlo, se calcula un "identificador de grupo" por linea:
+    //   - Si la linea tiene grupo_edad_codigo: se usa ese codigo (comportamiento
+    //     actual, para rangos etarios como "05_11A").
+    //   - Si NO tiene grupo_edad_codigo: se usa la etiqueta de la linea (campo
+    //     ESNI_LINEA_REPORTE.etiqueta) como identificador, limpiando el prefijo
+    //     "* " si lo tuviera. Esto permite que cada grupo poblacional especial
+    //     aparezca como su propia fila en la matriz.
+    //
+    // Ademas, la columna "Grupo Edad" ahora muestra el nombre legible
+    // (grupo_edad_nombre) cuando esta disponible, y la etiqueta como fallback.
     $grupos = [];
     foreach ($sec['lineas'] as $lin) {
-        $key = ($lin['vacuna_codigo'] ?: '-') . '|' . ($lin['grupo_edad_codigo'] ?: '-');
+        // Calcular identificador de grupo y etiqueta legible
+        $codGrupo  = $lin['grupo_edad_codigo'] ?? '';
+        $nomGrupo  = $lin['grupo_edad_nombre'] ?? '';
+        $etiqueta  = trim($lin['etiqueta'] ?? '');
+        // Quitar prefijo "* " o "*" si lo tiene (p.ej. "* Personal de Salud")
+        $etiquetaLimpia = preg_replace('/^\*\s*/', '', $etiqueta);
+
+        if ($codGrupo !== '') {
+            $grupoId  = $codGrupo;
+            $grupoTxt = $nomGrupo !== '' ? $nomGrupo : $codGrupo;
+        } else {
+            // Sin grupo de edad: usar la etiqueta de la linea como identificador
+            $grupoId  = $etiquetaLimpia !== '' ? $etiquetaLimpia : '-';
+            $grupoTxt = $etiquetaLimpia !== '' ? $etiquetaLimpia : '-';
+        }
+
+        $key = ($lin['vacuna_codigo'] ?: '-') . '|' . $grupoId;
         if (!isset($grupos[$key])) {
             $grupos[$key] = [
                 'etiqueta' => $lin['etiqueta'],
                 'vacuna'   => $lin['vacuna_codigo'] ?: '-',
-                'edad'     => $lin['grupo_edad_codigo'] ?: '-',
+                'edad'     => $grupoTxt,
                 'dosis'    => [],
             ];
         }
@@ -621,7 +671,21 @@ function renderMatrizSexo(array $sec): string {
                 foreach ($rowMap as $k => $lin) $tot += $lin['cantidad'];
                 ?>
                 <tr>
-                    <td><?= htmlspecialchars($rowMap['F_D1']['grupo_edad_codigo'] ?? $rowMap['M_DU']['grupo_edad_codigo'] ?? '-') ?></td>
+                    <td><?php
+                        // Fix coherente con renderMatrizDosis: si las lineas no
+                        // tienen grupo_edad (grupos poblacionales especiales),
+                        // mostrar la etiqueta de la linea en lugar de "-".
+                        $linRef = $rowMap['F_D1'] ?? $rowMap['M_DU'] ?? null;
+                        $codGrupoSexo = $linRef['grupo_edad_codigo'] ?? '';
+                        $nomGrupoSexo = $linRef['grupo_edad_nombre'] ?? '';
+                        if ($codGrupoSexo !== '') {
+                            $txtGrupoSexo = $nomGrupoSexo !== '' ? $nomGrupoSexo : $codGrupoSexo;
+                        } else {
+                            $txtGrupoSexo = preg_replace('/^\*\s*/', '', trim($linRef['etiqueta'] ?? ''));
+                            if ($txtGrupoSexo === '') $txtGrupoSexo = '-';
+                        }
+                        echo htmlspecialchars($txtGrupoSexo);
+                    ?></td>
                     <?php foreach (array_keys($cols) as $k): ?>
                         <td class="text-end fw-bold <?= ($rowMap[$k]['cantidad'] ?? 0) > 0 ? 'text-success' : 'text-muted' ?>"><?= isset($rowMap[$k]) ? number_format($rowMap[$k]['cantidad']) : '<span class="text-muted">-</span>' ?></td>
                     <?php endforeach; ?>
