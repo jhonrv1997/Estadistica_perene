@@ -135,6 +135,11 @@ function esniGetReglas(PDO $pdo, ?int $idLinea = null): array {
             INNER JOIN ESNI_LINEA_REPORTE l ON l.id_linea = r.id_linea
             LEFT JOIN ESNI_GRUPO_EDAD g ON g.id_grupo_edad = r.id_grupo_edad
             WHERE r.activo = 1 AND l.activo = 1";
+    // Nota: r.* incluye las columnas requiere_valor_lab_cita y
+    // excluye_valor_lab_cita agregadas por migration_seccion_j_covid.sql.
+    // Si la migracion aun no se ha ejecutado, esniGetReglas lanzara una
+    // excepcion PDOException (columna desconocida); el caller deberia
+    // atraparla y mostrar mensaje de migracion pendiente.
     $params = [];
     if ($idLinea !== null) {
         $sql .= " AND r.id_linea = ?";
@@ -455,6 +460,61 @@ function esniEjecutarReporte(PDO $pdo, array $filtros, array $cols): array {
         }
     }
 
+    // Filtro por valor_lab en misma Id_cita (seccion J - Hepatitis B Adulto):
+    // construir conjuntos de Id_cita que tienen al menos una fila con cada
+    // valor_lab marcador requerido (G=gestante, ST=personal salud, etc).
+    //
+    // Esto permite evaluar requiere_valor_lab_cita / excluye_valor_lab_cita
+    // de forma eficiente: en lugar de hacer una subconsulta por fila, hacemos
+    // UNA sola consulta por marcador y almacenamos el conjunto de Id_cita.
+    //
+    // La consulta NO filtra por cod_item: el marcador puede estar en cualquier
+    // fila de la cita (tipicamente en una fila con el mismo cod_item que la
+    // dosis, pero podria estar en otra). Tampoco filtra por I_ROWNUM_LAB=1
+    // porque los marcadores pueden tener rownum > 1.
+    $citasConValorLab = []; // ['G' => [id_cita => true], 'ST' => [...], ...]
+    $marcadoresRequeridos = [];
+    foreach ($reglas as $r) {
+        if (!empty($r['requiere_valor_lab_cita'])) {
+            $marcadoresRequeridos[strtoupper(trim($r['requiere_valor_lab_cita']))] = true;
+        }
+        if (!empty($r['excluye_valor_lab_cita'])) {
+            $marcadoresRequeridos[strtoupper(trim($r['excluye_valor_lab_cita']))] = true;
+        }
+    }
+    if (!empty($marcadoresRequeridos) && !empty($cols['id_cita']) && !empty($cols['valor_lab'])) {
+        foreach (array_keys($marcadoresRequeridos) as $marcador) {
+            try {
+                [$whereMarc, $paramsMarc] = esniConstruirWhereFiltros($cols, $filtros);
+                // Filtro por valor_lab = marcador (case-insensitive via UPPER)
+                $whereMarc .= " AND UPPER(TRIM(`{$cols['valor_lab']}`)) = :vl_marc";
+                $paramsMarc[':vl_marc'] = $marcador;
+
+                $sqlMarc = "SELECT DISTINCT `{$cols['id_cita']}` AS id_cita "
+                         . "FROM `{$tabla}` WHERE {$whereMarc}";
+                $stmtMarc = $pdo->prepare($sqlMarc);
+                $stmtMarc->execute($paramsMarc);
+                $marcRows = $stmtMarc->fetchAll(PDO::FETCH_ASSOC);
+                $setMarc = [];
+                foreach ($marcRows as $mr) {
+                    $idCit = isset($mr['id_cita']) && $mr['id_cita'] !== null && $mr['id_cita'] !== ''
+                        ? (string)$mr['id_cita'] : null;
+                    if ($idCit !== null) {
+                        $setMarc[$idCit] = true;
+                    }
+                }
+                $citasConValorLab[$marcador] = $setMarc;
+            } catch (Throwable $e) {
+                // Si falla la consulta del marcador, tratarlo como conjunto vacio.
+                // Esto hara que las reglas con requiere_valor_lab_cita='X'
+                // cuenten 0 (correcto: no hay citas con ese marcador), y las
+                // reglas con excluye_valor_lab_cita='X' cuenten a todos
+                // (tolerante: no podemos confirmar exclusion).
+                $citasConValorLab[$marcador] = [];
+            }
+        }
+    }
+
 
     // Recorrer filas y aplicar motor de reglas
     foreach ($filas as $f) {
@@ -476,6 +536,8 @@ function esniEjecutarReporte(PDO $pdo, array $filtros, array $cols): array {
         $idRiesgo = isset($f['id_gruporiesgo']) && $f['id_gruporiesgo'] !== null ? (string)$f['id_gruporiesgo'] : null;
         $idPaciente = isset($f['id_paciente']) && $f['id_paciente'] !== null && $f['id_paciente'] !== ''
             ? (string)$f['id_paciente'] : null;
+        $idCita = isset($f['id_cita']) && $f['id_cita'] !== null && $f['id_cita'] !== ''
+            ? (string)$f['id_cita'] : null;
 
         foreach ($reglasPorCod[$cod] as $r) {
             // 1) Valor lab. Si la regla no especifica valor_lab (NULL o vacio), encaja con cualquier valor.
@@ -516,6 +578,32 @@ function esniEjecutarReporte(PDO $pdo, array $filtros, array $cols): array {
             }
             if (!empty($r['excluye_comorbilidad'])) {
                 if ($idPaciente !== null && isset($pacientesConComorbilidad[$idPaciente])) continue;
+            }
+
+            // 7) Requiere/excluye valor_lab en la misma Id_cita.
+            //    Usado por la seccion J (Hepatitis B Adulto, cod_item=90746)
+            //    para distinguir No Gestantes / Gestantes / Personal de Salud
+            //    segun exista o no en la misma cita una fila marcadora con
+            //    valor_lab='G' (gestante) o 'ST' (personal de salud).
+            //
+            //    Requiere: si la regla exige marcador 'X', la cita debe
+            //    aparecer en el conjunto $citasConValorLab['X']. Si la cita
+            //    no tiene Id_cita (NULL), no se puede confirmar -> no encaja.
+            //
+            //    Excluye: si la regla excluye marcador 'Y', la cita NO debe
+            //    aparecer en $citasConValorLab['Y']. Si la cita no tiene
+            //    Id_cita (NULL), se asume que no tiene el marcador -> encaja
+            //    (tolerante: cuenta la fila como no-gestante por defecto).
+            if (!empty($r['requiere_valor_lab_cita'])) {
+                $marcReq = strtoupper(trim($r['requiere_valor_lab_cita']));
+                if ($idCita === null) continue;
+                $setReq = $citasConValorLab[$marcReq] ?? [];
+                if (!isset($setReq[$idCita])) continue;
+            }
+            if (!empty($r['excluye_valor_lab_cita'])) {
+                $marcExc = strtoupper(trim($r['excluye_valor_lab_cita']));
+                $setExc = $citasConValorLab[$marcExc] ?? [];
+                if ($idCita !== null && isset($setExc[$idCita])) continue;
             }
 
             // Match!
@@ -784,11 +872,72 @@ function esniCrearLinea(PDO $pdo, int $idSeccion, string $etiqueta, ?int $idVacu
  *   - Influenza con Comorbilidad  (requiere_comorbilidad=1)
  *   - Neumococo sin Comorbilidad  (excluye_comorbilidad=1)
  *   - Neumococo con Comorbilidad  (requiere_comorbilidad=1)
+ *
+ * Filtro por valor_lab en misma Id_cita (requerido por seccion J - Hepatitis B
+ * Adulto, cod_item=90746): cuando requiereValorLabCita no es null, la regla
+ * solo encaja si existe OTRA fila con la misma Id_cita cuyo valor_lab sea
+ * igual a este valor. Tipicos:
+ *   'G'  = la cita corresponde a una gestante
+ *   'ST' = la cita corresponde a personal de salud
+ * Cuando excluyeValorLabCita no es null, la regla solo encaja si NO existe
+ * ninguna otra fila con la misma Id_cita cuyo valor_lab sea igual a este
+ * valor. Tipico:
+ *   'G'  = la cita NO es de gestante (no gestante)
+ *
+ * Estos 2 nuevos campos se agregan a ESNI_REGLA mediante el script
+ * Database/migration_seccion_j_covid.sql. La funcion detecta dinamicamente
+ * si las columnas existen; si no existen aun, los valores se ignoran
+ * silenciosamente (retrocompatibilidad).
  */
-function esniCrearRegla(PDO $pdo, int $idLinea, string $codItem, ?string $valorLab = null, ?int $idGrupoEdad = null, string $sexo = 'A', ?string $aniomesMin = null, ?string $aniomesMax = null, int $requiereRiesgo = 0, int $excluyeRiesgo = 0, int $requiereComorbilidad = 0, int $excluyeComorbilidad = 0): int {
-    $stmt = $pdo->prepare("INSERT INTO ESNI_REGLA (id_linea, cod_item, valor_lab, id_grupo_edad, sexo, aniomes_min, aniomes_max, requiere_riesgo, excluye_riesgo, requiere_comorbilidad, excluye_comorbilidad) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
-    $stmt->execute([$idLinea, $codItem, $valorLab, $idGrupoEdad, $sexo, $aniomesMin, $aniomesMax, $requiereRiesgo, $excluyeRiesgo, $requiereComorbilidad, $excluyeComorbilidad]);
+function esniCrearRegla(PDO $pdo, int $idLinea, string $codItem, ?string $valorLab = null, ?int $idGrupoEdad = null, string $sexo = 'A', ?string $aniomesMin = null, ?string $aniomesMax = null, int $requiereRiesgo = 0, int $excluyeRiesgo = 0, int $requiereComorbilidad = 0, int $excluyeComorbilidad = 0, ?string $requiereValorLabCita = null, ?string $excluyeValorLabCita = null): int {
+    // Detectar si las columnas nuevas existen (migration aplicada).
+    static $tieneColsCita = null;
+    if ($tieneColsCita === null) {
+        $tieneColsCita = esniColumnasReglaExisten($pdo, ['requiere_valor_lab_cita', 'excluye_valor_lab_cita']);
+    }
+
+    if ($tieneColsCita) {
+        $sql = "INSERT INTO ESNI_REGLA
+                (id_linea, cod_item, valor_lab, id_grupo_edad, sexo, aniomes_min, aniomes_max,
+                 requiere_riesgo, excluye_riesgo, requiere_comorbilidad, excluye_comorbilidad,
+                 requiere_valor_lab_cita, excluye_valor_lab_cita)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+        $stmt = $pdo->prepare($sql);
+        $stmt->execute([$idLinea, $codItem, $valorLab, $idGrupoEdad, $sexo, $aniomesMin, $aniomesMax,
+                        $requiereRiesgo, $excluyeRiesgo, $requiereComorbilidad, $excluyeComorbilidad,
+                        $requiereValorLabCita, $excluyeValorLabCita]);
+    } else {
+        // Migracion no aplicada: insertar sin las columnas nuevas.
+        $sql = "INSERT INTO ESNI_REGLA
+                (id_linea, cod_item, valor_lab, id_grupo_edad, sexo, aniomes_min, aniomes_max,
+                 requiere_riesgo, excluye_riesgo, requiere_comorbilidad, excluye_comorbilidad)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+        $stmt = $pdo->prepare($sql);
+        $stmt->execute([$idLinea, $codItem, $valorLab, $idGrupoEdad, $sexo, $aniomesMin, $aniomesMax,
+                        $requiereRiesgo, $excluyeRiesgo, $requiereComorbilidad, $excluyeComorbilidad]);
+    }
     return (int)$pdo->lastInsertId();
+}
+
+/**
+ * Verifica si una o varias columnas existen en la tabla ESNI_REGLA.
+ * Util para detectar si la migracion (migration_seccion_j_covid.sql) ya
+ * se ejecuto, evitando errores SQL cuando las columnas nuevas todavia no
+ * existen. Devuelve true solo si TODAS las columnas pasadas existen.
+ */
+function esniColumnasReglaExisten(PDO $pdo, array $columnas): bool {
+    try {
+        $stmt = $pdo->prepare("SHOW COLUMNS FROM `ESNI_REGLA`");
+        $stmt->execute();
+        $existentes = $stmt->fetchAll(PDO::FETCH_COLUMN);
+        $set = array_map('strtolower', $existentes);
+        foreach ($columnas as $c) {
+            if (!in_array(strtolower($c), $set, true)) return false;
+        }
+        return true;
+    } catch (Throwable $e) {
+        return false;
+    }
 }
 
 /**
