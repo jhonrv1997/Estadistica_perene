@@ -216,7 +216,6 @@ CREATE TABLE `ESNI_LINEA_REPORTE` (
 --
 -- Volcado de datos para la tabla `ESNI_LINEA_REPORTE`
 --
-
 INSERT INTO `ESNI_LINEA_REPORTE` (`id_linea`, `id_seccion`, `orden`, `etiqueta`, `id_vacuna`, `id_dosis`, `id_grupo_edad`, `sexo`, `activo`) VALUES
 (1, 1, 1, 'BCG - 24 HORAS', 1, 5, 1, 'A', 1),
 (2, 1, 2, 'BCG - 28 DIAS', 1, 5, 2, 'A', 1),
@@ -283,9 +282,6 @@ INSERT INTO `ESNI_LINEA_REPORTE` (`id_linea`, `id_seccion`, `orden`, `etiqueta`,
 (66, 14, 1, 'VPH 1ra Dosis - Femenino', 20, 1, 17, 'F', 1),
 (67, 14, 2, 'VPH 2da Dosis - Femenino', 20, 2, 17, 'F', 1),
 (68, 14, 3, 'VPH Dosis Unica - Masculino', 20, 5, 18, 'M', 1),
-(71, 9, 1, 'HEPATITIS B ADULTO - 05 A 59 ANOS - 1RA DOSIS', 2, 1, 16, 'A', 1),
-(72, 9, 2, 'HEPATITIS B ADULTO - 05 A 59 ANOS - 2DA DOSIS', 2, 2, 16, 'A', 1),
-(73, 9, 3, 'HEPATITIS B ADULTO - 05 A 59 ANOS - 3RA DOSIS', 2, 3, 16, 'A', 1),
 (75, 2, 15, '18 MESES - REF. PENTAVALENTE', 22, 10, 11, 'A', 1),
 (76, 2, 14, '18 MESES - REF. IPV', 23, 10, 11, 'A', 1),
 (77, 15, 56, 'INFLUENZA CON COMORBILIDAD - 1RA DOSIS', 11, 1, 14, 'A', 1),
@@ -350,7 +346,25 @@ INSERT INTO `ESNI_LINEA_REPORTE` (`id_linea`, `id_seccion`, `orden`, `etiqueta`,
 (137, 7, 13, 'PUERPERAS', 11, 5, NULL, 'A', 1),
 (138, 7, 14, 'PERSONAL DE SALUD', 11, 5, NULL, 'A', 1),
 (139, 7, 15, 'ESTUDIANTES', 11, 5, NULL, 'A', 1),
-(140, 7, 16, 'COMUNIDADES NATIVAS', 11, 5, NULL, 'A', 1);
+(140, 7, 16, 'COMUNIDADES NATIVAS', 11, 5, NULL, 'A', 1),
+(141, 9, 1, '05 a 11 años', 2, 1, 36, 'A', 1),
+(142, 9, 2, '05 a 11 años', 2, 2, 36, 'A', 1),
+(143, 9, 3, '05 a 11 años', 2, 3, 36, 'A', 1),
+(144, 9, 4, '12 a 17 años', 2, 1, 31, 'A', 1),
+(145, 9, 5, '12 a 17 años', 2, 2, 31, 'A', 1),
+(146, 9, 6, '12 a 17 años', 2, 3, 31, 'A', 1),
+(147, 9, 7, '18 a 29 años', 2, 1, 32, 'A', 1),
+(148, 9, 8, '18 a 29 años', 2, 2, 32, 'A', 1),
+(149, 9, 9, '18 a 29 años', 2, 3, 32, 'A', 1),
+(150, 9, 10, '30 a 59 años', 2, 1, 35, 'A', 1),
+(151, 9, 11, '30 a 59 años', 2, 2, 35, 'A', 1),
+(152, 9, 12, '30 a 59 años', 2, 3, 35, 'A', 1),
+(153, 9, 13, '* Personal de Salud', 2, 1, NULL, 'A', 1),
+(154, 9, 14, '* Personal de Salud', 2, 2, NULL, 'A', 1),
+(155, 9, 15, '* Personal de Salud', 2, 3, NULL, 'A', 1),
+(156, 9, 16, 'Gestantes', 2, 1, NULL, 'A', 1),
+(157, 9, 17, 'Gestantes', 2, 2, NULL, 'A', 1),
+(158, 9, 18, 'Gestantes', 2, 3, NULL, 'A', 1);
 
 -- --------------------------------------------------------
 
