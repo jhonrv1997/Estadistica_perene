@@ -551,16 +551,27 @@ function esniEjecutarReporte(PDO $pdo, array $filtros, array $cols): array {
         // Personal de Salud o Gestantes). Esto permite que la seccion J muestre
         // cuantas dosis aplicaron a personal de salud sin quitarlas del conteo
         // del grupo etareo al que pertenecen (fines informativos).
-        $matchedNormal = false;       // Ya conto en una linea sin requiere_valor_lab_cita
-        $matchedEspecializada = false; // Ya conto en una linea con requiere_valor_lab_cita
+        //
+        // CONTEO POR-SECCION (no global):
+        // Los flags matchedNormal / matchedEspecializada se trackean POR
+        // id_seccion, no de forma global. Esto permite que una misma fila HIS
+        // cuente en multiples secciones del reporte (por ejemplo, una dosis de
+        // Hepatitis A aplicada a un nino de 1 anio cuenta en la seccion B
+        // "DE 01 ANIO" y TAMBIEN en la seccion R "HEPATITIS A - Vacuna de
+        // 1 a 5"), respetando el caracter informativo/paralelo de ciertas
+        // secciones (R, Q, etc.) que consolidan una vacuna por rango etario.
+        // Dentro de una misma seccion, la fila sigue contando como maximo una
+        // vez en linea normal y una vez en linea especializada (comportamiento
+        // original).
+        $matchedNormalPorSeccion        = []; // [id_seccion => true]
+        $matchedEspecializadaPorSeccion = []; // [id_seccion => true]
 
         foreach ($reglasPorCod[$cod] as $r) {
-            // Conteo dual: skip reglas del tipo que ya tuvo match.
-            // Si ya conto en una linea normal, no evaluar mas reglas normales.
-            // Si ya conto en una linea especializada, no evaluar mas reglas especializadas.
+            // Conteo dual por-seccion: skip reglas del tipo que ya tuvo match
+            // PARA LA SECCION ACTUAL. Otras secciones siguen siendo evaluables.
             $esEspecializada = !empty($r['requiere_valor_lab_cita']);
-            if ($esEspecializada && $matchedEspecializada) continue;
-            if (!$esEspecializada && $matchedNormal) continue;
+            if ($esEspecializada && !empty($matchedEspecializadaPorSeccion[$r['id_seccion']])) continue;
+            if (!$esEspecializada && !empty($matchedNormalPorSeccion[$r['id_seccion']])) continue;
             // 1) Valor lab. Si la regla no especifica valor_lab (NULL o vacio), encaja con cualquier valor.
             //    Si la regla SI especifica valor_lab, encaja solo si coincide exactamente (case-insensitive).
             //    Adicionalmente, si el valor_lab de la fila es NULL, intentamos treatarlo como 'DU'
@@ -640,19 +651,27 @@ function esniEjecutarReporte(PDO $pdo, array $filtros, array $cols): array {
             // Match!
             $contadores[$r['id_linea']]++;
 
-            // Conteo dual: $esEspecializada ya se calculo al inicio del loop.
-            // Permitimos que una fila cuente en AMBOS tipos (normal + especializada),
-            // pero solo una vez por tipo (la primera regla que encaja en cada).
+            // Conteo dual por-seccion: $esEspecializada ya se calculo al inicio
+            // del loop. Permitimos que una fila cuente en AMBOS tipos (normal +
+            // especializada) DENTRO DE LA MISMA SECCION, pero solo una vez por
+            // tipo por seccion (la primera regla que encaja en cada).
+            //
+            // Adicionalmente, como los flags son por-seccion, la fila puede
+            // volver a contar en otras secciones (R, Q, etc.) que consolidan
+            // la misma vacuna por rango etario con fines informativos.
             if ($esEspecializada) {
-                $matchedEspecializada = true;
+                $matchedEspecializadaPorSeccion[$r['id_seccion']] = true;
             } else {
-                $matchedNormal = true;
+                $matchedNormalPorSeccion[$r['id_seccion']] = true;
             }
 
-            // Si ya hubo match en ambos tipos, terminamos con esta fila.
-            // Si solo hubo match normal, seguimos buscando una especializada.
-            // Si solo hubo match especializada, seguimos buscando una normal.
-            if ($matchedNormal && $matchedEspecializada) break;
+            // Nota: anteriormente habia un `break` cuando hubo match en ambos
+            // tipos de forma global. Con el conteo por-seccion ese break se
+            // elimina porque debemos seguir evaluando reglas de otras secciones
+            // (la misma fila puede contar en B y en R). El `continue` de arriba
+            // ya filtra eficientemente las reglas redundantes de la misma
+            // seccion, por lo que el costo de iterar es minimo (las reglas por
+            // cod_item suelen ser pocas, <= 20).
         }
     }
 
