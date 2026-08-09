@@ -476,10 +476,17 @@ function esniEjecutarReporte(PDO $pdo, array $filtros, array $cols): array {
     $marcadoresRequeridos = [];
     foreach ($reglas as $r) {
         if (!empty($r['requiere_valor_lab_cita'])) {
+            // Soporte para valor unico (ej: 'G')
             $marcadoresRequeridos[strtoupper(trim($r['requiere_valor_lab_cita']))] = true;
         }
         if (!empty($r['excluye_valor_lab_cita'])) {
-            $marcadoresRequeridos[strtoupper(trim($r['excluye_valor_lab_cita']))] = true;
+            // Soporte para multiples valores separados por coma (ej: 'G,ST')
+            // Cada marcador individual se agrega al conjunto para construir
+            // los conjuntos de Id_cita correspondientes.
+            $parts = array_map('strtoupper', array_map('trim', explode(',', $r['excluye_valor_lab_cita'])));
+            foreach ($parts as $p) {
+                if ($p !== '') $marcadoresRequeridos[$p] = true;
+            }
         }
     }
     if (!empty($marcadoresRequeridos) && !empty($cols['id_cita']) && !empty($cols['valor_lab'])) {
@@ -539,7 +546,21 @@ function esniEjecutarReporte(PDO $pdo, array $filtros, array $cols): array {
         $idCita = isset($f['id_cita']) && $f['id_cita'] !== null && $f['id_cita'] !== ''
             ? (string)$f['id_cita'] : null;
 
+        // Conteo dual: una fila puede contar en una linea "normal" (grupo etareo)
+        // Y TAMBIEN en una linea "especializada" (requiere_valor_lab_cita, ej:
+        // Personal de Salud o Gestantes). Esto permite que la seccion J muestre
+        // cuantas dosis aplicaron a personal de salud sin quitarlas del conteo
+        // del grupo etareo al que pertenecen (fines informativos).
+        $matchedNormal = false;       // Ya conto en una linea sin requiere_valor_lab_cita
+        $matchedEspecializada = false; // Ya conto en una linea con requiere_valor_lab_cita
+
         foreach ($reglasPorCod[$cod] as $r) {
+            // Conteo dual: skip reglas del tipo que ya tuvo match.
+            // Si ya conto en una linea normal, no evaluar mas reglas normales.
+            // Si ya conto en una linea especializada, no evaluar mas reglas especializadas.
+            $esEspecializada = !empty($r['requiere_valor_lab_cita']);
+            if ($esEspecializada && $matchedEspecializada) continue;
+            if (!$esEspecializada && $matchedNormal) continue;
             // 1) Valor lab. Si la regla no especifica valor_lab (NULL o vacio), encaja con cualquier valor.
             //    Si la regla SI especifica valor_lab, encaja solo si coincide exactamente (case-insensitive).
             //    Adicionalmente, si el valor_lab de la fila es NULL, intentamos treatarlo como 'DU'
@@ -601,14 +622,37 @@ function esniEjecutarReporte(PDO $pdo, array $filtros, array $cols): array {
                 if (!isset($setReq[$idCita])) continue;
             }
             if (!empty($r['excluye_valor_lab_cita'])) {
-                $marcExc = strtoupper(trim($r['excluye_valor_lab_cita']));
-                $setExc = $citasConValorLab[$marcExc] ?? [];
-                if ($idCita !== null && isset($setExc[$idCita])) continue;
+                // Soporte para multiples valores separados por coma (ej: 'G,ST')
+                // La fila se excluye si la cita tiene CUALQUIERA de los marcadores.
+                $marcExclList = array_map('strtoupper', array_map('trim', explode(',', $r['excluye_valor_lab_cita'])));
+                $excluida = false;
+                foreach ($marcExclList as $marcExc) {
+                    if ($marcExc === '') continue;
+                    $setExc = $citasConValorLab[$marcExc] ?? [];
+                    if ($idCita !== null && isset($setExc[$idCita])) {
+                        $excluida = true;
+                        break;
+                    }
+                }
+                if ($excluida) continue;
             }
 
             // Match!
             $contadores[$r['id_linea']]++;
-            break; // Solo se cuenta una vez por fila (la primera regla que encaja)
+
+            // Conteo dual: $esEspecializada ya se calculo al inicio del loop.
+            // Permitimos que una fila cuente en AMBOS tipos (normal + especializada),
+            // pero solo una vez por tipo (la primera regla que encaja en cada).
+            if ($esEspecializada) {
+                $matchedEspecializada = true;
+            } else {
+                $matchedNormal = true;
+            }
+
+            // Si ya hubo match en ambos tipos, terminamos con esta fila.
+            // Si solo hubo match normal, seguimos buscando una especializada.
+            // Si solo hubo match especializada, seguimos buscando una normal.
+            if ($matchedNormal && $matchedEspecializada) break;
         }
     }
 
