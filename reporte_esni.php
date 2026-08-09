@@ -75,7 +75,6 @@ $profesionales    = esniGetProfesionales($pdo, $cols, ESNI_ID_UPS);
 $ejecutar = isset($_GET['generar']);
 $reporte = null;
 $debugSQL = null;
-$diagnostico = null;
 
 if ($ejecutar && $esquemaOK) {
     $t0 = microtime(true);
@@ -85,10 +84,7 @@ if ($ejecutar && $esquemaOK) {
     if (!empty($reporte['error']) && strpos($reporte['error'], 'Error SQL') === 0) {
         $debugSQL = ['sql' => $reporte['sql_debug'] ?? '', 'params' => $reporte['params_debug'] ?? []];
     }
-    // Diagnostico de cobertura de reglas (solo si no hubo error SQL)
-    if (empty($reporte['error'])) {
-        $diagnostico = esniDiagnosticarReglas($pdo, $cols, $filtros);
-    }
+
 }
 
 $pageTitle = 'Reporte Operacional ESNI - Inmunizaciones - Sistema HIS';
@@ -108,9 +104,7 @@ include 'includes/header.php';
 .esni-bigtotal { background:linear-gradient(90deg,#198754 0%,#157347 100%); color:#fff; padding:1rem 1.5rem; border-radius:.5rem; margin-bottom:1rem; }
 .esni-vac-dot { width:10px; height:10px; border-radius:50%; display:inline-block; margin-right:.4rem; vertical-align:middle; }
 .esni-debug { background:#f8f9fa; border:1px solid #dee2e6; padding:.8rem; font-family:monospace; font-size:.75rem; white-space:pre-wrap; word-break:break-all; }
-.esni-stat-card { padding:.8rem; border-radius:.5rem; color:#fff; }
-.esni-stat-num { font-size:1.6rem; font-weight:700; line-height:1; }
-.esni-stat-lbl { font-size:.78rem; opacity:.9; margin-top:.2rem; }
+
 </style>
 
 <div class="page-header-section">
@@ -129,19 +123,6 @@ include 'includes/header.php';
 </div>
 <?php endif; ?>
 
-<?php if ($esquemaOK):
-    $resumen = esniGetResumenConfig($pdo);
-?>
-<!-- Stats de configuracion -->
-<div class="row g-2 mb-3">
-    <div class="col-md-2 col-6"><div class="esni-stat-card bg-primary"><div class="esni-stat-num"><?= $resumen['vacunas'] ?></div><div class="esni-stat-lbl"><i class="fas fa-prescription-bottle me-1"></i>Vacunas</div></div></div>
-    <div class="col-md-2 col-6"><div class="esni-stat-card bg-info"><div class="esni-stat-num"><?= $resumen['dosis'] ?></div><div class="esni-stat-lbl"><i class="fas fa-list-ol me-1"></i>Dosis</div></div></div>
-    <div class="col-md-2 col-6"><div class="esni-stat-card bg-warning text-dark"><div class="esni-stat-num"><?= $resumen['grupos_edad'] ?></div><div class="esni-stat-lbl"><i class="fas fa-users me-1"></i>Grupos Edad</div></div></div>
-    <div class="col-md-2 col-6"><div class="esni-stat-card bg-success"><div class="esni-stat-num"><?= $resumen['secciones'] ?></div><div class="esni-stat-lbl"><i class="fas fa-layer-group me-1"></i>Secciones</div></div></div>
-    <div class="col-md-2 col-6"><div class="esni-stat-card bg-secondary"><div class="esni-stat-num"><?= $resumen['lineas'] ?></div><div class="esni-stat-lbl"><i class="fas fa-bars me-1"></i>Lineas</div></div></div>
-    <div class="col-md-2 col-6"><div class="esni-stat-card bg-danger"><div class="esni-stat-num"><?= $resumen['reglas'] ?></div><div class="esni-stat-lbl"><i class="fas fa-project-diagram me-1"></i>Reglas</div></div></div>
-</div>
-<?php endif; ?>
 
 <!-- Filtros -->
 <div class="card shadow-sm mb-4">
@@ -159,18 +140,6 @@ include 'includes/header.php';
         </div>
     </div>
     <div class="card-body">
-        <div class="alert alert-info py-2 mb-3 small d-flex align-items-center">
-            <i class="fas fa-lock me-2 text-info"></i>
-            <span>
-                <strong>Estrategia fija:</strong>
-                Este reporte solo carga datos de la tabla
-                <code>T_CONSOLIDADO_NUEVA_TRAMA_HISMINSA_DETALLADO</code>
-                con <code>Id_Ups = <?= htmlspecialchars(ESNI_ID_UPS) ?></code>
-                (Inmunizaciones / ESNI), para evitar cargar datos de otras estrategias.
-                La lista de establecimientos se obtiene del catalogo
-                <code>ZSPERENE</code>.
-            </span>
-        </div>
         <form id="filterForm" method="GET" action="reporte_esni.php">
             <input type="hidden" name="generar" value="1">
             <div class="row g-3">
@@ -257,62 +226,7 @@ include 'includes/header.php';
     </div>
 </div>
 
-<?php if ($diagnostico && !empty($diagnostico['cod_items_sin_reglas'])): ?>
-<!-- Panel de diagnostico de cobertura -->
-<div class="card border-warning mb-3">
-    <div class="card-header bg-warning bg-opacity-25 d-flex align-items-center">
-        <i class="fas fa-exclamation-triangle me-2 text-warning"></i>
-        <strong class="me-3">Diagnostico de cobertura de reglas</strong>
-        <span class="text-muted small">
-            Cobertura actual:
-            <strong class="<?= $diagnostico['porcentaje_cobertura'] < 50 ? 'text-danger' : 'text-success' ?>">
-                <?= $diagnostico['porcentaje_cobertura'] ?>%
-            </strong>
-            (<?= number_format($diagnostico['filas_cubiertas']) ?> de <?= number_format($diagnostico['total_filas_datos']) ?> filas HIS)
-        </span>
-    </div>
-    <div class="card-body">
-        <p class="mb-2 small">
-            Se encontraron <strong><?= count($diagnostico['cod_items_sin_reglas']) ?> codigos de item</strong>
-            en los datos HIS que <strong>no tienen reglas ESNI configuradas</strong>.
-            Estas filas no se estan contando en el reporte. Ejecute
-            <a href="install_esni_extra.php" class="alert-link"><code>install_esni_extra.php</code></a>
-            o agregue las reglas manualmente desde <a href="esni_config.php?tab=reglas" class="alert-link">Configurar ESNI &raquo; Reglas</a>.
-        </p>
-        <div class="table-responsive">
-            <table class="table table-sm table-hover mb-0" style="font-size:.8rem">
-                <thead>
-                    <tr>
-                        <th style="width:120px;">Codigo Item</th>
-                        <th class="text-end" style="width:90px;">Filas HIS</th>
-                        <th>Acción recomendada</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    <?php foreach ($diagnostico['cod_items_sin_reglas'] as $info): ?>
-                    <tr>
-                        <td><code><?= htmlspecialchars($info['cod']) ?></code></td>
-                        <td class="text-end fw-bold text-danger"><?= number_format($info['n']) ?></td>
-                        <td class="text-muted small">
-                            Crear regla en <a href="esni_config.php?tab=reglas">esni_config.php</a> con cod_item=<code><?= htmlspecialchars($info['cod']) ?></code>
-                        </td>
-                    </tr>
-                    <?php endforeach; ?>
-                </tbody>
-            </table>
-        </div>
-        <?php if (!empty($diagnostico['reglas_sin_datos'])): ?>
-        <p class="mt-3 mb-0 small text-muted">
-            <i class="fas fa-info-circle me-1"></i>
-            Adicionalmente, hay <strong><?= count($diagnostico['reglas_sin_datos']) ?> reglas</strong> configuradas
-            para cod_items que <em>no aparecen en los datos actuales</em>:
-            <code><?= htmlspecialchars(implode(', ', $diagnostico['reglas_sin_datos'])) ?></code>.
-            Estas reglas son inofensivas pero pueden eliminarse para limpiar la configuracion.
-        </p>
-        <?php endif; ?>
-    </div>
-</div>
-<?php endif; ?>
+
 
 <?php if ($reporte['totales']['total_dosis'] === 0): ?>
 <!-- Aviso de 0 resultados -->
@@ -322,7 +236,7 @@ include 'includes/header.php';
         <strong>El reporte se ejecutó correctamente pero no se encontro ninguna dosis que coincida con las reglas configuradas.</strong><br>
         Posibles causas:
         <ul class="mb-0 mt-1 small">
-            <li>Los codigos de item HIS en los datos no coinciden con los codigos configurados en las reglas ESNI (ver diagnostico de cobertura arriba).</li>
+            <li>Los codigos de item HIS en los datos no coinciden con los codigos configurados en las reglas ESNI.</li>
             <li>Los <code>Valor_Lab</code> de las filas HIS no coinciden con los valores esperados por las reglas (por ejemplo: la regla espera <code>'1'</code> pero los datos tienen <code>'DU'</code>).</li>
             <li>Los grupos de edad de las filas HIS no encajan con los grupos configurados en las reglas.</li>
             <li>No hay datos HIS para el periodo/establecimiento seleccionado en los filtros.</li>
@@ -737,21 +651,6 @@ function renderMatrizSexo(array $sec): string {
 }
 ?>
 
-<div class="card mt-4">
-    <div class="card-body small text-muted">
-        <h6 class="fw-bold"><i class="fas fa-info-circle me-2"></i>Como funciona este reporte</h6>
-        <p class="mb-1">El motor data-driven ejecuta las siguientes etapas:</p>
-        <ol class="mb-2 small">
-            <li>Carga las reglas activas desde la tabla <code>ESNI_REGLA</code> (mapeo <code>cod_item</code> + <code>valor_lab</code> + grupo edad -&gt; linea del reporte).</li>
-            <li>Construye una sola consulta SQL contra la tabla origen <code><?= htmlspecialchars($cols['_tabla'] ?? '?') ?></code> trayendo solo filas con los <code>cod_item</code> relevantes, aplicando los filtros comunes.</li>
-            <li>Para cada fila HIS, evalua las reglas asociadas al <code>cod_item</code> y cuenta la primera regla que encaja (valor_lab + sexo + edad + aniomes + riesgo).</li>
-            <li>Suma los contadores por linea y por seccion, generando el mismo layout que el Excel oficial MINSA.</li>
-        </ol>
-        <p class="mb-0 small text-muted">
-            Para agregar una nueva vacuna o dosis: vaya a <a href="esni_config.php"><i class="fas fa-cog me-1"></i>Configurar ESNI</a> y agregue los registros correspondientes.
-            <strong>No requiere editar codigo SQL ni PHP.</strong>
-        </p>
-    </div>
-</div>
+
 
 <?php include 'includes/footer.php';
