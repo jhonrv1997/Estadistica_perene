@@ -640,57 +640,92 @@ function renderTotalUno(array $sec): string {
 }
 
 function renderMatrizSexo(array $sec): string {
-    // Columnas = sexo (Femenino 1ra, Femenino 2da, Masculino Unica)
+    // ---------------------------------------------------------------------------
+    // Layout "Matriz por sexo":
+    //   - Columnas = sexo: "Masculino" y "Femenino" (consolidado, sin separar
+    //     por dosis). Antes se mostraban columnas por dosis (Femenino 1ra,
+    //     Femenino 2da, Masculino Unica) lo que no corresponde al layout
+    //     oficial. Ahora se suman todas las dosis de cada sexo en una sola
+    //     columna.
+    //   - Filas = un grupo de edad por cada grupo registrado en la seccion
+    //     (por ejemplo: 9 años, 10 años, 11 años, 12 años, 13 años, 14 a mas).
+    //     Antes se mostraba una sola fila con un unico grupo. Ahora se itera
+    //     sobre todos los grupos de edad registrados, en el orden en que
+    //     fueron configurados en ESNI_LINEA_REPORTE (ORDER BY orden, id_linea).
+    // ---------------------------------------------------------------------------
     $cols = [
-        'F_D1' => 'Femenino 1ra',
-        'F_D2' => 'Femenino 2da',
-        'M_DU' => 'Masculino Unica',
+        'M' => 'Masculino',
+        'F' => 'Femenino',
     ];
-    $rowMap = [];
+
+    // Acumular cantidades por (grupo_edad, sexo) y recordar la etiqueta
+    // legible de cada grupo. Se usa el codigo de grupo de edad como clave
+    // cuando existe (permite sumar correctamente las lineas M y F de un
+    // mismo grupo). Si la linea no tiene grupo_edad (grupos poblacionales
+    // especiales), se usa la etiqueta de la linea como clave para no perder
+    // esos datos.
+    $mat        = [];  // [clave_grupo => [sexo => cantidad]]
+    $edadNombre = [];  // [clave_grupo => etiqueta_legible]
+    $edadOrden  = [];  // claves en orden de aparicion
+
     foreach ($sec['lineas'] as $lin) {
-        if ($lin['sexo'] === 'F') {
-            $k = 'F_' . $lin['dosis_codigo'];
-        } elseif ($lin['sexo'] === 'M') {
-            $k = 'M_' . $lin['dosis_codigo'];
-        } else continue;
-        if (isset($cols[$k])) $rowMap[$k] = $lin;
+        $sexo = strtoupper((string)($lin['sexo'] ?? ''));
+        if (!isset($cols[$sexo])) continue; // Ignora 'A' u otros
+
+        $codGrupo = $lin['grupo_edad_codigo'] ?? '';
+        $nomGrupo = $lin['grupo_edad_nombre'] ?? '';
+
+        // Etiqueta visible de la fila: preferimos la etiqueta de la linea
+        // (lo que el administrador registro en ESNI_LINEA_REPORTE.etiqueta),
+        // porque coincide con el formato "9 años", "14 a mas", etc. Si no
+        // hay etiqueta, caemos al nombre del grupo de edad y por ultimo al
+        // codigo.
+        $etq = trim((string)($lin['etiqueta'] ?? ''));
+        $etq = preg_replace('/^\*\s*/', '', $etq);
+        if ($etq === '' && $nomGrupo !== '') $etq = $nomGrupo;
+        if ($etq === '' && $codGrupo !== '') $etq = $codGrupo;
+
+        $clave = $codGrupo !== '' ? $codGrupo : ('__' . $etq);
+
+        if (!isset($edadNombre[$clave])) {
+            $edadNombre[$clave] = $etq !== '' ? $etq : '-';
+            $edadOrden[] = $clave;
+        }
+        if (!isset($mat[$clave])) $mat[$clave] = [];
+        $mat[$clave][$sexo] = ($mat[$clave][$sexo] ?? 0) + (int)($lin['cantidad'] ?? 0);
     }
+
     ob_start();
     ?>
     <div class="table-responsive">
         <table class="table table-sm table-hover esni-table mb-0">
             <thead>
                 <tr><th class="text-start">Grupo Edad</th>
-                    <?php foreach ($cols as $cn): ?><th><?= htmlspecialchars($cn) ?></th><?php endforeach; ?>
+                    <?php foreach ($cols as $cn): ?><th class="text-end"><?= htmlspecialchars($cn) ?></th><?php endforeach; ?>
                     <th class="text-end">Total</th>
                 </tr>
             </thead>
             <tbody>
                 <?php
-                $tot = 0;
-                foreach ($rowMap as $k => $lin) $tot += $lin['cantidad'];
+                $granTotal = 0;
+                foreach ($edadOrden as $clave):
+                    $tot = 0;
+                    foreach (array_keys($cols) as $sx) $tot += $mat[$clave][$sx] ?? 0;
+                    $granTotal += $tot;
                 ?>
-                <tr>
-                    <td><?php
-                        // Fix coherente con renderMatrizDosis: si las lineas no
-                        // tienen grupo_edad (grupos poblacionales especiales),
-                        // mostrar la etiqueta de la linea en lugar de "-".
-                        $linRef = $rowMap['F_D1'] ?? $rowMap['M_DU'] ?? null;
-                        $codGrupoSexo = $linRef['grupo_edad_codigo'] ?? '';
-                        $nomGrupoSexo = $linRef['grupo_edad_nombre'] ?? '';
-                        if ($codGrupoSexo !== '') {
-                            $txtGrupoSexo = $nomGrupoSexo !== '' ? $nomGrupoSexo : $codGrupoSexo;
-                        } else {
-                            $txtGrupoSexo = preg_replace('/^\*\s*/', '', trim($linRef['etiqueta'] ?? ''));
-                            if ($txtGrupoSexo === '') $txtGrupoSexo = '-';
-                        }
-                        echo htmlspecialchars($txtGrupoSexo);
-                    ?></td>
-                    <?php foreach (array_keys($cols) as $k): ?>
-                        <td class="text-end fw-bold <?= ($rowMap[$k]['cantidad'] ?? 0) > 0 ? 'text-success' : 'text-muted' ?>"><?= isset($rowMap[$k]) ? number_format($rowMap[$k]['cantidad']) : '<span class="text-muted">-</span>' ?></td>
+                <tr class="<?= $tot > 0 ? '' : 'text-muted' ?>">
+                    <td><?= htmlspecialchars($edadNombre[$clave]) ?></td>
+                    <?php foreach (array_keys($cols) as $sx):
+                        $val = $mat[$clave][$sx] ?? 0;
+                    ?>
+                        <td class="text-end fw-bold <?= $val > 0 ? 'text-success' : 'text-muted' ?>"><?= $val > 0 ? number_format($val) : '<span class="text-muted">-</span>' ?></td>
                     <?php endforeach; ?>
-                    <td class="text-end fw-bold"><?= number_format($tot) ?></td>
+                    <td class="text-end fw-bold text-success"><?= number_format($tot) ?></td>
                 </tr>
+                <?php endforeach; ?>
+                <?php if (empty($edadOrden)): ?>
+                <tr><td colspan="<?= count($cols) + 2 ?>" class="text-center text-muted">Sin datos registrados para esta seccion</td></tr>
+                <?php endif; ?>
             </tbody>
             <tfoot>
                 <tr class="esni-total-row"><td colspan="<?= count($cols) + 1 ?>" class="text-end">TOTAL SECCION <?= htmlspecialchars($sec['codigo']) ?></td><td class="text-end"><?= number_format($sec['total']) ?></td></tr>
