@@ -697,7 +697,7 @@ elseif ($tab === 'reglas'):
                             Excluye valor_lab en misma Id_cita
                             <small class="text-muted d-block">Solo encaja si NO existe ninguna otra fila con la misma Id_cita cuyo valor_lab sea igual al indicado. Ej: <span class="mono-pill">G</span> (excluir gestantes).</small>
                         </label>
-                        <input type="text" name="excluye_valor_lab_cita" class="form-control form-control-sm" placeholder="ej: G (vacio = sin restriccion)">
+                        <input type="text" name="excluye_valor_lab_cita" class="form-control form-control-sm" placeholder="ej: G o G,ST (vacio = sin restriccion)">
                     </div>
                     <button class="btn btn-sm btn-his w-100"><i class="fas fa-save me-1"></i>Crear Regla</button>
                 </form>
@@ -964,8 +964,8 @@ document.getElementById('editModal').addEventListener('show.bs.modal', function 
                 <small class="text-muted d-block">Solo encaja si existe OTRA fila con la misma Id_cita cuyo valor_lab sea el indicado. Ej: <code>G</code> (gestante), <code>ST</code> (personal salud). Vacio = sin restriccion.</small>
             </label><input type="text" name="requiere_valor_lab_cita" class="form-control form-control-sm" value="${v('requiere-valor-lab-cita')}" placeholder="ej: G, ST"></div>
             <div class="mb-2"><label class="form-label small fw-semibold">Excluye valor_lab en misma Id_cita
-                <small class="text-muted d-block">Solo encaja si NO existe ninguna otra fila con la misma Id_cita cuyo valor_lab sea el indicado. Ej: <code>G</code> (excluir gestantes). Vacio = sin restriccion.</small>
-            </label><input type="text" name="excluye_valor_lab_cita" class="form-control form-control-sm" value="${v('excluye-valor-lab-cita')}" placeholder="ej: G"></div>
+                <small class="text-muted d-block">Solo encaja si NO existe ninguna otra fila con la misma Id_cita cuyo valor_lab sea el indicado. Ej: <code>G</code> (excluir gestantes), <code>G,ST</code> (excluir gestantes y personal salud). Vacio = sin restriccion.</small>
+            </label><input type="text" name="excluye_valor_lab_cita" class="form-control form-control-sm" value="${v('excluye-valor-lab-cita')}" placeholder="ej: G o G,ST"></div>
             <div class="form-check mb-3"><input type="checkbox" name="activo" value="1" class="form-check-input" id="act" ${checked('activo')}><label class="form-check-label" for="act">Activo</label></div>
             <button class="btn btn-sm btn-his"><i class="fas fa-save me-1"></i>Guardar</button>
         </form>`;
