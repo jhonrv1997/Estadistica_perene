@@ -156,7 +156,6 @@ CREATE TABLE `ESNI_GRUPO_EDAD` (
 --
 -- Volcado de datos para la tabla `ESNI_GRUPO_EDAD`
 --
-
 INSERT INTO `ESNI_GRUPO_EDAD` (`id_grupo_edad`, `codigo`, `nombre`, `tipo_edad`, `edad_min`, `edad_max`, `descripcion`, `activo`) VALUES
 (1, '24H', '24 horas', 'D', 0, 1, 'Recien nacido - 24 horas de vida', 1),
 (2, '28D', '28 dias', 'D', 2, 28, 'De 2 a 28 dias', 1),
@@ -193,7 +192,14 @@ INSERT INTO `ESNI_GRUPO_EDAD` (`id_grupo_edad`, `codigo`, `nombre`, `tipo_edad`,
 (33, '30_49A', '30 y 49 años', 'A', 30, 49, NULL, 1),
 (34, '50_59A', '50 y 59 años', 'A', 50, 59, NULL, 1),
 (35, '30_59A', '30 y 59 años', 'A', 30, 59, NULL, 1),
-(36, '05_11A', '05 y 11 años', 'A', 5, 11, NULL, 1);
+(36, '05_11A', '05 y 11 años', 'A', 5, 11, NULL, 1),
+(37, '09A', '09 años', 'A', 9, 9, NULL, 1),
+(38, '10A', '10 años', 'A', 10, 10, NULL, 1),
+(39, '11A', '11 años', 'A', 11, 11, NULL, 1),
+(40, '12A', '12 años', 'A', 12, 12, NULL, 1),
+(41, '13A', '13 años', 'A', 13, 13, NULL, 1),
+(42, '14A_MAS', '14 años a mas', 'A', 14, 120, NULL, 1);
+
 
 -- --------------------------------------------------------
 
@@ -279,9 +285,6 @@ INSERT INTO `ESNI_LINEA_REPORTE` (`id_linea`, `id_seccion`, `orden`, `etiqueta`,
 (60, 5, 2, 'dT 2da - Gestantes', 18, 2, 19, 'F', 1),
 (61, 5, 3, 'dT 3ra - Gestantes', 18, 3, 19, 'F', 1),
 (62, 5, 4, 'TDAP - Gestantes', 19, 1, 19, 'F', 1),
-(66, 14, 1, 'VPH 1ra Dosis - Femenino', 20, 1, 17, 'F', 1),
-(67, 14, 2, 'VPH 2da Dosis - Femenino', 20, 2, 17, 'F', 1),
-(68, 14, 3, 'VPH Dosis Unica - Masculino', 20, 5, 18, 'M', 1),
 (75, 2, 15, '18 MESES - REF. PENTAVALENTE', 22, 10, 11, 'A', 1),
 (76, 2, 14, '18 MESES - REF. IPV', 23, 10, 11, 'A', 1),
 (77, 15, 56, 'INFLUENZA CON COMORBILIDAD - 1RA DOSIS', 11, 1, 14, 'A', 1),
@@ -364,7 +367,27 @@ INSERT INTO `ESNI_LINEA_REPORTE` (`id_linea`, `id_seccion`, `orden`, `etiqueta`,
 (155, 9, 15, 'Personal de Salud', 2, 3, NULL, 'A', 1),
 (156, 9, 16, 'Gestantes', 2, 1, NULL, 'A', 1),
 (157, 9, 17, 'Gestantes', 2, 2, NULL, 'A', 1),
-(158, 9, 18, 'Gestantes', 2, 3, NULL, 'A', 1);
+(158, 9, 18, 'Gestantes', 2, 3, NULL, 'A', 1),
+(159, 10, 1, '05 a 11 años', 15, 5, 36, 'A', 1),
+(160, 10, 2, '12 a 17 años', 15, 5, 31, 'A', 1),
+(161, 10, 3, '18 a 29 años', 15, 5, 32, 'A', 1),
+(162, 10, 4, '30 a 59 años', 15, 5, 35, 'A', 1),
+(163, 10, 5, '60 + años', 15, 5, 27, 'A', 1),
+(164, 18, 1, '12 a 17 años', 19, 5, 31, 'F', 1),
+(165, 18, 2, '18 a 29 años', 19, 5, 32, 'F', 1),
+(166, 18, 3, '30 a 49 años', 19, 5, 33, 'F', 1),
+(167, 14, 1, '9 años', 20, 5, 37, 'M', 1),
+(168, 14, 2, '9 años', 20, 5, 37, 'F', 1),
+(169, 14, 3, '10 años', 20, 5, 38, 'M', 1),
+(170, 14, 4, '10 años', 20, 5, 38, 'F', 1),
+(171, 14, 5, '11 años', 20, 5, 39, 'M', 1),
+(172, 14, 6, '11 años', 20, 5, 39, 'F', 1),
+(173, 14, 7, '12 años', 20, 5, 40, 'M', 1),
+(174, 14, 8, '12 años', 20, 5, 40, 'F', 1),
+(175, 14, 9, '13 años', 20, 5, 41, 'M', 1),
+(176, 14, 10, '13 años', 20, 5, 41, 'F', 1),
+(177, 14, 11, '14 a mas', 20, 5, 42, 'M', 1),
+(178, 14, 12, '14 a mas', 20, 5, 42, 'F', 1);
 
 -- --------------------------------------------------------
 
@@ -432,7 +455,6 @@ CREATE TABLE `ESNI_REGLA` (
 --
 -- Volcado de datos para la tabla `ESNI_REGLA`
 --
-
 INSERT INTO `ESNI_REGLA` (`id_regla`, `id_linea`, `cod_item`, `valor_lab`, `id_grupo_edad`, `sexo`, `aniomes_min`, `aniomes_max`, `requiere_riesgo`, `excluye_riesgo`, `requiere_comorbilidad`, `excluye_comorbilidad`, `activo`, `requiere_valor_lab_cita`, `excluye_valor_lab_cita`) VALUES
 (1, 1, '90585', NULL, 1, 'A', NULL, NULL, 0, 0, 0, 0, 1, NULL, NULL),
 (2, 1, '90585', 'DU', 1, 'A', NULL, NULL, 0, 0, 0, 0, 1, NULL, NULL),
@@ -578,15 +600,6 @@ INSERT INTO `ESNI_REGLA` (`id_regla`, `id_linea`, `cod_item`, `valor_lab`, `id_g
 (181, 29, '90716', '1', 9, 'A', NULL, NULL, 0, 0, 0, 0, 1, NULL, NULL),
 (182, 29, '90716', '01', 9, 'A', NULL, NULL, 0, 0, 0, 0, 1, NULL, NULL),
 (183, 29, '90716', 'D1', 9, 'A', NULL, NULL, 0, 0, 0, 0, 1, NULL, NULL),
-(184, 66, '90649', 'DU', 17, 'F', NULL, NULL, 0, 0, 0, 0, 1, NULL, NULL),
-(185, 66, '90649', '1', 17, 'F', NULL, NULL, 0, 0, 0, 0, 1, NULL, NULL),
-(186, 66, '90649', '01', 17, 'F', NULL, NULL, 0, 0, 0, 0, 1, NULL, NULL),
-(187, 66, '90649', 'D1', 17, 'F', NULL, NULL, 0, 0, 0, 0, 1, NULL, NULL),
-(188, 67, '90649', '2', 17, 'F', NULL, NULL, 0, 0, 0, 0, 1, NULL, NULL),
-(189, 67, '90649', '02', 17, 'F', NULL, NULL, 0, 0, 0, 0, 1, NULL, NULL),
-(190, 67, '90649', 'D2', 17, 'F', NULL, NULL, 0, 0, 0, 0, 1, NULL, NULL),
-(191, 68, '90649', 'DU', 18, 'M', NULL, NULL, 0, 0, 0, 0, 1, NULL, NULL),
-(192, 68, '90649', NULL, 18, 'M', NULL, NULL, 0, 0, 0, 0, 1, NULL, NULL),
 (193, 36, '90633.01', 'DU', 10, 'A', NULL, NULL, 0, 0, 0, 0, 1, NULL, NULL),
 (194, 36, '90633.01', NULL, 10, 'A', NULL, NULL, 0, 0, 0, 0, 1, NULL, NULL),
 (196, 27, '90670', '3', 9, 'A', NULL, NULL, 0, 0, 0, 0, 1, NULL, NULL),
@@ -711,8 +724,7 @@ INSERT INTO `ESNI_REGLA` (`id_regla`, `id_linea`, `cod_item`, `valor_lab`, `id_g
 (318, 149, '90746', 'D3', 32, 'A', NULL, NULL, 0, 0, 0, 0, 1, NULL, 'G'),
 (319, 150, '90746', '1', 35, 'A', NULL, NULL, 0, 0, 0, 0, 1, NULL, 'G'),
 (320, 150, '90746', 'D1', 35, 'A', NULL, NULL, 0, 0, 0, 0, 1, NULL, 'G'),
-(321, 151, '90746', '2', 35, 'A', NULL, NULL, 0, 0, 0, 0, 1, NULL, 'G');
-INSERT INTO `ESNI_REGLA` (`id_regla`, `id_linea`, `cod_item`, `valor_lab`, `id_grupo_edad`, `sexo`, `aniomes_min`, `aniomes_max`, `requiere_riesgo`, `excluye_riesgo`, `requiere_comorbilidad`, `excluye_comorbilidad`, `activo`, `requiere_valor_lab_cita`, `excluye_valor_lab_cita`) VALUES
+(321, 151, '90746', '2', 35, 'A', NULL, NULL, 0, 0, 0, 0, 1, NULL, 'G'),
 (322, 151, '90746', 'D2', 35, 'A', NULL, NULL, 0, 0, 0, 0, 1, NULL, 'G'),
 (323, 152, '90746', '3', 35, 'A', NULL, NULL, 0, 0, 0, 0, 1, NULL, 'G'),
 (324, 152, '90746', 'D3', 35, 'A', NULL, NULL, 0, 0, 0, 0, 1, NULL, 'G'),
@@ -721,7 +733,8 @@ INSERT INTO `ESNI_REGLA` (`id_regla`, `id_linea`, `cod_item`, `valor_lab`, `id_g
 (327, 154, '90746', '2', NULL, 'A', NULL, NULL, 0, 0, 0, 0, 1, 'ST', NULL),
 (328, 154, '90746', 'D2', NULL, 'A', NULL, NULL, 0, 0, 0, 0, 1, 'ST', NULL),
 (329, 155, '90746', '3', NULL, 'A', NULL, NULL, 0, 0, 0, 0, 1, 'ST', NULL),
-(330, 155, '90746', 'D3', NULL, 'A', NULL, NULL, 0, 0, 0, 0, 1, 'ST', NULL),
+(330, 155, '90746', 'D3', NULL, 'A', NULL, NULL, 0, 0, 0, 0, 1, 'ST', NULL);
+INSERT INTO `ESNI_REGLA` (`id_regla`, `id_linea`, `cod_item`, `valor_lab`, `id_grupo_edad`, `sexo`, `aniomes_min`, `aniomes_max`, `requiere_riesgo`, `excluye_riesgo`, `requiere_comorbilidad`, `excluye_comorbilidad`, `activo`, `requiere_valor_lab_cita`, `excluye_valor_lab_cita`) VALUES
 (331, 156, '90746', '1', NULL, 'F', NULL, NULL, 0, 0, 0, 0, 1, 'G', NULL),
 (332, 156, '90746', 'D1', NULL, 'F', NULL, NULL, 0, 0, 0, 0, 1, 'G', NULL),
 (333, 156, '90744', '1', NULL, 'F', NULL, NULL, 0, 0, 0, 0, 1, 'G', NULL),
@@ -733,7 +746,28 @@ INSERT INTO `ESNI_REGLA` (`id_regla`, `id_linea`, `cod_item`, `valor_lab`, `id_g
 (339, 158, '90744', '3', NULL, 'F', NULL, NULL, 0, 0, 0, 0, 1, 'G', NULL),
 (340, 158, '90744', 'D3', NULL, 'F', NULL, NULL, 0, 0, 0, 0, 1, 'G', NULL),
 (341, 158, '90746', '3', NULL, 'F', NULL, NULL, 0, 0, 0, 0, 1, 'G', NULL),
-(342, 158, '90746', 'D3', NULL, 'F', NULL, NULL, 0, 0, 0, 0, 1, 'G', NULL);
+(342, 158, '90746', 'D3', NULL, 'F', NULL, NULL, 0, 0, 0, 0, 1, 'G', NULL),
+(343, 159, '90717', 'DU', 36, 'A', NULL, NULL, 0, 0, 0, 0, 1, NULL, NULL),
+(344, 160, '90717', 'DU', 31, 'A', NULL, NULL, 0, 0, 0, 0, 1, NULL, NULL),
+(345, 161, '90717', 'DU', 32, 'A', NULL, NULL, 0, 0, 0, 0, 1, NULL, NULL),
+(346, 162, '90717', 'DU', 35, 'A', NULL, NULL, 0, 0, 0, 0, 1, NULL, NULL),
+(347, 163, '90717', 'DU', 27, 'A', NULL, NULL, 0, 0, 0, 0, 1, NULL, NULL),
+(348, 164, '90715', 'DU', 31, 'F', NULL, NULL, 0, 0, 0, 0, 1, 'G', NULL),
+(349, 165, '90715', 'DU', 32, 'F', NULL, NULL, 0, 0, 0, 0, 1, 'G', NULL),
+(350, 166, '90715', 'DU', 33, 'F', NULL, NULL, 0, 0, 0, 0, 1, 'G', NULL),
+(351, 167, '90649', 'DU', 37, 'M', NULL, NULL, 0, 0, 0, 0, 1, NULL, NULL),
+(352, 168, '90649', 'DU', 37, 'F', NULL, NULL, 0, 0, 0, 0, 1, NULL, NULL),
+(353, 169, '90649', 'DU', 38, 'M', NULL, NULL, 0, 0, 0, 0, 1, NULL, NULL),
+(354, 170, '90649', 'DU', 38, 'F', NULL, NULL, 0, 0, 0, 0, 1, NULL, NULL),
+(355, 171, '90649', 'DU', 39, 'M', NULL, NULL, 0, 0, 0, 0, 1, NULL, NULL),
+(356, 172, '90649', 'DU', 39, 'F', NULL, NULL, 0, 0, 0, 0, 1, NULL, NULL),
+(357, 173, '90649', 'DU', 40, 'M', NULL, NULL, 0, 0, 0, 0, 1, NULL, NULL),
+(358, 174, '90649', 'DU', 40, 'F', NULL, NULL, 0, 0, 0, 0, 1, NULL, NULL),
+(359, 175, '90649', 'DU', 41, 'M', NULL, NULL, 0, 0, 0, 0, 1, NULL, NULL),
+(360, 176, '90649', 'DU', 41, 'F', NULL, NULL, 0, 0, 0, 0, 1, NULL, NULL),
+(361, 177, '90649', 'DU', 42, 'M', NULL, NULL, 0, 0, 0, 0, 1, NULL, NULL),
+(362, 178, '90649', 'DU', 42, 'F', NULL, NULL, 0, 0, 0, 0, 1, NULL, NULL);
+
 
 -- --------------------------------------------------------
 
@@ -754,7 +788,6 @@ CREATE TABLE `ESNI_SECCION_REPORTE` (
 --
 -- Volcado de datos para la tabla `ESNI_SECCION_REPORTE`
 --
-
 INSERT INTO `ESNI_SECCION_REPORTE` (`id_seccion`, `codigo`, `titulo`, `descripcion`, `layout`, `orden`, `activo`) VALUES
 (1, 'A', 'A. - MENORES DE 01 ANIO', 'BCG, Hepatitis B, Antipolio (IPV), Pentavalente, Reacciones Adversas, Rotavirus, Neumococo, Influenza, Poblacion en Riesgo', 'lista', 1, 1),
 (2, 'B', 'B. - DE 01 ANIO', 'Neumococo 1 anio, SPR, Varicela, Influenza, Neumococo 12-23m, Antiamarilica, Hepatitis A, SPR 2da, Ref DPT, Ref APO, Vacunacion no oportuna', 'lista', 2, 1),
@@ -766,15 +799,15 @@ INSERT INTO `ESNI_SECCION_REPORTE` (`id_seccion`, `codigo`, `titulo`, `descripci
 (8, 'I', 'I. - SARAMPION - RUBEOLA', 'Vacunacion SR en ninos/personas no vacunadas', 'total_uno', 8, 1),
 (9, 'J', 'J. - POBLACION DE 05 A 59 ANIOS: VACUNACION CONTRA LA HEPATITIS B', 'Hepatitis B en poblacion 5-59 anos', 'matriz_dosis', 9, 1),
 (10, 'K', 'K. - ANTIAMARILICA', 'Antiamarilica en poblacion no vacunada y viajeros a zonas endemicas', 'total_uno', 10, 1),
-(12, 'Q', 'Q. - VARICELA', 'Varicela por grupo de edad', 'total_uno', 12, 1),
+(12, 'Q', 'Q. - VARICELA', 'Varicela por grupo de edad', 'total_uno', 14, 1),
 (13, 'O', 'O. - NEUMOCOCO', 'Neumococo en poblacion en riesgo', 'total_uno', 13, 1),
-(14, 'N', 'N.-VACUNA VPH', 'Virus del Papiloma Humano: femenino y masculino (dosis unica)', 'matriz_sexo', 14, 1),
+(14, 'N', 'N.-VACUNA VPH', 'Virus del Papiloma Humano: femenino y masculino (dosis unica)', 'matriz_sexo', 12, 1),
 (15, 'D', ' D. - DE 03 ANOS', 'Influenza con/sin comorbilidad, Neumococo comorbilidad, Antiamarilica, Vacunacion no oportuna, Refuerzo DPT 3 anos, Refuerzo APO 3 años', 'lista', 4, 1),
 (16, 'E1', 'E1.-  DE 04 AÑOS', 'Influenza con/sin comorbilidad, Neumococo comorbilidad, Antiamarilica, Vacunacion no oportuna, Refuerzo DPT 4 anos, Refuerzo APO 4 anos', 'lista', 4, 1),
 (17, 'E2', 'E2.-  DE 05 - 07 AÑOS', 'SPR, Refuerzo DPT', 'lista', 4, 1),
-(18, 'L', 'L.- SOLO GESTANTES', 'Vacuna combinada dtpa', 'matriz_edad', 11, 1),
-(19, 'R', 'R.-HEPATITIS A', 'Vacuna de 1 a 5', 'matriz_edad', 12, 1),
-(20, 'T', 'T.-SPR-SARAMPION', 'vacuna de 5 a 59 y Trabajador de Salud', 'matriz_edad', 15, 1);
+(18, 'L', 'L.- SOLO GESTANTES', 'Vacuna combinada dtpa', 'total_uno', 11, 1),
+(19, 'R', 'R.-HEPATITIS A', 'Vacuna de 1 a 5', 'matriz_edad', 15, 1),
+(20, 'T', 'T.-SPR-SARAMPION', 'vacuna de 5 a 59 y Trabajador de Salud', 'matriz_edad', 16, 1);
 
 -- --------------------------------------------------------
 
