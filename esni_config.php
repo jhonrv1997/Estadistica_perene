@@ -147,14 +147,30 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $esquemaOK) {
                     isset($_POST['requiere_riesgo'])?1:0, isset($_POST['excluye_riesgo'])?1:0,
                     isset($_POST['requiere_comorbilidad'])?1:0, isset($_POST['excluye_comorbilidad'])?1:0,
                     $_POST['requiere_valor_lab_cita'] !== '' ? $_POST['requiere_valor_lab_cita'] : null,
-                    $_POST['excluye_valor_lab_cita'] !== '' ? $_POST['excluye_valor_lab_cita'] : null);
+                    $_POST['excluye_valor_lab_cita'] !== '' ? $_POST['excluye_valor_lab_cita'] : null,
+                    $_POST['excluye_etnia'] !== '' ? $_POST['excluye_etnia'] : null);
                 $mensaje = "Regla creada.";
                 $mensajeTipo = 'success';
                 break;
             case 'editar_regla':
                 // Detectar dinamicamente si las columnas nuevas existen.
                 $tieneColsCita = esniColumnasReglaExisten($pdo, ['requiere_valor_lab_cita', 'excluye_valor_lab_cita']);
-                if ($tieneColsCita) {
+                $tieneColEtnia = esniColumnasReglaExisten($pdo, ['excluye_etnia']);
+                if ($tieneColsCita && $tieneColEtnia) {
+                    $stmt = $pdo->prepare("UPDATE ESNI_REGLA SET id_linea=?, cod_item=?, valor_lab=?, id_grupo_edad=?, sexo=?, aniomes_min=?, aniomes_max=?, requiere_riesgo=?, excluye_riesgo=?, requiere_comorbilidad=?, excluye_comorbilidad=?, requiere_valor_lab_cita=?, excluye_valor_lab_cita=?, excluye_etnia=?, activo=? WHERE id_regla=?");
+                    $stmt->execute([(int)$_POST['id_linea'], $_POST['cod_item'],
+                        $_POST['valor_lab'] !== '' ? $_POST['valor_lab'] : null,
+                        $_POST['id_grupo_edad'] !== '' ? (int)$_POST['id_grupo_edad'] : null,
+                        $_POST['sexo'],
+                        $_POST['aniomes_min'] !== '' ? $_POST['aniomes_min'] : null,
+                        $_POST['aniomes_max'] !== '' ? $_POST['aniomes_max'] : null,
+                        isset($_POST['requiere_riesgo'])?1:0, isset($_POST['excluye_riesgo'])?1:0,
+                        isset($_POST['requiere_comorbilidad'])?1:0, isset($_POST['excluye_comorbilidad'])?1:0,
+                        $_POST['requiere_valor_lab_cita'] !== '' ? $_POST['requiere_valor_lab_cita'] : null,
+                        $_POST['excluye_valor_lab_cita'] !== '' ? $_POST['excluye_valor_lab_cita'] : null,
+                        $_POST['excluye_etnia'] !== '' ? $_POST['excluye_etnia'] : null,
+                        isset($_POST['activo'])?1:0, $_POST['id_regla']]);
+                } elseif ($tieneColsCita) {
                     $stmt = $pdo->prepare("UPDATE ESNI_REGLA SET id_linea=?, cod_item=?, valor_lab=?, id_grupo_edad=?, sexo=?, aniomes_min=?, aniomes_max=?, requiere_riesgo=?, excluye_riesgo=?, requiere_comorbilidad=?, excluye_comorbilidad=?, requiere_valor_lab_cita=?, excluye_valor_lab_cita=?, activo=? WHERE id_regla=?");
                     $stmt->execute([(int)$_POST['id_linea'], $_POST['cod_item'],
                         $_POST['valor_lab'] !== '' ? $_POST['valor_lab'] : null,
@@ -616,7 +632,10 @@ elseif ($tab === 'reglas'):
     $tieneColsCita = esniColumnasReglaExisten($pdo, ['requiere_valor_lab_cita', 'excluye_valor_lab_cita']);
     $colRequiere = $tieneColsCita ? 'r.requiere_valor_lab_cita' : 'NULL AS requiere_valor_lab_cita';
     $colExcluye  = $tieneColsCita ? 'r.excluye_valor_lab_cita' : 'NULL AS excluye_valor_lab_cita';
-    $reglas = $pdo->query("SELECT r.*, {$colRequiere}, {$colExcluye}, l.etiqueta, l.id_seccion, s.codigo AS seccion_codigo,
+    // Detectar si la columna excluye_etnia existe (migration_comunidades_nativas_etnia.sql)
+    $tieneColEtnia = esniColumnasReglaExisten($pdo, ['excluye_etnia']);
+    $colExcluyeEtnia = $tieneColEtnia ? 'r.excluye_etnia' : 'NULL AS excluye_etnia';
+    $reglas = $pdo->query("SELECT r.*, {$colRequiere}, {$colExcluye}, {$colExcluyeEtnia}, l.etiqueta, l.id_seccion, s.codigo AS seccion_codigo,
                                   g.codigo AS grupo_edad, g.nombre AS grupo_edad_nombre,
                                   g.tipo_edad AS ge_tipo_edad, g.edad_min AS ge_edad_min, g.edad_max AS ge_edad_max
                            FROM ESNI_REGLA r
@@ -699,6 +718,13 @@ elseif ($tab === 'reglas'):
                         </label>
                         <input type="text" name="excluye_valor_lab_cita" class="form-control form-control-sm" placeholder="ej: G o G,ST (vacio = sin restriccion)">
                     </div>
+                    <div class="mb-2">
+                        <label class="form-label small fw-semibold">
+                            Excluye etnia (Id_Etnia)
+                            <small class="text-muted d-block">Lista de Id_Etnia separados por coma a excluir. La regla no contara pacientes cuyo Id_Etnia coincida con alguno de estos valores. Ej: <span class="mono-pill">56,57,58,59,60</span> (Comunidades Nativas seccion H). Vacio = sin restriccion.</small>
+                        </label>
+                        <input type="text" name="excluye_etnia" class="form-control form-control-sm" placeholder="ej: 56,57,58,59,60 (vacio = sin restriccion)">
+                    </div>
                     <button class="btn btn-sm btn-his w-100"><i class="fas fa-save me-1"></i>Crear Regla</button>
                 </form>
             </div>
@@ -712,7 +738,7 @@ elseif ($tab === 'reglas'):
             </div>
             <div class="table-responsive">
                 <table class="table table-sm mb-0" style="font-size:.78rem">
-                    <thead class="table-light"><tr><th>ID</th><th>Sec</th><th>Linea</th><th>cod_item</th><th>valor_lab</th><th>Edad</th><th>Sexo</th><th>Riesgo</th><th>Comorb.</th><th>V.Lab Cita</th><th>A-Mes</th><th class="text-end">Acciones</th></tr></thead>
+                    <thead class="table-light"><tr><th>ID</th><th>Sec</th><th>Linea</th><th>cod_item</th><th>valor_lab</th><th>Edad</th><th>Sexo</th><th>Riesgo</th><th>Comorb.</th><th>V.Lab Cita</th><th>Excl.Etnia</th><th>A-Mes</th><th class="text-end">Acciones</th></tr></thead>
                     <tbody>
                         <?php foreach ($reglas as $r): ?>
                         <tr>
@@ -748,6 +774,14 @@ elseif ($tab === 'reglas'):
                                     echo '-';
                                 }
                             ?></td>
+                            <td class="text-center" title="Excluye etnias por Id_Etnia"><?php
+                                $excE = $r['excluye_etnia'] ?? null;
+                                if ($excE) {
+                                    echo '<span class="badge bg-danger text-white" title="Excluye pacientes con Id_Etnia IN (' . clean($excE) . ')">exc:' . clean($excE) . '</span>';
+                                } else {
+                                    echo '-';
+                                }
+                            ?></td>
                             <td><small><?= clean($r['aniomes_min'] ?? '') ?>-<?= clean($r['aniomes_max'] ?? '') ?></small></td>
                             <td class="text-end">
                                 <button class="btn btn-sm btn-outline-primary" data-bs-toggle="modal" data-bs-target="#editModal"
@@ -758,6 +792,7 @@ elseif ($tab === 'reglas'):
                                     data-requiere-riesgo="<?= $r['requiere_riesgo'] ?>" data-excluye-riesgo="<?= $r['excluye_riesgo'] ?>"
                                     data-requiere-comorbilidad="<?= $r['requiere_comorbilidad'] ?? 0 ?>" data-excluye-comorbilidad="<?= $r['excluye_comorbilidad'] ?? 0 ?>"
                                     data-requiere-valor-lab-cita="<?= clean($r['requiere_valor_lab_cita'] ?? '') ?>" data-excluye-valor-lab-cita="<?= clean($r['excluye_valor_lab_cita'] ?? '') ?>"
+                                    data-excluye-etnia="<?= clean($r['excluye_etnia'] ?? '') ?>"
                                     data-activo="<?= $r['activo'] ?>"><i class="fas fa-edit"></i></button>
                                 <form method="POST" class="d-inline" onsubmit="return confirm('Eliminar regla?')">
                                     <input type="hidden" name="accion" value="eliminar_regla">
@@ -966,6 +1001,9 @@ document.getElementById('editModal').addEventListener('show.bs.modal', function 
             <div class="mb-2"><label class="form-label small fw-semibold">Excluye valor_lab en misma Id_cita
                 <small class="text-muted d-block">Solo encaja si NO existe ninguna otra fila con la misma Id_cita cuyo valor_lab sea el indicado. Ej: <code>G</code> (excluir gestantes), <code>G,ST</code> (excluir gestantes y personal salud). Vacio = sin restriccion.</small>
             </label><input type="text" name="excluye_valor_lab_cita" class="form-control form-control-sm" value="${v('excluye-valor-lab-cita')}" placeholder="ej: G o G,ST"></div>
+            <div class="mb-2"><label class="form-label small fw-semibold">Excluye etnia (Id_Etnia)
+                <small class="text-muted d-block">Lista de Id_Etnia separados por coma a excluir. Ej: <code>56,57,58,59,60</code> (Comunidades Nativas seccion H). Vacio = sin restriccion.</small>
+            </label><input type="text" name="excluye_etnia" class="form-control form-control-sm" value="${v('excluye-etnia')}" placeholder="ej: 56,57,58,59,60"></div>
             <div class="form-check mb-3"><input type="checkbox" name="activo" value="1" class="form-check-input" id="act" ${checked('activo')}><label class="form-check-label" for="act">Activo</label></div>
             <button class="btn btn-sm btn-his"><i class="fas fa-save me-1"></i>Guardar</button>
         </form>`;
