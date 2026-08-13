@@ -574,7 +574,10 @@ function esniEjecutarReporte(PDO $pdo, array $filtros, array $cols): array {
         foreach ($reglasPorCod[$cod] as $r) {
             // Conteo dual por-seccion: skip reglas del tipo que ya tuvo match
             // PARA LA SECCION ACTUAL. Otras secciones siguen siendo evaluables.
-            $esEspecializada = !empty($r['requiere_valor_lab_cita']);
+            // Las reglas con excluye_etnia se tratan como especializadas para
+            // permitir que una fila cuente tanto en su grupo etareo (normal)
+            // como en la linea de etnia (ej: COMUNIDADES NATIVAS en seccion H).
+            $esEspecializada = !empty($r['requiere_valor_lab_cita']) || !empty($r['excluye_etnia']);
             if ($esEspecializada && !empty($matchedEspecializadaPorSeccion[$r['id_seccion']])) continue;
             if (!$esEspecializada && !empty($matchedNormalPorSeccion[$r['id_seccion']])) continue;
             // 1) Valor lab. Si la regla no especifica valor_lab (NULL o vacio), encaja con cualquier valor.
