@@ -86,6 +86,9 @@ function esniResolverColumnas(PDO $pdo): array {
         'rownnum_lab'     => ['I_ROWNUM_LAB', 'i_rownum_lab', 'RowNumLab'],
         // Estrategia / UPS: el modulo ESNI solo debe leer filas con Id_Ups = 301204
         'id_ups'          => ['Id_Ups', 'id_ups', 'ID_UPS', 'IdUps', 'id_Ups'],
+        // Etnia: usada por la regla excluye_etnia para filtrar por Id_Etnia
+        // (ej: linea "COMUNIDADES NATIVAS" en seccion H)
+        'id_etnia'        => ['Id_Etnia', 'id_etnia', 'ID_ETNIA', 'IdEtnia'],
     ];
 
     $resueltos = [];
@@ -377,7 +380,7 @@ function esniEjecutarReporte(PDO $pdo, array $filtros, array $cols): array {
 
     // Construir SELECT con las columnas relevantes
     $selCols = ["`{$cols['cod_item']}` AS cod_item"];
-    foreach (['valor_lab', 'edad_reg', 'tip_edad', 'grupo_edad', 'sexo', 'id_paciente', 'id_cita', 'id_gruporiesgo'] as $c) {
+    foreach (['valor_lab', 'edad_reg', 'tip_edad', 'grupo_edad', 'sexo', 'id_paciente', 'id_cita', 'id_gruporiesgo', 'id_etnia'] as $c) {
         $selCols[] = !empty($cols[$c]) ? "`{$cols[$c]}` AS {$c}" : "NULL AS {$c}";
     }
     // AnioMes: si existe la columna, usarla; si no, construir a partir de Anio+Mes (formato YYYYMM)
@@ -545,6 +548,8 @@ function esniEjecutarReporte(PDO $pdo, array $filtros, array $cols): array {
             ? (string)$f['id_paciente'] : null;
         $idCita = isset($f['id_cita']) && $f['id_cita'] !== null && $f['id_cita'] !== ''
             ? (string)$f['id_cita'] : null;
+        $idEtnia = isset($f['id_etnia']) && $f['id_etnia'] !== null && $f['id_etnia'] !== ''
+            ? trim((string)$f['id_etnia']) : null;
 
         // Conteo dual: una fila puede contar en una linea "normal" (grupo etareo)
         // Y TAMBIEN en una linea "especializada" (requiere_valor_lab_cita, ej:
@@ -646,6 +651,27 @@ function esniEjecutarReporte(PDO $pdo, array $filtros, array $cols): array {
                     }
                 }
                 if ($excluida) continue;
+            }
+
+            // 8) Excluye etnia (Id_Etnia).
+            //    Si la regla tiene excluye_etnia definido (lista de Id_Etnia separados
+            //    por coma, ej: '56,57,58,59,60'):
+            //      - Si Id_Etnia es NULL → la fila NO se cuenta (semantica SQL:
+            //        NULL NOT IN (...) es falso, no se puede confirmar que no
+            //        pertenece a las etnias excluidas).
+            //      - Si Id_Etnia tiene un valor que esta en la lista excluida →
+            //        la fila NO se cuenta.
+            //      - Si Id_Etnia tiene un valor que NO esta en la lista →
+            //        la fila SI se cuenta.
+            //    Si excluye_etnia es NULL o vacio → no se aplica ningun filtro
+            //    de etnia, solo los demas filtros registrados.
+            //    Uso principal: linea "COMUNIDADES NATIVAS" en seccion H del ESNI,
+            //    que debe contar solo pacientes con Id_Etnia <> 56,57,58,59,60.
+            if (!empty($r['excluye_etnia'])) {
+                // Id_Etnia NULL → no se puede confirmar exclusion → no encaja (estricto)
+                if ($idEtnia === null) continue;
+                $etniasExcluidas = array_map('trim', explode(',', $r['excluye_etnia']));
+                if (in_array($idEtnia, $etniasExcluidas, true)) continue;
             }
 
             // Match!
@@ -951,15 +977,34 @@ function esniCrearLinea(PDO $pdo, int $idSeccion, string $etiqueta, ?int $idVacu
  * Database/migration_seccion_j_covid.sql. La funcion detecta dinamicamente
  * si las columnas existen; si no existen aun, los valores se ignoran
  * silenciosamente (retrocompatibilidad).
+ *
+ * Filtro por etnia (excluyeEtnia): lista de Id_Etnia separados por coma
+ * que se deben excluir del conteo. Ej: '56,57,58,59,60' para la linea
+ * "COMUNIDADES NATIVAS" de la seccion H. Agregado por
+ * Database/migration_comunidades_nativas_etnia.sql.
  */
-function esniCrearRegla(PDO $pdo, int $idLinea, string $codItem, ?string $valorLab = null, ?int $idGrupoEdad = null, string $sexo = 'A', ?string $aniomesMin = null, ?string $aniomesMax = null, int $requiereRiesgo = 0, int $excluyeRiesgo = 0, int $requiereComorbilidad = 0, int $excluyeComorbilidad = 0, ?string $requiereValorLabCita = null, ?string $excluyeValorLabCita = null): int {
+function esniCrearRegla(PDO $pdo, int $idLinea, string $codItem, ?string $valorLab = null, ?int $idGrupoEdad = null, string $sexo = 'A', ?string $aniomesMin = null, ?string $aniomesMax = null, int $requiereRiesgo = 0, int $excluyeRiesgo = 0, int $requiereComorbilidad = 0, int $excluyeComorbilidad = 0, ?string $requiereValorLabCita = null, ?string $excluyeValorLabCita = null, ?string $excluyeEtnia = null): int {
     // Detectar si las columnas nuevas existen (migration aplicada).
     static $tieneColsCita = null;
+    static $tieneColEtnia = null;
     if ($tieneColsCita === null) {
         $tieneColsCita = esniColumnasReglaExisten($pdo, ['requiere_valor_lab_cita', 'excluye_valor_lab_cita']);
     }
+    if ($tieneColEtnia === null) {
+        $tieneColEtnia = esniColumnasReglaExisten($pdo, ['excluye_etnia']);
+    }
 
-    if ($tieneColsCita) {
+    if ($tieneColsCita && $tieneColEtnia) {
+        $sql = "INSERT INTO ESNI_REGLA
+                (id_linea, cod_item, valor_lab, id_grupo_edad, sexo, aniomes_min, aniomes_max,
+                 requiere_riesgo, excluye_riesgo, requiere_comorbilidad, excluye_comorbilidad,
+                 requiere_valor_lab_cita, excluye_valor_lab_cita, excluye_etnia)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+        $stmt = $pdo->prepare($sql);
+        $stmt->execute([$idLinea, $codItem, $valorLab, $idGrupoEdad, $sexo, $aniomesMin, $aniomesMax,
+                        $requiereRiesgo, $excluyeRiesgo, $requiereComorbilidad, $excluyeComorbilidad,
+                        $requiereValorLabCita, $excluyeValorLabCita, $excluyeEtnia]);
+    } elseif ($tieneColsCita) {
         $sql = "INSERT INTO ESNI_REGLA
                 (id_linea, cod_item, valor_lab, id_grupo_edad, sexo, aniomes_min, aniomes_max,
                  requiere_riesgo, excluye_riesgo, requiere_comorbilidad, excluye_comorbilidad,
