@@ -55,8 +55,24 @@
  *     H22 = INFLUENZA - 06 Y 07 MESES - 2DA DOSIS
  *     J22 = G22 + H22
  *
- * Si en el futuro se requiere llenar celdas de otras secciones (B, C, ...),
- * basta con extender el array $cellMap mas abajo, indicando la etiqueta
+ *   SECCION B - MENORES DE 01 ANIO (celdas I28..J41):
+ *     I28/J28 = 1A 11M 29D - NEUMOCOCO - 01 ANIO - 3RA DOSIS  (I=Casos, J=I)
+ *     G29/J29 = 1A 11M 29D - SPR - 01 ANIO - 1RA DOSIS        (G=Casos, J=G)
+ *     G30/J30 = 1A 11M 29D - DOSIS UNICA - INFLUENZA           (G=Casos, J=G)
+ *     G31/J31 = VARICELA 1RA                                  (G=Casos, J=G)
+ *     G33/J33 = 15 MESES - ANTIAMARILICA - DOSIS UNICA       (G=Casos, J=G)
+ *     G34/J34 = 15 MESES - HEPATITIS A - DOSIS UNICA         (G=Casos, J=G)
+ *     H35/J35 = 18 MESES - SPR - 2DA DOSIS                   (H=Casos, J=H)
+ *     G36/J36 = 18 MESES - REF. DPT - 1RA DOSIS              (G=Casos, J=G)
+ *     G37/J37 = 18 MESES - REF. IPV                          (G=Casos, J=G)
+ *     G38/J38 = 18 MESES - REF. PENTAVALENTE                (G=Casos, J=G)
+ *     I39/J39 = No vacunado IPV                             (I=Casos, J=I)
+ *     H41      = No vacunado PENTAVALENTE 2da               (H=Casos)
+ *     I41      = No vacunado PENTAVALENTE 3ra               (I=Casos)
+ *     J41      = H41 + I41                                  (suma)
+ *
+ * Si en el futuro se requiere llenar celdas de otras secciones (C, ...),
+ * basta con extender el array $cellValues mas abajo, indicando la etiqueta
  * exacta de la linea (campo ESNI_LINEA_REPORTE.etiqueta) y la celda destino.
  */
 
@@ -137,10 +153,11 @@ if (!empty($reporte['error'])) {
 }
 
 // ============================================================================
-// 3. Indexar lineas de la SECCION A por etiqueta normalizada
+// 3. Indexar lineas de las SECCIONES A y B por etiqueta normalizada
 // ----------------------------------------------------------------------------
 // El motor de reglas devuelve $reporte['secciones'] con todas las secciones
-// (A, B, C, H, ...). Nos interesa la seccion "A" (codigo = 'A').
+// (A, B, C, H, ...). Nos interesan las secciones "A" (Menores de 1 anio,
+// casilla A) y "B" (Menores de 1 anio - seccion B de la plantilla).
 //
 // La etiqueta de la linea puede tener ligeras variaciones (espacios extra,
 // Mayusculas) respecto a la nomenclatura de la plantilla. Por eso se
@@ -158,7 +175,7 @@ foreach ($reporte['secciones'] as $sec) {
     }
 }
 
-// Construir mapa [etiqueta_normalizada => cantidad]
+// Construir mapa [etiqueta_normalizada => cantidad] para Seccion A
 $casosPorEtiqueta = [];
 if ($seccionA !== null) {
     foreach ($seccionA['lineas'] as $lin) {
@@ -170,6 +187,31 @@ if ($seccionA !== null) {
             $casosPorEtiqueta[$etqNorm] += (int)$lin['cantidad'];
         } else {
             $casosPorEtiqueta[$etqNorm] = (int)$lin['cantidad'];
+        }
+    }
+}
+
+// -----------------------------------------------------------------------------
+// 3.1 Indexar lineas de la SECCION B (id_seccion = 2 en la BD) por etiqueta
+// normalizada. Las etiquetas aqui son las del esquema ESNI (BCG, Hepatitis,
+// IPV, Pentavalente, etc.) pero para el rango etario de 1 anio (12 meses).
+// -----------------------------------------------------------------------------
+$seccionB = null;
+foreach ($reporte['secciones'] as $sec) {
+    if (strcasecmp($sec['codigo'], 'B') === 0) {
+        $seccionB = $sec;
+        break;
+    }
+}
+
+$casosPorEtiquetaB = [];
+if ($seccionB !== null) {
+    foreach ($seccionB['lineas'] as $lin) {
+        $etqNorm = esniNormalizarEtiqueta($lin['etiqueta']);
+        if (isset($casosPorEtiquetaB[$etqNorm])) {
+            $casosPorEtiquetaB[$etqNorm] += (int)$lin['cantidad'];
+        } else {
+            $casosPorEtiquetaB[$etqNorm] = (int)$lin['cantidad'];
         }
     }
 }
@@ -255,12 +297,37 @@ $neumo_d2   = esniGetCasos($casosPorEtiqueta, 'NEUMOCOCO - 02 Y 04 MESES - 2DA D
 $inf_d1     = esniGetCasos($casosPorEtiqueta, 'INFLUENZA - 06 Y 07 MESES - 1RA DOSIS');
 $inf_d2     = esniGetCasos($casosPorEtiqueta, 'INFLUENZA - 06 Y 07 MESES - 2DA DOSIS');
 
-// 4.3 Calcular totales por vacuna (celdas J)
+// 4.3 Calcular totales por vacuna (celdas J) - Seccion A
 $ipv_total     = $ipv_d1   + $ipv_d2   + $ipv_d3;
 $penta_total   = $penta_d1 + $penta_d2 + $penta_d3;
 $rota_total    = $rota_d1  + $rota_d2;
 $neumo_total   = $neumo_d1 + $neumo_d2;
 $inf_total     = $inf_d1   + $inf_d2;
+
+// -----------------------------------------------------------------------------
+// 4.2B Casos por linea (Seccion B - MENORES DE 01 ANIO)
+// -----------------------------------------------------------------------------
+// Nota: en la BD la etiqueta de INFLUENZA es
+// '1A 11M 29D - DOSIS UNICA - INFLUENZA' (sin sufijo '- DOSIS UNICA' final).
+$b_neumo_3ra    = esniGetCasos($casosPorEtiquetaB, '1A 11M 29D - NEUMOCOCO - 01 ANIO - 3RA DOSIS');
+$b_spr_1ra      = esniGetCasos($casosPorEtiquetaB, '1A 11M 29D - SPR - 01 ANIO - 1RA DOSIS');
+$b_inf_du       = esniGetCasos($casosPorEtiquetaB, '1A 11M 29D - DOSIS UNICA - INFLUENZA');
+$b_varicela_1ra = esniGetCasos($casosPorEtiquetaB, 'VARICELA 1RA');
+$b_amarilica_du = esniGetCasos($casosPorEtiquetaB, '15 MESES - ANTIAMARILICA - DOSIS UNICA');
+$b_hepA_du      = esniGetCasos($casosPorEtiquetaB, '15 MESES - HEPATITIS A - DOSIS UNICA');
+$b_spr_2da      = esniGetCasos($casosPorEtiquetaB, '18 MESES - SPR - 2DA DOSIS');
+$b_dpt_1ra      = esniGetCasos($casosPorEtiquetaB, '18 MESES - REF. DPT - 1RA DOSIS');
+$b_ipv_ref      = esniGetCasos($casosPorEtiquetaB, '18 MESES - REF. IPV');
+$b_penta_ref    = esniGetCasos($casosPorEtiquetaB, '18 MESES - REF. PENTAVALENTE');
+$b_nv_ipv       = esniGetCasos($casosPorEtiquetaB, 'No vacunado IPV');
+$b_nv_penta_2da = esniGetCasos($casosPorEtiquetaB, 'No vacunado PENTAVALENTE 2da');
+$b_nv_penta_3ra = esniGetCasos($casosPorEtiquetaB, 'No vacunado PENTAVALENTE 3ra');
+
+// 4.3B Totales Seccion B:
+//   - Lineas con dosis unica o dosis simple: el total (J) es igual a la unica
+//     columna de Casos usada (G, H o I segun la celda destino indicada).
+//   - Linea 41 (No vacunado PENTAVALENTE 2da/3ra): J41 = H41 + I41.
+$b_penta_nv_total = $b_nv_penta_2da + $b_nv_penta_3ra;
 
 // 4.4 Construir el mapa final celda => valor
 $cellValues = [
@@ -292,6 +359,34 @@ $cellValues = [
 
     // Influenza (2 dosis + total)
     'G22' => $inf_d1, 'H22' => $inf_d2, 'J22' => $inf_total,
+
+    // --- Seccion B: MENORES DE 01 ANIO (celdas I28..J41) ---
+    // NEUMOCOCO 3ra dosis (celda I=Casos, total J=I)
+    'I28' => $b_neumo_3ra,    'J28' => $b_neumo_3ra,
+    // SPR 1ra dosis (celda G=Casos, total J=G)
+    'G29' => $b_spr_1ra,      'J29' => $b_spr_1ra,
+    // INFLUENZA dosis unica (celda G=Casos, total J=G)
+    'G30' => $b_inf_du,       'J30' => $b_inf_du,
+    // VARICELA 1ra (celda G=Casos, total J=G)
+    'G31' => $b_varicela_1ra, 'J31' => $b_varicela_1ra,
+    // ANTIAMARILICA dosis unica (celda G=Casos, total J=G)
+    'G33' => $b_amarilica_du, 'J33' => $b_amarilica_du,
+    // HEPATITIS A dosis unica (celda G=Casos, total J=G)
+    'G34' => $b_hepA_du,      'J34' => $b_hepA_du,
+    // SPR 2da dosis (celda H=Casos, total J=H)
+    'H35' => $b_spr_2da,      'J35' => $b_spr_2da,
+    // REF. DPT 1ra (celda G=Casos, total J=G)
+    'G36' => $b_dpt_1ra,      'J36' => $b_dpt_1ra,
+    // REF. IPV (celda G=Casos, total J=G)
+    'G37' => $b_ipv_ref,      'J37' => $b_ipv_ref,
+    // REF. PENTAVALENTE (celda G=Casos, total J=G)
+    'G38' => $b_penta_ref,    'J38' => $b_penta_ref,
+    // No vacunado IPV (celda I=Casos, total J=I)
+    'I39' => $b_nv_ipv,       'J39' => $b_nv_ipv,
+    // No vacunado PENTAVALENTE 2da/3ra (celdas H e I) y total J = H + I
+    'H41' => $b_nv_penta_2da,
+    'I41' => $b_nv_penta_3ra,
+    'J41' => $b_penta_nv_total,
 ];
 
 // ============================================================================
