@@ -71,9 +71,20 @@
  *     I41      = No vacunado PENTAVALENTE 3ra               (I=Casos)
  *     J41      = H41 + I41                                  (suma)
  *
- * Si en el futuro se requiere llenar celdas de otras secciones (C, ...),
- * basta con extender el array $cellValues mas abajo, indicando la etiqueta
- * exacta de la linea (campo ESNI_LINEA_REPORTE.etiqueta) y la celda destino.
+ * Seccion C - Mayores de 01 anio (celdas F/I en filas 50-66):
+ *     F50/I50 = INFLUENZA CON COMORBILIDAD - 1RA DOSIS  (F=Casos, I=F)
+ *     F51/I51 = INFLUENZA SIN COMORBILIDAD - 1RA DOSIS  (F=Casos, I=F)
+ *     F52/I52 = NEUMOCOCO CON COMORBILIDAD - 1RA DOSIS   (F=Casos, I=F)
+ *     F53 = VACUNACION NO OPORTUNA - NEUMOCOCO D1
+ *     G53 = VACUNACION NO OPORTUNA - NEUMOCOCO D2
+ *     H53 = VACUNACION NO OPORTUNA - NEUMOCOCO D3
+ *     I53 = F53 + G53 + H53
+ *     F55/I55 = ANTIAMARILICA - 1RA DOSIS                (F=Casos, I=F)
+ *     F62 = VACUNACION NO OPORTUNA - SPR - 1RA DOSIS
+ *     G62 = VACUNACION NO OPORTUNA - SPR - 2DA DOSIS
+ *     I62 = F62 + G62
+ *     F65/I65 = REFUERZO ANTIPOLIO IPV - 1RA DOSIS      (F=Casos, I=F)
+ *     F66/I66 = REFUERZO PENTAVALENTE - 1RA DOSIS       (F=Casos, I=F)
  */
 
 require_once 'includes/auth.php';
@@ -153,11 +164,12 @@ if (!empty($reporte['error'])) {
 }
 
 // ============================================================================
-// 3. Indexar lineas de las SECCIONES A y B por etiqueta normalizada
+// 3. Indexar lineas de las SECCIONES A, B y C por etiqueta normalizada
 // ----------------------------------------------------------------------------
 // El motor de reglas devuelve $reporte['secciones'] con todas las secciones
 // (A, B, C, H, ...). Nos interesan las secciones "A" (Menores de 1 anio,
-// casilla A) y "B" (Menores de 1 anio - seccion B de la plantilla).
+// casilla A), "B" (Menores de 1 anio - seccion B de la plantilla) y
+// "C" (Mayores de 01 anio - seccion C de la plantilla).
 //
 // La etiqueta de la linea puede tener ligeras variaciones (espacios extra,
 // Mayusculas) respecto a la nomenclatura de la plantilla. Por eso se
@@ -216,10 +228,34 @@ if ($seccionB !== null) {
     }
 }
 
+// -----------------------------------------------------------------------------
+// 3.2 Indexar lineas de la SECCION C (Mayores de 01 anio) por etiqueta
+// normalizada.
+// -----------------------------------------------------------------------------
+$seccionC = null;
+foreach ($reporte['secciones'] as $sec) {
+    if (strcasecmp($sec['codigo'], 'C') === 0) {
+        $seccionC = $sec;
+        break;
+    }
+}
+
+$casosPorEtiquetaC = [];
+if ($seccionC !== null) {
+    foreach ($seccionC['lineas'] as $lin) {
+        $etqNorm = esniNormalizarEtiqueta($lin['etiqueta']);
+        if (isset($casosPorEtiquetaC[$etqNorm])) {
+            $casosPorEtiquetaC[$etqNorm] += (int)$lin['cantidad'];
+        } else {
+            $casosPorEtiquetaC[$etqNorm] = (int)$lin['cantidad'];
+        }
+    }
+}
+
 /**
  * Helper: obtiene la cantidad de casos para una etiqueta de linea.
- * Devuelve 0 si la etiqueta no existe en la seccion A (no se registraron
- * dosis para esa vacuna/dosis/grupo).
+ * Devuelve 0 si la etiqueta no existe en la seccion indicada (no se
+ * registraron dosis para esa vacuna/dosis/grupo).
  *
  * @param array  $casosPorEtiqueta Mapa [etiqueta_normalizada => int].
  * @param string $etiqueta         Etiqueta tal como esta en ESNI_LINEA_REPORTE.
@@ -329,6 +365,25 @@ $b_nv_penta_3ra = esniGetCasos($casosPorEtiquetaB, 'No vacunado PENTAVALENTE 3ra
 //   - Linea 41 (No vacunado PENTAVALENTE 2da/3ra): J41 = H41 + I41.
 $b_penta_nv_total = $b_nv_penta_2da + $b_nv_penta_3ra;
 
+//-----------------------------------------------------------------------------
+// 4.2C Casos por linea (Seccion C - MAYORES DE 01 ANIO)
+//-----------------------------------------------------------------------------
+$c_inf_comorb_d1  = esniGetCasos($casosPorEtiquetaC, 'INFLUENZA CON COMORBILIDAD - 1RA DOSIS');
+$c_inf_sincom_d1  = esniGetCasos($casosPorEtiquetaC, 'INFLUENZA SIN COMORBILIDAD - 1RA DOSIS');
+$c_neumo_com_d1   = esniGetCasos($casosPorEtiquetaC, 'NEUMOCOCO CON COMORBILIDAD - 1RA DOSIS');
+$c_vno_neumo_d1   = esniGetCasos($casosPorEtiquetaC, 'VACUNACION NO OPORTUNA - NEUMOCOCO D1');
+$c_vno_neumo_d2   = esniGetCasos($casosPorEtiquetaC, 'VACUNACION NO OPORTUNA - NEUMOCOCO D2');
+$c_vno_neumo_d3   = esniGetCasos($casosPorEtiquetaC, 'VACUNACION NO OPORTUNA - NEUMOCOCO D3');
+$c_amarilica_d1   = esniGetCasos($casosPorEtiquetaC, 'ANTIAMARILICA - 1RA DOSIS');
+$c_vno_spr_d1     = esniGetCasos($casosPorEtiquetaC, 'VACUNACION NO OPORTUNA - SPR - 1RA DOSIS');
+$c_vno_spr_d2     = esniGetCasos($casosPorEtiquetaC, 'VACUNACION NO OPORTUNA - SPR - 2DA DOSIS');
+$c_ref_ipv_d1     = esniGetCasos($casosPorEtiquetaC, 'REFUERZO ANTIPOLIO IPV- 1RA DOSIS');
+$c_ref_penta_d1   = esniGetCasos($casosPorEtiquetaC, 'REFUERZO PENTAVALENTE - 1RA DOSIS');
+
+// 4.3C Totales Seccion C (celdas que son suma de otras)
+$c_vno_neumo_total = $c_vno_neumo_d1 + $c_vno_neumo_d2 + $c_vno_neumo_d3;
+$c_vno_spr_total   = $c_vno_spr_d1 + $c_vno_spr_d2;
+
 // 4.4 Construir el mapa final celda => valor
 $cellValues = [
     // Encabezado (texto)
@@ -387,6 +442,29 @@ $cellValues = [
     'H41' => $b_nv_penta_2da,
     'I41' => $b_nv_penta_3ra,
     'J41' => $b_penta_nv_total,
+
+    // --- Seccion C: MAYORES DE 01 ANIO (celdas F/I en filas 50-66) ---
+    // INFLUENZA CON COMORBILIDAD - 1RA DOSIS (F=I=Casos)
+    'F50' => $c_inf_comorb_d1,    'I50' => $c_inf_comorb_d1,
+    // INFLUENZA SIN COMORBILIDAD - 1RA DOSIS (F=I=Casos)
+    'F51' => $c_inf_sincom_d1,    'I51' => $c_inf_sincom_d1,
+    // NEUMOCOCO CON COMORBILIDAD - 1RA DOSIS (F=I=Casos)
+    'F52' => $c_neumo_com_d1,     'I52' => $c_neumo_com_d1,
+    // VACUNACION NO OPORTUNA - NEUMOCOCO D1/D2/D3 y total I = F+G+H
+    'F53' => $c_vno_neumo_d1,
+    'G53' => $c_vno_neumo_d2,
+    'H53' => $c_vno_neumo_d3,
+    'I53' => $c_vno_neumo_total,
+    // ANTIAMARILICA - 1RA DOSIS (F=I=Casos)
+    'F55' => $c_amarilica_d1,     'I55' => $c_amarilica_d1,
+    // VACUNACION NO OPORTUNA - SPR 1ra/2da dosis y total I = F+G
+    'F62' => $c_vno_spr_d1,
+    'G62' => $c_vno_spr_d2,
+    'I62' => $c_vno_spr_total,
+    // REFUERZO ANTIPOLIO IPV - 1RA DOSIS (F=I=Casos)
+    'F65' => $c_ref_ipv_d1,       'I65' => $c_ref_ipv_d1,
+    // REFUERZO PENTAVALENTE - 1RA DOSIS (F=I=Casos)
+    'F66' => $c_ref_penta_d1,     'I66' => $c_ref_penta_d1,
 ];
 
 // ============================================================================
