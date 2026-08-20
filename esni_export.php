@@ -129,15 +129,15 @@ $filtros = [
     'anio'            => trim($_GET['anio'] ?? ''),
     'mes'             => trim($_GET['mes'] ?? ''),
     'establecimiento' => trim($_GET['establecimiento'] ?? ''),
-    'profesional'     => trim($_GET['profesional'] ?? ''),
     'id_ups'          => ESNI_ID_UPS,
 ];
 
 // El valor de "establecimiento" llega como Codigo_Unico (cargado desde ZSPERENE).
 // Se resuelve el nombre para mostrarlo en C2.
 $nombreEstablecimiento = '';
+$estExport = esniGetEstablecimientosZS($pdo);
+$establecimientosPermitidos = array_keys($estExport);
 if ($filtros['establecimiento'] !== '') {
-    $estExport = esniGetEstablecimientosZS($pdo);
     $nombreEstablecimiento = $estExport[$filtros['establecimiento']] ?? $filtros['establecimiento'];
 }
 
@@ -145,7 +145,7 @@ if ($filtros['establecimiento'] !== '') {
 // 2. Ejecutar reporte ESNI
 // ============================================================================
 $cols = esniResolverColumnas($pdo);
-$reporte = esniEjecutarReporte($pdo, $filtros, $cols);
+$reporte = esniEjecutarReporte($pdo, $filtros, $cols, $establecimientosPermitidos);
 
 if (!empty($reporte['error'])) {
     http_response_code(500);

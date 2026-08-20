@@ -7,7 +7,7 @@
  *   SQL Server -> 4 archivos .txt de scripts -> Excel con conexion ODBC
  *
  * Ahora TODO se hace desde la web:
- *   1) El usuario aplica filtros (anio, mes, departamento, EE.SS., profesional).
+ *   1) El usuario aplica filtros (anio, mes, departamento, EE.SS.).
  *   2) El motor de reglas data-driven (includes/esni_data.php) ejecuta el reporte
  *      contra la tabla consolidada MySQL usando las reglas configurables.
  *   3) Se muestran las 14 secciones (A, B, C, H, H2, I, J, K, L, M, N, O, P, VPH)
@@ -45,13 +45,10 @@ define('ESNI_ID_UPS', '301204');
 $fAnio            = trim($_GET['anio'] ?? '');
 $fMes             = trim($_GET['mes'] ?? '');
 $fEstablecimiento = trim($_GET['establecimiento'] ?? '');
-$fProfesional     = trim($_GET['profesional'] ?? '');
-
 $filtros = [
     'anio'            => $fAnio,
     'mes'             => $fMes,
     'establecimiento' => $fEstablecimiento,
-    'profesional'     => $fProfesional,
     // Fijo para el modulo ESNI: solo estrategia Id_Ups = 301204
     'id_ups'          => ESNI_ID_UPS,
 ];
@@ -67,7 +64,9 @@ $filtros['anio'] = $fAnio;
 // al cargar la pagina. La clave es el Codigo_Unico (valor del <option>) y el
 // valor el Nombre_Establecimiento.
 $establecimientos = esniGetEstablecimientosZS($pdo);
-$profesionales    = esniGetProfesionales($pdo, $cols, ESNI_ID_UPS);
+// Cuando se selecciona "-- Todos --", filtrar solo por los establecimientos
+// del catalogo ZSPERENE para no traer datos de establecimientos ajenos.
+$establecimientosPermitidos = array_keys($establecimientos);
 
 // Ejecutar reporte SOLO cuando el usuario pulse "Generar reporte".
 // Esto evita saturar la base de datos con la consulta del motor de reglas
@@ -78,7 +77,7 @@ $debugSQL = null;
 
 if ($ejecutar && $esquemaOK) {
     $t0 = microtime(true);
-    $reporte = esniEjecutarReporte($pdo, $filtros, $cols);
+    $reporte = esniEjecutarReporte($pdo, $filtros, $cols, $establecimientosPermitidos);
     $tEjec = round(microtime(true) - $t0, 3);
     $reporte['tiempo_ejecucion'] = $tEjec;
     if (!empty($reporte['error']) && strpos($reporte['error'], 'Error SQL') === 0) {
@@ -170,15 +169,6 @@ include 'includes/header.php';
                         <?php endforeach; ?>
                     </select>
                 </div>
-                <div class="col-lg-2 col-md-4 col-sm-6">
-                    <label class="form-label fw-semibold small"><i class="fas fa-user-md me-1"></i>Profesional</label>
-                    <select name="profesional" class="form-select form-select-sm">
-                        <option value="">-- Todos --</option>
-                        <?php foreach ($profesionales as $p): ?>
-                            <option value="<?= htmlspecialchars($p) ?>" <?= $fProfesional === $p ? 'selected' : '' ?>><?= htmlspecialchars($p) ?></option>
-                        <?php endforeach; ?>
-                    </select>
-                </div>
             </div>
         </form>
     </div>
@@ -217,7 +207,6 @@ include 'includes/header.php';
         if ($fAnio)             $tags[] = 'Anio=' . $fAnio;
         if ($fMes)              $tags[] = 'Mes=' . getNombreMes($fMes);
         if ($fEstablecimiento)  $tags[] = 'EESS=' . mb_strimwidth($establecimientos[$fEstablecimiento] ?? $fEstablecimiento, 0, 30, '...');
-        if ($fProfesional)      $tags[] = 'Prof=' . $fProfesional;
         if (count($tags) === 1) $tags[] = 'SIN FILTROS (todos los periodos)';
         ?>
         <?php foreach ($tags as $t): ?>
