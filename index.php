@@ -32,7 +32,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 }
 
-$pageTitle = 'InteLHIS- Iniciar Sesion';
+$pageTitle = 'HIS PERENE- Iniciar Sesion';
 include 'includes/header.php';
 ?>
 
@@ -40,7 +40,7 @@ include 'includes/header.php';
     <div class="login-card">
         <div class="login-header">
             <img src="assets/img/logo_hisminsa.png" alt="HIS" class="mb-3" style="width:100px;height:100px;object-fit:contain;border-radius:50%;">
-            <h3 class="text-white fw-bold">InteLHIS</h3>
+            <h3 class="text-white fw-bold">HIS PERENE</h3>
             <p class="text-white-50 mb-0">Sistema de Analítica y Reportes HIS</p>
         </div>
         <div class="login-body">
@@ -69,11 +69,11 @@ include 'includes/header.php';
                 </div>
                 <div class="mb-4">
                     <label for="password" class="form-label fw-semibold">
-                        <i class="fas fa-lock me-1"></i> Contrasena
+                        <i class="fas fa-lock me-1"></i> Contraseña
                     </label>
                     <div class="input-group">
                         <input type="password" class="form-control form-control-lg" id="password" name="password" 
-                               placeholder="Ingrese su contrasena" required>
+                               placeholder="Ingrese su contraseña" required>
                         <button class="btn btn-outline-secondary" type="button" id="togglePassword">
                             <i class="fas fa-eye"></i>
                         </button>
@@ -85,7 +85,7 @@ include 'includes/header.php';
             </form>
         </div>
         <div class="login-footer">
-            <small class="text-muted">InteLHIS v1.0 &copy; <?= date('Y') ?></small>
+            <small class="text-muted">HIS PERENE v1.0 &copy; <?= date('Y') ?></small>
         </div>
     </div>
 </div>

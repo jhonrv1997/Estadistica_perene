@@ -38,27 +38,7 @@ try {
 // Definir las paginas disponibles por rol
 // Cada entrada: [icono, titulo, descripcion, color, archivo, Roles]
 $paginas = [
-    // 1. Convenio de Gestion
-    [
-        'icon' => 'fa-file-contract',
-        'titulo' => 'Convenio de Gestion',
-        'descripcion' => 'Reporte de avance de los 34 indicadores del Convenio MINSA-GORE 2026.',
-        'color' => 'primary',
-        'archivo' => 'convenio_gestion.php',
-        'badge' => '34 indicadores',
-        'roles' => ['admin', 'usuario'],
-    ],
-    // 2. Convenio FED
-    [
-        'icon' => 'fa-medal',
-        'titulo' => 'Convenio FED',
-        'descripcion' => 'Fondo de Estimulo al Desempeno. Avance de 7 indicadores con calculo ponderado.',
-        'color' => 'warning',
-        'archivo' => 'convenio_fed.php',
-        'badge' => '7 indicadores',
-        'roles' => ['admin', 'usuario'],
-    ],
-    // 3. Consulta de Atenciones
+    // 1. Consulta de Atenciones
     [
         'icon' => 'fa-search',
         'titulo' => 'Consulta de Atenciones',
@@ -68,27 +48,7 @@ $paginas = [
         'badge' => '2 sub-paginas',
         'roles' => ['admin', 'usuario'],
     ],
-    // 4. Control de Calidad
-    [
-        'icon' => 'fa-clipboard-check',
-        'titulo' => 'Control de Calidad',
-        'descripcion' => 'Reporte de todas las observaciones encontradas en los datos consolidados.',
-        'color' => 'danger',
-        'archivo' => 'control_calidad.php',
-        'badge' => 'Observaciones',
-        'roles' => ['admin', 'usuario'],
-    ],
-    // 5. Reporte de Atenciones
-    [
-        'icon' => 'fa-file-medical',
-        'titulo' => 'Reporte de Atenciones',
-        'descripcion' => 'Atenciones y Atendidos, Produccion Diario, Produccion Mensual, Reporte 40A.',
-        'color' => 'success',
-        'archivo' => 'reporte_atenciones.php?sub=atendidos',
-        'badge' => '4 sub-reportes',
-        'roles' => ['admin', 'usuario'],
-    ],
-    // 6. Reportes Operacionales
+     // 2. Reportes Operacionales
     [
         'icon' => 'fa-chart-line',
         'titulo' => 'Reportes Operacionales',
@@ -98,17 +58,49 @@ $paginas = [
         'badge' => '17 estrategias',
         'roles' => ['admin', 'usuario'],
     ],
-    // 7. Dashboard de Atenciones (consulta avanzada)
+    // 3. Convenio de Gestion
     [
-        'icon' => 'fa-chart-bar',
-        'titulo' => 'Dashboard de Atenciones',
-        'descripcion' => 'Consulta detallada del consolidado con filtros avanzados y exportacion Excel.',
-        'color' => 'info',
-        'archivo' => 'dashboard.php',
-        'badge' => 'Consulta avanzada',
+        'icon' => 'fa-file-contract',
+        'titulo' => 'Convenio de Gestion',
+        'descripcion' => 'Reporte de avance de los 34 indicadores del Convenio MINSA-GORE 2026.',
+        'color' => 'primary',
+        'archivo' => 'convenio_gestion.php',
+        'badge' => '34 indicadores',
         'roles' => ['admin', 'usuario'],
     ],
-    // 8. Importar Datos (solo admin)
+    // 4. Convenio FED
+    [
+        'icon' => 'fa-medal',
+        'titulo' => 'Convenio FED',
+        'descripcion' => 'Fondo de Estimulo al Desempeno. Avance de 7 indicadores con calculo ponderado.',
+        'color' => 'warning',
+        'archivo' => 'convenio_fed.php',
+        'badge' => '7 indicadores',
+        'roles' => ['admin', 'usuario'],
+    ],
+    
+    // 5. Control de Calidad
+    [
+        'icon' => 'fa-clipboard-check',
+        'titulo' => 'Control de Calidad',
+        'descripcion' => 'Reporte de todas las observaciones encontradas en los datos consolidados.',
+        'color' => 'danger',
+        'archivo' => 'control_calidad.php',
+        'badge' => 'Observaciones',
+        'roles' => ['admin', 'usuario'],
+    ],
+    // 6. Reporte de Atenciones
+    [
+        'icon' => 'fa-file-medical',
+        'titulo' => 'Reporte de Atenciones',
+        'descripcion' => 'Atenciones y Atendidos, Produccion Diario, Produccion Mensual, Reporte 40A.',
+        'color' => 'success',
+        'archivo' => 'reporte_atenciones.php?sub=atendidos',
+        'badge' => '4 sub-reportes',
+        'roles' => ['admin', 'usuario'],
+    ],
+      
+    // 7. Importar Datos (solo admin)
     [
         'icon' => 'fa-file-import',
         'titulo' => 'Importar Datos',
@@ -118,7 +110,7 @@ $paginas = [
         'badge' => 'Solo Administrador',
         'roles' => ['admin'],
     ],
-    // 9. Gestion de Usuarios (solo admin)
+    // 8. Gestion de Usuarios (solo admin)
     [
         'icon' => 'fa-users-cog',
         'titulo' => 'Gestion de Usuarios',
@@ -128,7 +120,7 @@ $paginas = [
         'badge' => 'Solo Administrador',
         'roles' => ['admin'],
     ],
-    // 10. Log de Auditoria
+    // 9. Log de Auditoria
     [
         'icon' => 'fa-clipboard-list',
         'titulo' => 'Log de Auditoria',
