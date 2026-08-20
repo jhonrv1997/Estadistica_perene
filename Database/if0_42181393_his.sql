@@ -272,8 +272,8 @@ INSERT INTO `ESNI_LINEA_REPORTE` (`id_linea`, `id_seccion`, `orden`, `etiqueta`,
 (51, 3, 12, 'VACUNACION NO OPORTUNA - SPR - 2DA DOSIS', 12, 2, 13, 'A', 1),
 (52, 3, 13, 'VACUNACION NO OPORTUNA - BCG (CONTACTO DE TB P) - 1RA DOSIS', 21, 1, 23, 'A', 1),
 (53, 3, 14, 'VARICELA (CONTACTO INDICE)', 14, 5, 24, 'A', 1),
-(54, 3, 15, 'REFUERZO PENTAVALENTE 02 ANOS - 1RA DOSIS', 5, 6, 13, 'A', 1),
-(55, 3, 16, 'REFUERZO ANTIPOLIO (IPV) 02 ANOS - 1RA DOSIS', 3, 6, 13, 'A', 1),
+(54, 3, 15, 'REFUERZO PENTAVALENTE - 1RA DOSIS', 5, 6, 13, 'A', 1),
+(55, 3, 16, 'REFUERZO ANTIPOLIO IPV- 1RA DOSIS', 3, 6, 13, 'A', 1),
 (56, 4, 1, 'dT 1ra - Mujeres 5 a 9 anos', 18, 1, 29, 'F', 1),
 (57, 4, 2, 'dT 2da - Mujeres 5 a 9 anos', 18, 2, 29, 'F', 1),
 (58, 4, 3, 'dT 3ra - Mujeres 5 a 9 anos', 18, 3, 29, 'F', 1),
@@ -435,7 +435,10 @@ INSERT INTO `ESNI_LINEA_REPORTE` (`id_linea`, `id_seccion`, `orden`, `etiqueta`,
 (231, 7, 18, 'OTROS', 11, 5, NULL, 'A', 1),
 (232, 2, 20, 'No vacunado IPV', 3, 3, 9, 'A', 1),
 (233, 2, 21, 'No vacunado PENTAVALENTE 2da', 5, 2, 9, 'A', 1),
-(234, 2, 22, 'No vacunado PENTAVALENTE 3ra', 5, 3, 9, 'A', 1);
+(234, 2, 22, 'No vacunado PENTAVALENTE 3ra', 5, 3, 9, 'A', 1),
+(235, 3, 17, 'VACUNACION NO OPORTUNA - NEUMOCOCO D1', 10, 1, 13, 'A', 1),
+(236, 3, 18, 'VACUNACION NO OPORTUNA - NEUMOCOCO D2', 10, 2, 13, 'A', 1),
+(237, 3, 19, 'VACUNACION NO OPORTUNA - NEUMOCOCO D3', 10, 3, 13, 'A', 1);
 -- --------------------------------------------------------
 
 --
@@ -626,9 +629,9 @@ INSERT INTO `ESNI_REGLA` (`id_regla`, `id_linea`, `cod_item`, `valor_lab`, `id_g
 (147, 37, '90707', 'D2', 11, 'A', NULL, NULL, 0, 0, 0, 0, 1, NULL, NULL, NULL),
 (148, 35, '90717', 'DU', 10, 'A', NULL, NULL, 0, 0, 0, 0, 1, NULL, NULL, NULL),
 (149, 43, '90717', 'DU', 13, 'A', NULL, NULL, 0, 0, 0, 0, 1, NULL, NULL, NULL),
-(150, 43, '90717', '1', 12, 'A', NULL, NULL, 0, 0, 0, 0, 1, NULL, NULL, NULL),
-(151, 43, '90717', '01', 12, 'A', NULL, NULL, 0, 0, 0, 0, 1, NULL, NULL, NULL),
-(152, 43, '90717', 'D1', 12, 'A', NULL, NULL, 0, 0, 0, 0, 1, NULL, NULL, NULL),
+(150, 43, '90717', '1', 13, 'A', NULL, NULL, 0, 0, 0, 0, 1, NULL, NULL, NULL),
+(151, 43, '90717', '01', 13, 'A', NULL, NULL, 0, 0, 0, 0, 1, NULL, NULL, NULL),
+(152, 43, '90717', 'D1', 13, 'A', NULL, NULL, 0, 0, 0, 0, 1, NULL, NULL, NULL),
 (162, 56, '90714', '1', 29, 'F', NULL, NULL, 0, 0, 0, 0, 1, NULL, NULL, NULL),
 (163, 56, '90714', '01', 29, 'F', NULL, NULL, 0, 0, 0, 0, 1, NULL, NULL, NULL),
 (164, 56, '90714', 'D1', 29, 'F', NULL, NULL, 0, 0, 0, 0, 1, NULL, NULL, NULL),
@@ -892,7 +895,17 @@ INSERT INTO `ESNI_REGLA` (`id_regla`, `id_linea`, `cod_item`, `valor_lab`, `id_g
 (445, 33, '90670', '1', 9, 'A', NULL, NULL, 0, 0, 0, 0, 1, NULL, NULL, NULL),
 (446, 33, '90670', 'D1', 9, 'A', NULL, NULL, 0, 0, 0, 0, 1, NULL, NULL, NULL),
 (447, 34, '90670', '2', 9, 'A', NULL, NULL, 0, 0, 0, 0, 1, NULL, NULL, NULL),
-(448, 34, '90670', 'D2', 9, 'A', NULL, NULL, 0, 0, 0, 0, 1, NULL, NULL, NULL);
+(448, 34, '90670', 'D2', 9, 'A', NULL, NULL, 0, 0, 0, 0, 1, NULL, NULL, NULL),
+(449, 42, '90670', 'DU', 13, 'A', NULL, NULL, 0, 0, 1, 0, 1, NULL, NULL, NULL),
+(450, 42, '90670', 'DA', 13, 'A', NULL, NULL, 0, 0, 1, 0, 1, NULL, NULL, NULL),
+(451, 235, '90670', '1', 13, 'A', NULL, NULL, 0, 0, 0, 0, 1, NULL, NULL, NULL),
+(452, 235, '90670', 'D1', 13, 'A', NULL, NULL, 0, 0, 0, 0, 1, NULL, NULL, NULL),
+(453, 236, '90670', '2', 13, 'A', NULL, NULL, 0, 0, 0, 0, 1, NULL, NULL, NULL),
+(454, 236, '90670', 'D2', 13, 'A', NULL, NULL, 0, 0, 0, 0, 1, NULL, NULL, NULL),
+(455, 237, '90670', '3', 13, 'A', NULL, NULL, 0, 0, 0, 0, 1, NULL, NULL, NULL),
+(456, 237, '90670', 'D3', 13, 'A', NULL, NULL, 0, 0, 0, 0, 1, NULL, NULL, NULL),
+(457, 50, '90707', 'D1', 13, 'A', NULL, NULL, 0, 0, 0, 0, 1, NULL, NULL, NULL),
+(458, 51, '90707', 'D2', 13, 'A', NULL, NULL, 0, 0, 0, 0, 1, NULL, NULL, NULL);
 -- --------------------------------------------------------
 
 --
@@ -913,20 +926,20 @@ CREATE TABLE `ESNI_SECCION_REPORTE` (
 -- Volcado de datos para la tabla `ESNI_SECCION_REPORTE`
 --
 INSERT INTO `ESNI_SECCION_REPORTE` (`id_seccion`, `codigo`, `titulo`, `descripcion`, `layout`, `orden`, `activo`) VALUES
-(1, 'A', 'A. - MENORES DE 01 ANIO', 'BCG, Hepatitis B, Antipolio (IPV), Pentavalente, Reacciones Adversas, Rotavirus, Neumococo, Influenza, Poblacion en Riesgo', 'lista', 1, 1),
-(2, 'B', 'B. - DE 01 ANIO', 'Neumococo 1 anio, SPR, Varicela, Influenza, Neumococo 12-23m, Antiamarilica, Hepatitis A, SPR 2da, Ref DPT, Ref APO, Vacunacion no oportuna', 'lista', 2, 1),
-(3, 'C', 'C. - DE 02 ANOS', 'Influenza con/sin comorbilidad, Neumococo comorbilidad, Antiamarilica, Vacunacion no oportuna, Refuerzo DPT 2 anos, Refuerzo APO 2 anos', 'lista', 3, 1),
+(1, 'A', 'A. - MENORES DE 01 AÑO', 'BCG, Hepatitis B, Antipolio (IPV), Pentavalente, Reacciones Adversas, Rotavirus, Neumococo, Influenza, Poblacion en Riesgo', 'lista', 1, 1),
+(2, 'B', 'B. - DE 01 AÑO', 'Neumococo 1 anio, SPR, Varicela, Influenza, Neumococo 12-23m, Antiamarilica, Hepatitis A, SPR 2da, Ref DPT, Ref APO, Vacunacion no oportuna', 'lista', 2, 1),
+(3, 'C', 'C. - DE 02 AÑOS', 'Influenza con/sin comorbilidad, Neumococo comorbilidad, Antiamarilica, Vacunacion no oportuna, Refuerzo DPT 2 anos, Refuerzo APO 2 anos', 'lista', 3, 1),
 (4, 'F', 'F. - dT ADULTO EN MUJERES EN EDAD FERTIL DESDE 5 ANIOS', 'Esquema dT en mujeres en edad fertil desde 5 anios', 'matriz_dosis', 4, 1),
 (5, 'F2', 'F2. - GESTANTES (dT)', 'Esquema dT', 'matriz_dosis', 5, 1),
 (6, 'G', 'G. - dT ADULTO: VARONES EN RIESGO', 'Esquema dT en varones en riesgo', 'matriz_dosis', 6, 1),
 (7, 'H', 'H. - INFLUENZA ESTACIONAL EN OTROS GRUPOS', 'Influenza por grupo de edad y riesgo', 'lista', 7, 1),
 (8, 'I', 'I. - SARAMPION - RUBEOLA', 'Vacunacion SR en ninos/personas no vacunadas', 'total_uno', 8, 1),
-(9, 'J', 'J. - POBLACION DE 05 A 59 ANIOS: VACUNACION CONTRA LA HEPATITIS B', 'Hepatitis B en poblacion 5-59 anos', 'matriz_dosis', 9, 1),
+(9, 'J', 'J. - POBLACION DE 05 A 59 AÑOS: VACUNACION CONTRA LA HEPATITIS B', 'Hepatitis B en poblacion 5-59 anos', 'matriz_dosis', 9, 1),
 (10, 'K', 'K. - ANTIAMARILICA', 'Antiamarilica en poblacion no vacunada y viajeros a zonas endemicas', 'total_uno', 10, 1),
 (12, 'Q', 'Q. - VARICELA', 'Varicela por grupo de edad', 'total_uno', 15, 1),
 (13, 'O', 'O. - NEUMOCOCO', 'Neumococo en poblacion en riesgo', 'total_uno', 13, 1),
 (14, 'N', 'N.-VACUNA VPH', 'Virus del Papiloma Humano: femenino y masculino (dosis unica)', 'matriz_sexo', 12, 1),
-(15, 'D', ' D. - DE 03 ANOS', 'Influenza con/sin comorbilidad, Neumococo comorbilidad, Antiamarilica, Vacunacion no oportuna, Refuerzo DPT 3 anos, Refuerzo APO 3 años', 'lista', 4, 1),
+(15, 'D', ' D. - DE 03 AÑOS', 'Influenza con/sin comorbilidad, Neumococo comorbilidad, Antiamarilica, Vacunacion no oportuna, Refuerzo DPT 3 anos, Refuerzo APO 3 años', 'lista', 4, 1),
 (16, 'E1', 'E1.-  DE 04 AÑOS', 'Influenza con/sin comorbilidad, Neumococo comorbilidad, Antiamarilica, Vacunacion no oportuna, Refuerzo DPT 4 anos, Refuerzo APO 4 anos', 'lista', 4, 1),
 (17, 'E2', 'E2.-  DE 05 - 07 AÑOS', 'SPR, Refuerzo DPT', 'lista', 4, 1),
 (18, 'L', 'L.- SOLO GESTANTES (dtpa)', 'Vacuna combinada dtpa', 'total_uno', 11, 1),
