@@ -157,7 +157,7 @@ function esniGetReglas(PDO $pdo, ?int $idLinea = null): array {
 /**
  * Construye la clausula WHERE de filtros comunes (anio/mes/establecimiento/etc).
  */
-function esniConstruirWhereFiltros(array $cols, array $filtros): array {
+function esniConstruirWhereFiltros(array $cols, array $filtros, array $establecimientosPermitidos = []): array {
     $where = ["1=1"];
     $params = [];
 
@@ -179,19 +179,29 @@ function esniConstruirWhereFiltros(array $cols, array $filtros): array {
         $where[] = "CAST(TRIM(`{$cols['mes']}`) AS UNSIGNED) = :mes";
         $params[':mes'] = intval($filtros['mes']);
     }
-    if (!empty($filtros['establecimiento']) && $cols['establecimiento']) {
-        // El filtro de establecimiento ahora llega como un Codigo_Unico (valor del
+    if (!empty($filtros['establecimiento']) && $cols['codigo_unico']) {
+        // El filtro de establecimiento llega como un Codigo_Unico (valor del
         // <option> cargado desde la tabla ZSPERENE). Se filtra por la columna
-        // Codigo_Unico de la tabla origen, que coincide con el Codigo_Unico de
-        // ZSPERENE. Si por algun motivo no existiera la columna codigo_unico,
-        // se hace un fallback al filtro por Nombre_Establecimiento.
-        if (!empty($cols['codigo_unico'])) {
-            $where[] = "`{$cols['codigo_unico']}` = :est";
-            $params[':est'] = $filtros['establecimiento'];
-        } else {
-            $where[] = "`{$cols['establecimiento']}` = :est";
-            $params[':est'] = $filtros['establecimiento'];
+        // Codigo_Unico de la tabla origen.
+        $where[] = "`{$cols['codigo_unico']}` = :est";
+        $params[':est'] = $filtros['establecimiento'];
+    } elseif (!empty($filtros['establecimiento']) && $cols['establecimiento']) {
+        // Fallback por Nombre_Establecimiento si no existe columna codigo_unico
+        $where[] = "`{$cols['establecimiento']}` = :est";
+        $params[':est'] = $filtros['establecimiento'];
+    } elseif (!empty($establecimientosPermitidos) && $cols['codigo_unico']) {
+        // Cuando no se selecciona ningun establecimiento ("-- Todos --"),
+        // filtrar solo por los establecimientos del catalogo ZSPERENE
+        // para evitar traer datos de otros establecimientos ajenos a la red.
+        $placeholders = [];
+        $i = 0;
+        foreach ($establecimientosPermitidos as $cod) {
+            $ph = ":est_todos_$i";
+            $placeholders[] = $ph;
+            $params[$ph] = $cod;
+            $i++;
         }
+        $where[] = "`{$cols['codigo_unico']}` IN (" . implode(', ', $placeholders) . ")";
     }
     if (!empty($filtros['departamento']) && $cols['departamento']) {
         $where[] = "`{$cols['departamento']}` = :dep";
@@ -329,11 +339,11 @@ function esniValorLabEncaja(?string $valorLabRegla, ?string $valorLabFila): bool
  * la tabla origen que tengan alguno de los cod_items relevantes (con los
  * filtros comunes aplicados), y luego aplicamos el matching en PHP.
  *
- * @param array $filtros Filtros: anio, mes, establecimiento, departamento, profesional
+ * @param array $filtros Filtros: anio, mes, establecimiento, departamento, id_ups
  * @param array $cols    Mapa de columnas resueltas (de esniResolverColumnas)
  * @return array Estructura: ['secciones' => [...], 'totales' => [...]]
  */
-function esniEjecutarReporte(PDO $pdo, array $filtros, array $cols): array {
+function esniEjecutarReporte(PDO $pdo, array $filtros, array $cols, array $establecimientosPermitidos = []): array {
     $reglas = esniGetReglas($pdo);
     if (empty($reglas)) return ['secciones' => [], 'totales' => [], 'error' => 'No hay reglas configuradas'];
 
@@ -362,7 +372,7 @@ function esniEjecutarReporte(PDO $pdo, array $filtros, array $cols): array {
     }
 
     // Clausula WHERE comun
-    [$whereComun, $paramsComun] = esniConstruirWhereFiltros($cols, $filtros);
+    [$whereComun, $paramsComun] = esniConstruirWhereFiltros($cols, $filtros, $establecimientosPermitidos);
 
     // Placeholder para IN (cod_items...)
     $inPlaceholders = [];
@@ -437,8 +447,8 @@ function esniEjecutarReporte(PDO $pdo, array $filtros, array $cols): array {
     $pacientesConComorbilidad = [];
     if ($usaComorbilidad && !empty($cols['id_paciente']) && !empty($cols['cod_item'])) {
         try {
-            // Construir WHERE comun (anio, mes, EE.SS., departamento, profesional, id_ups)
-            [$whereComorb, $paramsComorb] = esniConstruirWhereFiltros($cols, $filtros);
+            // Construir WHERE comun (anio, mes, EE.SS., departamento, id_ups)
+            [$whereComorb, $paramsComorb] = esniConstruirWhereFiltros($cols, $filtros, $establecimientosPermitidos);
             // Agregar SOLO el filtro cod_item = 9999 (sin IN ni I_ROWNUM_LAB)
             $whereComorb .= " AND `{$cols['cod_item']}` = :cod_comorb";
             $paramsComorb[':cod_comorb'] = $codComorbilidad;
@@ -495,7 +505,7 @@ function esniEjecutarReporte(PDO $pdo, array $filtros, array $cols): array {
     if (!empty($marcadoresRequeridos) && !empty($cols['id_cita']) && !empty($cols['valor_lab'])) {
         foreach (array_keys($marcadoresRequeridos) as $marcador) {
             try {
-                [$whereMarc, $paramsMarc] = esniConstruirWhereFiltros($cols, $filtros);
+                [$whereMarc, $paramsMarc] = esniConstruirWhereFiltros($cols, $filtros, $establecimientosPermitidos);
                 // Filtro por valor_lab = marcador (case-insensitive via UPPER)
                 $whereMarc .= " AND UPPER(TRIM(`{$cols['valor_lab']}`)) = :vl_marc";
                 $paramsMarc[':vl_marc'] = $marcador;
