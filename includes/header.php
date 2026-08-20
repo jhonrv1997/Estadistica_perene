@@ -5,7 +5,7 @@
  * Items de administracion (Importar, Usuarios) solo se muestran a rol admin.
  */
 
-if (!isset($pageTitle)) $pageTitle = 'IntelHIS';
+if (!isset($pageTitle)) $pageTitle = 'HIS PERENE';
 $currentpage = basename($_SERVER['PHP_SELF'], '.php');
 $subpage = $_GET['sub'] ?? '';
 $esAdmin = esAdmin();
@@ -35,7 +35,7 @@ $esAdmin = esAdmin();
         <a class="navbar-brand d-flex align-items-center" href="home.php">
             <img src="assets/img/logo_hisminsa.png" alt="HIS" class="me-2"
                  style="width:28px;height:28px;object-fit:contain;border-radius:50%;">
-            <span class="fw-bold">IntelHIS</span>
+            <span class="fw-bold">HIS PERENE</span>
         </a>
 
         <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
@@ -53,14 +53,7 @@ $esAdmin = esAdmin();
                     </a>
                 </li>
 
-                <!-- Dashboard -->
-                <li class="nav-item">
-                    <a class="nav-link <?= $currentpage === 'dashboard' ? 'active' : '' ?>" href="dashboard.php">
-                        <i class="fas fa-chart-bar me-1"></i> Dashboard
-                    </a>
-                </li>
-
-                <!-- Convenios (dropdown) -->
+                 <!-- Convenios (dropdown) -->
                 <li class="nav-item dropdown">
                     <a class="nav-link dropdown-toggle <?= in_array($currentpage, ['convenio_gestion', 'convenio_fed']) ? 'active' : '' ?>"
                        href="#" role="button" data-bs-toggle="dropdown" aria-expanded="false">
@@ -136,7 +129,7 @@ $esAdmin = esAdmin();
                         <li><a class="dropdown-item <?= $currentpage === 'reporte_operacionales' && $subpage === 'adulto' ? 'active' : '' ?>" href="reporte_operacionales.php?sub=adulto"><i class="fas fa-user me-2"></i>Adulto</a></li>
                         <li><a class="dropdown-item <?= $currentpage === 'reporte_operacionales' && $subpage === 'adulto_mayor' ? 'active' : '' ?>" href="reporte_operacionales.php?sub=adulto_mayor"><i class="fas fa-user-tie me-2"></i>Adulto Mayor</a></li>
                         <li><a class="dropdown-item <?= $currentpage === 'reporte_operacionales' && $subpage === 'cancer' ? 'active' : '' ?>" href="reporte_operacionales.php?sub=cancer"><i class="fas fa-ribbon me-2"></i>Cancer</a></li>
-                        <li><a class="dropdown-item <?= $currentpage === 'reporte_operacionales' && $subpage === 'esni' ? 'active' : '' ?>" href="reporte_esni.php"><i class="fas fa-syringe me-2"></i>ESNI <span class="badge bg-success ms-1" style="font-size:.65em">NUEVO</span><small class="d-block text-muted">Reporte Operacional completo (data-driven)</small></a></li>
+                        <li><a class="dropdown-item <?= $currentpage === 'reporte_operacionales' && $subpage === 'esni' ? 'active' : '' ?>" href="reporte_esni.php"><i class="fas fa-syringe me-2"></i>ESNI <span class="badge bg-success ms-1" style="font-size:.65em">NUEVO</span><small class="d-block text-muted">Reporte Operacional</small></a></li>
                         <li><a class="dropdown-item <?= $currentpage === 'reporte_operacionales' && $subpage === 'joven' ? 'active' : '' ?>" href="reporte_operacionales.php?sub=joven"><i class="fas fa-walking me-2"></i>Joven</a></li>
                         <li><a class="dropdown-item <?= $currentpage === 'reporte_operacionales' && $subpage === 'materno' ? 'active' : '' ?>" href="reporte_operacionales.php?sub=materno"><i class="fas fa-baby me-2"></i>Materno</a></li>
                         <li><a class="dropdown-item <?= $currentpage === 'reporte_operacionales' && $subpage === 'medicina_alternativa' ? 'active' : '' ?>" href="reporte_operacionales.php?sub=medicina_alternativa"><i class="fas fa-leaf me-2"></i>Medicina Alternativa</a></li>
