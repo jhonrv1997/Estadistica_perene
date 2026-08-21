@@ -155,8 +155,18 @@ if ($fNumReg !== '') {
     $params[':numreg'] = (int)$fNumReg;
 }
 if ($fDocPaciente !== '') {
-    $where .= " AND Numero_Documento_Paciente LIKE :dpac";
-    $params[':dpac'] = '%' . $fDocPaciente . '%';
+    $docLen = strlen($fDocPaciente);
+    if ($docLen >= 8) {
+        $where .= " AND (Numero_Documento_Paciente = :dpac_exact OR Numero_Documento_Paciente LIKE :dpac_like OR Id_Paciente = :dpac_id_exact OR Id_Paciente LIKE :dpac_id_like)";
+        $params[':dpac_exact'] = $fDocPaciente;
+        $params[':dpac_like'] = '%' . $fDocPaciente . '%';
+        $params[':dpac_id_exact'] = $fDocPaciente;
+        $params[':dpac_id_like'] = '%' . $fDocPaciente . '%';
+    } else {
+        $where .= " AND (Numero_Documento_Paciente LIKE :dpac OR Id_Paciente LIKE :dpac_id)";
+        $params[':dpac'] = '%' . $fDocPaciente . '%';
+        $params[':dpac_id'] = '%' . $fDocPaciente . '%';
+    }
 }
 if ($fDocPersonal !== '') {
     $where .= " AND Numero_Documento_Personal LIKE :dper";
@@ -207,7 +217,7 @@ if ($sub === 'preventivas') {
 // ============================================================
 $campos = "Id_Cita, Anio, Mes, Dia, Fecha_Atencion, Lote, Num_Pag, Num_Reg,
            Codigo_Unico, Nombre_Establecimiento,
-           Abrev_Tipo_Doc_Paciente, Numero_Documento_Paciente,
+           Abrev_Tipo_Doc_Paciente, Numero_Documento_Paciente, Id_Paciente,
            Apellido_Paterno_Paciente, Apellido_Materno_Paciente, Nombres_Paciente,
            Fecha_Nacimiento_Paciente, Id_Genero, Tipo_Edad, Edad_Reg, Grupo_Edad,
            Descripcion_Etnia, Descripcion_Financiador,
@@ -232,7 +242,7 @@ $datos = $dataStmt->fetchAll(PDO::FETCH_ASSOC);
 $headers = [
     'Id Cita','Anio','Mes','Dia','Fecha Atencion','Lote','Num Pag','Num Reg',
     'Codigo Unico','Establecimiento',
-    'T. Doc. Pac.','Doc. Paciente','Ape. Pat. Paciente','Ape. Mat. Paciente','Nombres Paciente',
+    'T. Doc. Pac.','Doc. Paciente','Id Paciente','Ape. Pat. Paciente','Ape. Mat. Paciente','Nombres Paciente',
     'Fecha Nacimiento','Genero','Tipo Edad','Edad','Grupo Edad','Etnia','Financiador',
     'Doc. Personal','T. Doc. Per.','Ape. Pat. Personal','Ape. Mat. Personal','Nombres Personal',
     'Profesion','Condicion',
@@ -241,7 +251,7 @@ $headers = [
     'Peso','Talla','Hemoglobina','Perim. Abdominal','Perim. Cefalico',
     'Otra Condicion','Centro Poblado','UPS','Fecha Registro','Fecha Modificacion'
 ];
-$widths = [15,6,4,4,14,6,8,8,12,30,8,15,18,18,25,14,8,8,6,15,15,15,15,8,18,18,25,25,15,15,18,18,25,12,35,6,10,8,10,10,10,10,20,25,30,18,18];
+$widths = [15,6,4,4,14,6,8,8,12,30,8,15,15,18,18,25,14,8,8,6,15,15,15,15,8,18,18,25,25,15,15,18,18,25,12,35,6,10,8,10,10,10,10,20,25,30,18,18];
 
 $excelData = [];
 foreach ($datos as $row) {
@@ -251,6 +261,7 @@ foreach ($datos as $row) {
         $row['Lote'] ?? '', $row['Num_Pag'] ?? '', $row['Num_Reg'] ?? '',
         $row['Codigo_Unico'] ?? '', $row['Nombre_Establecimiento'] ?? '',
         $row['Abrev_Tipo_Doc_Paciente'] ?? '', $row['Numero_Documento_Paciente'] ?? '',
+        $row['Id_Paciente'] ?? '',
         $row['Apellido_Paterno_Paciente'] ?? '', $row['Apellido_Materno_Paciente'] ?? '', $row['Nombres_Paciente'] ?? '',
         formatDate($row['Fecha_Nacimiento_Paciente'] ?? ''),
         $row['Id_Genero'] ?? '', $row['Tipo_Edad'] ?? '', $row['Edad_Reg'] ?? '', $row['Grupo_Edad'] ?? '',

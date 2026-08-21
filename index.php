@@ -41,7 +41,7 @@ include 'includes/header.php';
         <div class="login-header">
             <img src="assets/img/logo_hisminsa.png" alt="HIS" class="mb-3" style="width:100px;height:100px;object-fit:contain;border-radius:50%;">
             <h3 class="text-white fw-bold">HIS PERENE</h3>
-            <p class="text-white-50 mb-0">Sistema de Analítica y Reportes HIS</p>
+            <p class="text-white-50 mb-0">Sistema de Analítica y Reportes Estadisticos</p>
         </div>
         <div class="login-body">
             <?php if ($error): ?>

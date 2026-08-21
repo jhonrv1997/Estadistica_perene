@@ -401,13 +401,18 @@ if ($fDocPaciente !== '') {
     // MEJORA #3: Si el documento tiene formato valido (8+ digitos),
     // intentar busqueda exacta primero (usa indice).
     // Si es menor, usar LIKE para busqueda parcial.
+    // Incluye tambien Id_Paciente para registros como 'APP138' que no son numericos.
     $docLen = strlen($fDocPaciente);
     if ($docLen >= 8) {
-        $where .= " AND (Numero_Documento_Paciente = :dpac_exact OR Numero_Documento_Paciente LIKE :dpac_like)";
+        $where .= " AND (Numero_Documento_Paciente = :dpac_exact OR Numero_Documento_Paciente LIKE :dpac_like OR Id_Paciente = :dpac_id_exact OR Id_Paciente LIKE :dpac_id_like)";
         $params[':dpac_exact'] = $fDocPaciente;
         $params[':dpac_like'] = '%' . $fDocPaciente . '%';
+        $params[':dpac_id_exact'] = $fDocPaciente;
+        $params[':dpac_id_like'] = '%' . $fDocPaciente . '%';
     } else {
-        $where .= " AND Numero_Documento_Paciente LIKE :dpac"; $params[':dpac'] = '%' . $fDocPaciente . '%';
+        $where .= " AND (Numero_Documento_Paciente LIKE :dpac OR Id_Paciente LIKE :dpac_id)";
+        $params[':dpac'] = '%' . $fDocPaciente . '%';
+        $params[':dpac_id'] = '%' . $fDocPaciente . '%';
     }
 }
 if ($fDocPersonal !== '') {
@@ -502,7 +507,7 @@ if ($mostrarResultados) {
                MAX(Lote) AS Lote, MAX(Num_Pag) AS Num_Pag, MAX(Num_Reg) AS Num_Reg,
                MAX(Id_Turno) AS Id_Turno, MAX(Id_Condicion_Establecimiento) AS Id_Condicion_Establecimiento, MAX(Id_Condicion_Servicio) AS Id_Condicion_Servicio,
                MAX(Codigo_Unico) AS Codigo_Unico, MAX(Nombre_Establecimiento) AS Nombre_Establecimiento,
-               MAX(Abrev_Tipo_Doc_Paciente) AS Abrev_Tipo_Doc_Paciente, MAX(Numero_Documento_Paciente) AS Numero_Documento_Paciente,
+               MAX(Abrev_Tipo_Doc_Paciente) AS Abrev_Tipo_Doc_Paciente, MAX(Numero_Documento_Paciente) AS Numero_Documento_Paciente, MAX(Id_Paciente) AS Id_Paciente,
                MAX(Nombres_Paciente) AS Nombres_Paciente, MAX(Apellido_Paterno_Paciente) AS Apellido_Paterno_Paciente,
                MAX(Fecha_Nacimiento_Paciente) AS Fecha_Nacimiento_Paciente, MAX(Id_Genero) AS Id_Genero, MAX(Tipo_Edad) AS Tipo_Edad, MAX(Edad_Reg) AS Edad_Reg,
                MAX(Grupo_Edad) AS Grupo_Edad,
@@ -730,7 +735,7 @@ include 'includes/header.php';
                 </div>
                 <div class="col-lg-2 col-md-4 col-sm-6">
                     <label class="form-label">Doc. Paciente</label>
-                    <input type="text" name="doc_paciente" class="form-control form-control-sm" placeholder="Nro. Doc." value="<?= htmlspecialchars($fDocPaciente) ?>">
+                    <input type="text" name="doc_paciente" class="form-control form-control-sm" placeholder="Doc. o APP" value="<?= htmlspecialchars($fDocPaciente) ?>">
                 </div>
                 <div class="col-lg-2 col-md-4 col-sm-6">
                     <label class="form-label">Doc. Personal</label>
@@ -818,7 +823,7 @@ include 'includes/header.php';
                 <?php endif; ?>
                 <div class="col-lg-2 col-md-4 col-sm-6">
                     <label class="form-label">Doc. Paciente</label>
-                    <input type="text" name="doc_paciente" class="form-control form-control-sm" placeholder="Nro. Doc." value="<?= htmlspecialchars($fDocPaciente) ?>">
+                    <input type="text" name="doc_paciente" class="form-control form-control-sm" placeholder="Doc. o Id_Paciente" value="<?= htmlspecialchars($fDocPaciente) ?>">
                 </div>
                 <div class="col-lg-2 col-md-4 col-sm-6">
                     <label class="form-label">Doc. Personal</label>
@@ -930,7 +935,7 @@ include 'includes/header.php';
                             <td class="tabla-col-atencion"><?= clean($row['Id_Condicion_Establecimiento']) ?></td>
                             <td class="tabla-col-atencion"><?= clean($row['Id_Condicion_Servicio']) ?></td>
                             <td class="tabla-col-paciente"><small><?= clean($row['Abrev_Tipo_Doc_Paciente']) ?></small></td>
-                            <td class="tabla-col-paciente"><?= clean($row['Numero_Documento_Paciente']) ?></td>
+                            <td class="tabla-col-paciente"><?= !empty($row['Numero_Documento_Paciente']) ? clean($row['Numero_Documento_Paciente']) : clean($row['Id_Paciente']) ?></td>
                             <td class="tabla-col-paciente" title="<?= clean($row['Nombres_Paciente']) ?>">
                                 <?= clean(mb_strimwidth($row['Nombres_Paciente'] ?? '', 0, 20, '...')) ?>
                             </td>
