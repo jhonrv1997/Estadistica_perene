@@ -85,6 +85,22 @@
  *     I62 = F62 + G62
  *     F65/I65 = REFUERZO ANTIPOLIO IPV - 1RA DOSIS      (F=Casos, I=F)
  *     F66/I66 = REFUERZO PENTAVALENTE - 1RA DOSIS       (F=Casos, I=F)
+ *
+ * Seccion D - DE 03 ANIOS (celdas J/K/L/M en filas 50-66):
+ *     J50/M50 = INFLUENZA CON COMORBILIDAD - 1RA DOSIS  (J=Casos, M=J)
+ *     J51/M51 = INFLUENZA SIN COMORBILIDAD - 1RA DOSIS  (J=Casos, M=J)
+ *     J52/M52 = NEUMOCOCO CON COMORBILIDAD              (J=Casos, M=J)
+ *     J55/M55 = ANTIAMARILICA                            (J=Casos, M=J)
+ *     J58     = Pentavalente No vacunado D1               (J=Casos)
+ *     K58     = Pentavalente No vacunado D2               (K=Casos)
+ *     L58     = Pentavalente No vacunado D3               (L=Casos)
+ *     M58     = J58 + K58 + L58                          (suma)
+ *     J62     = SPR 1RA Dosis                            (J=Casos)
+ *     K62     = SPR 2DA Dosis                            (K=Casos)
+ *     M62     = J62 + K62                                (suma)
+ *     J64/M64 = REFUERZO DPT                             (J=Casos, M=J)
+ *     J65/M65 = REFUERZO ANTIPOLIO IPV                   (J=Casos, M=J)
+ *     J66/M66 = REFUERZO PENTAVALENTE                     (J=Casos, M=J)
  */
 
 require_once 'includes/auth.php';
@@ -164,12 +180,13 @@ if (!empty($reporte['error'])) {
 }
 
 // ============================================================================
-// 3. Indexar lineas de las SECCIONES A, B y C por etiqueta normalizada
+// 3. Indexar lineas de las SECCIONES A, B, C y D por etiqueta normalizada
 // ----------------------------------------------------------------------------
 // El motor de reglas devuelve $reporte['secciones'] con todas las secciones
-// (A, B, C, H, ...). Nos interesan las secciones "A" (Menores de 1 anio,
-// casilla A), "B" (Menores de 1 anio - seccion B de la plantilla) y
-// "C" (Mayores de 01 anio - seccion C de la plantilla).
+// (A, B, C, D, H, ...). Nos interesan las secciones "A" (Menores de 1 anio,
+// casilla A), "B" (Menores de 1 anio - seccion B de la plantilla),
+// "C" (Mayores de 01 anio - seccion C de la plantilla) y
+// "D" (DE 03 anios - seccion D de la plantilla).
 //
 // La etiqueta de la linea puede tener ligeras variaciones (espacios extra,
 // Mayusculas) respecto a la nomenclatura de la plantilla. Por eso se
@@ -248,6 +265,30 @@ if ($seccionC !== null) {
             $casosPorEtiquetaC[$etqNorm] += (int)$lin['cantidad'];
         } else {
             $casosPorEtiquetaC[$etqNorm] = (int)$lin['cantidad'];
+        }
+    }
+}
+
+// -----------------------------------------------------------------------------
+// 3.3 Indexar lineas de la SECCION D (DE 03 ANIOS) por etiqueta
+// normalizada.
+// -----------------------------------------------------------------------------
+$seccionD = null;
+foreach ($reporte['secciones'] as $sec) {
+    if (strcasecmp($sec['codigo'], 'D') === 0) {
+        $seccionD = $sec;
+        break;
+    }
+}
+
+$casosPorEtiquetaD = [];
+if ($seccionD !== null) {
+    foreach ($seccionD['lineas'] as $lin) {
+        $etqNorm = esniNormalizarEtiqueta($lin['etiqueta']);
+        if (isset($casosPorEtiquetaD[$etqNorm])) {
+            $casosPorEtiquetaD[$etqNorm] += (int)$lin['cantidad'];
+        } else {
+            $casosPorEtiquetaD[$etqNorm] = (int)$lin['cantidad'];
         }
     }
 }
@@ -384,6 +425,26 @@ $c_ref_penta_d1   = esniGetCasos($casosPorEtiquetaC, 'REFUERZO PENTAVALENTE - 1R
 $c_vno_neumo_total = $c_vno_neumo_d1 + $c_vno_neumo_d2 + $c_vno_neumo_d3;
 $c_vno_spr_total   = $c_vno_spr_d1 + $c_vno_spr_d2;
 
+//-----------------------------------------------------------------------------
+// 4.2D Casos por linea (Seccion D - DE 03 ANIOS)
+//-----------------------------------------------------------------------------
+$d_inf_comorb_d1     = esniGetCasos($casosPorEtiquetaD, 'INFLUENZA CON COMORBILIDAD - 1RA DOSIS');
+$d_inf_sincom_d1     = esniGetCasos($casosPorEtiquetaD, 'INFLUENZA SIN COMORBILIDAD - 1RA DOSIS');
+$d_neumo_com         = esniGetCasos($casosPorEtiquetaD, 'Neumococo con Comorbilidad');
+$d_amarilica         = esniGetCasos($casosPorEtiquetaD, 'ANTIAMARILICA');
+$d_penta_nv_d1       = esniGetCasos($casosPorEtiquetaD, 'Pentavalente No vacunado D1');
+$d_penta_nv_d2       = esniGetCasos($casosPorEtiquetaD, 'Pentavalente No vacunado D2');
+$d_penta_nv_d3       = esniGetCasos($casosPorEtiquetaD, 'Pentavalente No vacunado D3');
+$d_spr_1ra           = esniGetCasos($casosPorEtiquetaD, 'SPR 1RA Dosis');
+$d_spr_2da           = esniGetCasos($casosPorEtiquetaD, 'SPR 2DA Dosis');
+$d_ref_dpt           = esniGetCasos($casosPorEtiquetaD, 'Refuerzo DPT');
+$d_ref_ipv           = esniGetCasos($casosPorEtiquetaD, 'Refuerzo Antipolio IPV');
+$d_ref_penta         = esniGetCasos($casosPorEtiquetaD, 'REFUERZO PENTAVALENTE');
+
+// 4.3D Totales Seccion D (celdas que son suma de otras)
+$d_penta_nv_total    = $d_penta_nv_d1 + $d_penta_nv_d2 + $d_penta_nv_d3;
+$d_spr_total         = $d_spr_1ra + $d_spr_2da;
+
 // 4.4 Construir el mapa final celda => valor
 $cellValues = [
     // Encabezado (texto)
@@ -465,6 +526,31 @@ $cellValues = [
     'F65' => $c_ref_ipv_d1,       'I65' => $c_ref_ipv_d1,
     // REFUERZO PENTAVALENTE - 1RA DOSIS (F=I=Casos)
     'F66' => $c_ref_penta_d1,     'I66' => $c_ref_penta_d1,
+
+    // --- Seccion D: DE 03 ANIOS (celdas J/K/L/M en filas 50-66) ---
+    // INFLUENZA CON COMORBILIDAD - 1RA DOSIS (J=M=Casos)
+    'J50' => $d_inf_comorb_d1,    'M50' => $d_inf_comorb_d1,
+    // INFLUENZA SIN COMORBILIDAD - 1RA DOSIS (J=M=Casos)
+    'J51' => $d_inf_sincom_d1,    'M51' => $d_inf_sincom_d1,
+    // NEUMOCOCO CON COMORBILIDAD (J=M=Casos)
+    'J52' => $d_neumo_com,        'M52' => $d_neumo_com,
+    // ANTIAMARILICA (J=M=Casos)
+    'J55' => $d_amarilica,        'M55' => $d_amarilica,
+    // Pentavalente No vacunado D1/D2/D3 y total M = J+K+L
+    'J58' => $d_penta_nv_d1,
+    'K58' => $d_penta_nv_d2,
+    'L58' => $d_penta_nv_d3,
+    'M58' => $d_penta_nv_total,
+    // SPR 1ra/2da Dosis y total M = J+K
+    'J62' => $d_spr_1ra,
+    'K62' => $d_spr_2da,
+    'M62' => $d_spr_total,
+    // REFUERZO DPT (J=M=Casos)
+    'J64' => $d_ref_dpt,          'M64' => $d_ref_dpt,
+    // REFUERZO ANTIPOLIO IPV (J=M=Casos)
+    'J65' => $d_ref_ipv,          'M65' => $d_ref_ipv,
+    // REFUERZO PENTAVALENTE (J=M=Casos)
+    'J66' => $d_ref_penta,        'M66' => $d_ref_penta,
 ];
 
 // ============================================================================
