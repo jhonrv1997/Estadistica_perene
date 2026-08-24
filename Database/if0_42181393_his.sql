@@ -444,7 +444,12 @@ INSERT INTO `ESNI_LINEA_REPORTE` (`id_linea`, `id_seccion`, `orden`, `etiqueta`,
 (240, 15, 9, 'Pentavalente No vacunado D2', 5, 2, 14, 'A', 1),
 (241, 15, 10, 'Pentavalente No vacunado D3', 5, 3, 14, 'A', 1),
 (242, 15, 11, 'Refuerzo DPT', 17, 10, 14, 'A', 1),
-(243, 15, 12, 'Refuerzo Antipolio IPV', 23, 10, 14, 'A', 1);
+(243, 15, 12, 'Refuerzo Antipolio IPV', 23, 10, 14, 'A', 1),
+(244, 16, 9, 'Neumococo con Comorbilidad', 10, 5, 15, 'A', 1),
+(245, 16, 10, 'Pentavalente D1 -No vacunado', 5, 1, 15, 'A', 1),
+(246, 16, 11, 'Pentavalente D2 -No vacunado', 5, 2, 15, 'A', 1),
+(247, 16, 12, 'Pentavalente D3 -No vacunado', 5, 3, 15, 'A', 1),
+(248, 16, 13, 'Refuerzo Pentavalente', 22, 6, 15, 'A', 1);
 -- --------------------------------------------------------
 
 --
@@ -923,7 +928,17 @@ INSERT INTO `ESNI_REGLA` (`id_regla`, `id_linea`, `cod_item`, `valor_lab`, `id_g
 (467, 242, '90701', 'DA', 14, 'A', NULL, NULL, 0, 0, 0, 0, 1, NULL, NULL, NULL),
 (468, 242, '90701', 'DDA', 14, 'A', NULL, NULL, 0, 0, 0, 0, 1, NULL, NULL, NULL),
 (469, 243, '90713', 'DA', 14, 'A', NULL, NULL, 0, 0, 0, 0, 1, NULL, NULL, NULL),
-(470, 243, '90713', 'DDA', 14, 'A', NULL, NULL, 0, 0, 0, 0, 1, NULL, NULL, NULL);
+(470, 243, '90713', 'DDA', 14, 'A', NULL, NULL, 0, 0, 0, 0, 1, NULL, NULL, NULL),
+(471, 244, '90670', 'DU', 15, 'A', NULL, NULL, 0, 0, 1, 0, 1, NULL, NULL, NULL),
+(472, 244, '90670', 'DA', 15, 'A', NULL, NULL, 0, 0, 1, 0, 1, NULL, NULL, NULL),
+(473, 245, '90722', '1', 15, 'A', NULL, NULL, 0, 0, 0, 0, 1, NULL, NULL, NULL),
+(474, 245, '90722', 'D1', 15, 'A', NULL, NULL, 0, 0, 0, 0, 1, NULL, NULL, NULL),
+(475, 246, '90722', '2', 15, 'A', NULL, NULL, 0, 0, 0, 0, 1, NULL, NULL, NULL),
+(476, 246, '90722', 'D2', 15, 'A', NULL, NULL, 0, 0, 0, 0, 1, NULL, NULL, NULL),
+(477, 247, '90722', '3', 15, 'A', NULL, NULL, 0, 0, 0, 0, 1, NULL, NULL, NULL),
+(478, 247, '90722', 'D3', 15, 'A', NULL, NULL, 0, 0, 0, 0, 1, NULL, NULL, NULL),
+(479, 248, '90722', 'DA', 15, 'A', NULL, NULL, 0, 0, 0, 0, 1, NULL, NULL, NULL),
+(480, 248, '90722', 'DDA', 15, 'A', NULL, NULL, 0, 0, 0, 0, 1, NULL, NULL, NULL);
 -- --------------------------------------------------------
 
 --
