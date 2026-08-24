@@ -438,7 +438,13 @@ INSERT INTO `ESNI_LINEA_REPORTE` (`id_linea`, `id_seccion`, `orden`, `etiqueta`,
 (234, 2, 22, 'No vacunado PENTAVALENTE 3ra', 5, 3, 9, 'A', 1),
 (235, 3, 17, 'VACUNACION NO OPORTUNA - NEUMOCOCO D1', 10, 1, 13, 'A', 1),
 (236, 3, 18, 'VACUNACION NO OPORTUNA - NEUMOCOCO D2', 10, 2, 13, 'A', 1),
-(237, 3, 19, 'VACUNACION NO OPORTUNA - NEUMOCOCO D3', 10, 3, 13, 'A', 1);
+(237, 3, 19, 'VACUNACION NO OPORTUNA - NEUMOCOCO D3', 10, 3, 13, 'A', 1),
+(238, 15, 7, 'Neumococo con Comorbilidad', 10, 5, 14, 'A', 1),
+(239, 15, 8, 'Pentavalente No vacunado D1', 5, 1, 14, 'A', 1),
+(240, 15, 9, 'Pentavalente No vacunado D2', 5, 2, 14, 'A', 1),
+(241, 15, 10, 'Pentavalente No vacunado D3', 5, 3, 14, 'A', 1),
+(242, 15, 11, 'Refuerzo DPT', 17, 10, 14, 'A', 1),
+(243, 15, 12, 'Refuerzo Antipolio IPV', 23, 10, 14, 'A', 1);
 -- --------------------------------------------------------
 
 --
@@ -905,7 +911,19 @@ INSERT INTO `ESNI_REGLA` (`id_regla`, `id_linea`, `cod_item`, `valor_lab`, `id_g
 (455, 237, '90670', '3', 13, 'A', NULL, NULL, 0, 0, 0, 0, 1, NULL, NULL, NULL),
 (456, 237, '90670', 'D3', 13, 'A', NULL, NULL, 0, 0, 0, 0, 1, NULL, NULL, NULL),
 (457, 50, '90707', 'D1', 13, 'A', NULL, NULL, 0, 0, 0, 0, 1, NULL, NULL, NULL),
-(458, 51, '90707', 'D2', 13, 'A', NULL, NULL, 0, 0, 0, 0, 1, NULL, NULL, NULL);
+(458, 51, '90707', 'D2', 13, 'A', NULL, NULL, 0, 0, 0, 0, 1, NULL, NULL, NULL),
+(459, 238, '90670', 'DU', 14, 'A', NULL, NULL, 0, 0, 1, 0, 1, NULL, NULL, NULL),
+(460, 238, '90670', 'DA', 14, 'A', NULL, NULL, 0, 0, 1, 0, 1, NULL, NULL, NULL),
+(461, 239, '90722', '1', 14, 'A', NULL, NULL, 0, 0, 0, 0, 1, NULL, NULL, NULL),
+(462, 239, '90722', 'D1', 14, 'A', NULL, NULL, 0, 0, 0, 0, 1, NULL, NULL, NULL),
+(463, 240, '90722', '2', 14, 'A', NULL, NULL, 0, 0, 0, 0, 1, NULL, NULL, NULL),
+(464, 240, '90722', 'D2', 14, 'A', NULL, NULL, 0, 0, 0, 0, 1, NULL, NULL, NULL),
+(465, 241, '90722', '3', 14, 'A', NULL, NULL, 0, 0, 0, 0, 1, NULL, NULL, NULL),
+(466, 241, '90722', 'D3', 14, 'A', NULL, NULL, 0, 0, 0, 0, 1, NULL, NULL, NULL),
+(467, 242, '90701', 'DA', 14, 'A', NULL, NULL, 0, 0, 0, 0, 1, NULL, NULL, NULL),
+(468, 242, '90701', 'DDA', 14, 'A', NULL, NULL, 0, 0, 0, 0, 1, NULL, NULL, NULL),
+(469, 243, '90713', 'DA', 14, 'A', NULL, NULL, 0, 0, 0, 0, 1, NULL, NULL, NULL),
+(470, 243, '90713', 'DDA', 14, 'A', NULL, NULL, 0, 0, 0, 0, 1, NULL, NULL, NULL);
 -- --------------------------------------------------------
 
 --
