@@ -6,34 +6,8 @@
  */
 require_once 'includes/auth.php';
 verificarAutenticacion();
-require_once 'includes/functions.php';
-
-$pdo = getDBConnection();
 $esAdmin = esAdmin();
 $nombreUsuario = $_SESSION['nombre_completo'] ?? $_SESSION['usuario'] ?? 'Usuario';
-
-// Estadisticas rapidas del sistema (solo si las tablas existen)
-$statsSistema = [
-    'total_atenciones' => 0,
-    'total_establecimientos' => 0,
-    'total_anios' => 0,
-    'total_periodos_procesados' => 0,
-];
-try {
-    $row = $pdo->query("SELECT
-        COUNT(*) as total_atenciones,
-        COUNT(DISTINCT Id_Establecimiento) as total_establecimientos,
-        COUNT(DISTINCT Anio) as total_anios
-        FROM T_CONSOLIDADO_NUEVA_TRAMA_HISMINSA_DETALLADO")->fetch();
-    if ($row) {
-        $statsSistema['total_atenciones'] = (int)$row['total_atenciones'];
-        $statsSistema['total_establecimientos'] = (int)$row['total_establecimientos'];
-        $statsSistema['total_anios'] = (int)$row['total_anios'];
-    }
-    $statsSistema['total_periodos_procesados'] = (int)$pdo->query("SELECT COUNT(DISTINCT CONCAT(TRIM(Anio),'-',TRIM(Mes))) FROM T_CONSOLIDADO_NUEVA_TRAMA_HISMINSA_DETALLADO WHERE Anio IS NOT NULL AND Mes IS NOT NULL")->fetchColumn();
-} catch (Exception $e) {
-    // Si la tabla no existe, los stats quedan en 0
-}
 
 // Definir las paginas disponibles por rol
 // Cada entrada: [icono, titulo, descripcion, color, archivo, Roles]
@@ -158,46 +132,6 @@ include 'includes/header.php';
                 <i class="fas <?= $esAdmin ? 'fa-user-shield' : 'fa-user' ?> me-1"></i>
                 Rol: <?= $esAdmin ? 'Administrador' : 'Usuario' ?>
             </span>
-        </div>
-    </div>
-</div>
-
-<!-- Estadisticas del sistema -->
-<div class="row mb-4">
-    <div class="col-md-3 col-6 mb-3">
-        <div class="stat-card stat-primary">
-            <div class="stat-icon"><i class="fas fa-notes-medical"></i></div>
-            <div class="stat-info">
-                <span class="stat-value"><?= number_format($statsSistema['total_atenciones']) ?></span>
-                <span class="stat-label">Atenciones Consolidadas</span>
-            </div>
-        </div>
-    </div>
-    <div class="col-md-3 col-6 mb-3">
-        <div class="stat-card stat-success">
-            <div class="stat-icon"><i class="fas fa-hospital"></i></div>
-            <div class="stat-info">
-                <span class="stat-value"><?= number_format($statsSistema['total_establecimientos']) ?></span>
-                <span class="stat-label">Establecimientos</span>
-            </div>
-        </div>
-    </div>
-    <div class="col-md-3 col-6 mb-3">
-        <div class="stat-card stat-info">
-            <div class="stat-icon"><i class="fas fa-calendar-alt"></i></div>
-            <div class="stat-info">
-                <span class="stat-value"><?= number_format($statsSistema['total_anios']) ?></span>
-                <span class="stat-label">Anios Procesados</span>
-            </div>
-        </div>
-    </div>
-    <div class="col-md-3 col-6 mb-3">
-        <div class="stat-card stat-warning">
-            <div class="stat-icon"><i class="fas fa-database"></i></div>
-            <div class="stat-info">
-                <span class="stat-value"><?= number_format($statsSistema['total_periodos_procesados']) ?></span>
-                <span class="stat-label">Periodos Procesados</span>
-            </div>
         </div>
     </div>
 </div>
