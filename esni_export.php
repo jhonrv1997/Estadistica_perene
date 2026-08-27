@@ -117,6 +117,14 @@
  *     F84/I84 = REFUERZO ANTIPOLIO(IPV)                    (F=Casos, I=F)
  *     G85/I85 = REFUERZO DPT                               (G=Casos, I=G)
  *     G86/I86 = REFUERZO ANTIPOLIO(APO)                    (G=Casos, I=G)
+ *
+ * Seccion E2 - GRUPO ESPECIAL / RIESGO (celdas J/K/L/M en filas 71-86):
+ *     J78     = Pentavalente D1 -No vacunado               (J=Casos)
+ *     K78     = Pentavalente D2 -No vacunado               (K=Casos)
+ *     L78     = Pentavalente D3 -No vacunado               (L=Casos)
+ *     M78     = J78 + K78 + L78                           (suma)
+ *     K85     = REFUERZO DPT                               (K=Casos)
+ *     M85     = REFUERZO DPT                               (M=Casos = K85)
  */
 
 require_once 'includes/auth.php';
@@ -334,6 +342,31 @@ if ($seccionE1 !== null) {
     }
 }
 
+// -----------------------------------------------------------------------------
+// 3.5 Indexar lineas de la SECCION E2 (GRUPO ESPECIAL / RIESGO) por etiqueta
+// normalizada. Esta seccion alimenta las celdas J/K/L/M de las filas 71-86
+// de la plantilla oficial (paralelo a la seccion E1 que usa F/G/H/I).
+// -----------------------------------------------------------------------------
+$seccionE2 = null;
+foreach ($reporte['secciones'] as $sec) {
+    if (strcasecmp($sec['codigo'], 'E2') === 0) {
+        $seccionE2 = $sec;
+        break;
+    }
+}
+
+$casosPorEtiquetaE2 = [];
+if ($seccionE2 !== null) {
+    foreach ($seccionE2['lineas'] as $lin) {
+        $etqNorm = esniNormalizarEtiqueta($lin['etiqueta']);
+        if (isset($casosPorEtiquetaE2[$etqNorm])) {
+            $casosPorEtiquetaE2[$etqNorm] += (int)$lin['cantidad'];
+        } else {
+            $casosPorEtiquetaE2[$etqNorm] = (int)$lin['cantidad'];
+        }
+    }
+}
+
 /**
  * Helper: obtiene la cantidad de casos para una etiqueta de linea.
  * Devuelve 0 si la etiqueta no existe en la seccion indicada (no se
@@ -509,6 +542,21 @@ $e1_ref_apo         = esniGetCasos($casosPorEtiquetaE1, 'REFUERZO ANTIPOLIO(APO)
 $e1_penta_nv_total  = $e1_penta_nv_d1 + $e1_penta_nv_d2 + $e1_penta_nv_d3;
 $e1_spr_total       = $e1_spr_1ra + $e1_spr_2da;
 
+//-----------------------------------------------------------------------------
+// 4.2E2 Casos por linea (Seccion E2 - GRUPO ESPECIAL / RIESGO)
+//-----------------------------------------------------------------------------
+// Etiquetas tomadas literalmente de la configuracion ESNI_LINEA_REPORTE para
+// la seccion con codigo 'E2'. Alimentan las celdas J/K/L/M de las filas
+// 71-86 de la plantilla oficial (paralelo a E1 que usa F/G/H/I).
+$e2_penta_nv_d1     = esniGetCasos($casosPorEtiquetaE2, 'Pentavalente D1 -No vacunado');
+$e2_penta_nv_d2     = esniGetCasos($casosPorEtiquetaE2, 'Pentavalente D2 -No vacunado');
+$e2_penta_nv_d3     = esniGetCasos($casosPorEtiquetaE2, 'Pentavalente D3 -No vacunado');
+$e2_ref_dpt         = esniGetCasos($casosPorEtiquetaE2, 'REFUERZO DPT');
+
+// 4.3E2 Totales Seccion E2 (celdas que son suma de otras)
+// M78 = J78 + K78 + L78 (Pentavalente D1/D2/D3 -No vacunado)
+$e2_penta_nv_total  = $e2_penta_nv_d1 + $e2_penta_nv_d2 + $e2_penta_nv_d3;
+
 // 4.4 Construir el mapa final celda => valor
 $cellValues = [
     // Encabezado (texto)
@@ -640,6 +688,15 @@ $cellValues = [
     'G85' => $e1_ref_dpt,          'I85' => $e1_ref_dpt,
     // REFUERZO ANTIPOLIO(APO) (G=I=Casos)
     'G86' => $e1_ref_apo,          'I86' => $e1_ref_apo,
+
+    // --- Seccion E2: GRUPO ESPECIAL / RIESGO (celdas J/K/L/M en filas 71-86) ---
+    // Pentavalente D1/D2/D3 -No vacunado y total M = J+K+L
+    'J78' => $e2_penta_nv_d1,
+    'K78' => $e2_penta_nv_d2,
+    'L78' => $e2_penta_nv_d3,
+    'M78' => $e2_penta_nv_total,
+    // REFUERZO DPT (K=M=Casos)
+    'K85' => $e2_ref_dpt,          'M85' => $e2_ref_dpt,
 ];
 
 // ============================================================================
