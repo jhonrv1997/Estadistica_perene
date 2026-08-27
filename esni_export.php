@@ -125,6 +125,23 @@
  *     M78     = J78 + K78 + L78                           (suma)
  *     K85     = REFUERZO DPT                               (K=Casos)
  *     M85     = REFUERZO DPT                               (M=Casos = K85)
+ *
+ * Seccion F - dT ADULTO EN MUJERES EN EDAD FERTIL DESDE 5 ANIOS
+ *   (celdas M/N/O/P en filas 8-14, layout matriz_dosis):
+ *     M8/N8/O8 = dT 1ra/2da/3ra - Mujeres 5 a 9 anos       (M=D1, N=D2, O=D3)
+ *     P8  = M8 + N8 + O8                                  (suma)
+ *     M9/N9/O9 = dT 1ra/2da/3ra - Mujeres 10 a 11 anos
+ *     P9  = M9 + N9 + O9
+ *     M10/N10/O10 = dT 1ra/2da/3ra - Mujeres 12 a 17 anos
+ *     P10 = M10 + N10 + O10
+ *     M11/N11/O11 = dT 1ra/2da/3ra - Mujeres 18 a 29 anos
+ *     P11 = M11 + N11 + O11
+ *     M12/N12/O12 = dT 1ra/2da/3ra - Mujeres 30 a 49 anos
+ *     P12 = M12 + N12 + O12
+ *     M13/N13/O13 = dT 1ra/2da/3ra - Mujeres 50 a 59 anos
+ *     P13 = M13 + N13 + O13
+ *     M14/N14/O14 = dT 1ra/2da/3ra - Mujeres 60 a mas anos
+ *     P14 = M14 + N14 + O14
  */
 
 require_once 'includes/auth.php';
@@ -367,6 +384,32 @@ if ($seccionE2 !== null) {
     }
 }
 
+// -----------------------------------------------------------------------------
+// 3.6 Indexar lineas de la SECCION F (dT ADULTO EN MUJERES EN EDAD FERTIL
+// DESDE 5 ANIOS) por etiqueta normalizada. Esta seccion tiene layout
+// "matriz_dosis" y alimenta las celdas M/N/O/P de las filas 8-14 de la
+// plantilla oficial (D1, D2, D3 y Total por grupo de edad).
+// -----------------------------------------------------------------------------
+$seccionF = null;
+foreach ($reporte['secciones'] as $sec) {
+    if (strcasecmp($sec['codigo'], 'F') === 0) {
+        $seccionF = $sec;
+        break;
+    }
+}
+
+$casosPorEtiquetaF = [];
+if ($seccionF !== null) {
+    foreach ($seccionF['lineas'] as $lin) {
+        $etqNorm = esniNormalizarEtiqueta($lin['etiqueta']);
+        if (isset($casosPorEtiquetaF[$etqNorm])) {
+            $casosPorEtiquetaF[$etqNorm] += (int)$lin['cantidad'];
+        } else {
+            $casosPorEtiquetaF[$etqNorm] = (int)$lin['cantidad'];
+        }
+    }
+}
+
 /**
  * Helper: obtiene la cantidad de casos para una etiqueta de linea.
  * Devuelve 0 si la etiqueta no existe en la seccion indicada (no se
@@ -557,6 +600,51 @@ $e2_ref_dpt         = esniGetCasos($casosPorEtiquetaE2, 'REFUERZO DPT');
 // M78 = J78 + K78 + L78 (Pentavalente D1/D2/D3 -No vacunado)
 $e2_penta_nv_total  = $e2_penta_nv_d1 + $e2_penta_nv_d2 + $e2_penta_nv_d3;
 
+//-----------------------------------------------------------------------------
+// 4.2F Casos por linea (Seccion F - dT ADULTO MUJERES EN EDAD FERTIL)
+//-----------------------------------------------------------------------------
+// Etiquetas tomadas literalmente de la configuracion ESNI_LINEA_REPORTE para
+// la seccion con codigo 'F' (id_seccion = 4). Alimentan las celdas M/N/O/P
+// de las filas 8-14 de la plantilla oficial. Las celdas P (columna Total)
+// se calculan como M + N + O (suma de las 3 dosis dT del grupo de edad).
+// --- 5 a 9 anios (fila 8) ---
+$f_dt5a9_d1    = esniGetCasos($casosPorEtiquetaF, 'dT 1ra - Mujeres 5 a 9 anos');
+$f_dt5a9_d2    = esniGetCasos($casosPorEtiquetaF, 'dT 2da - Mujeres 5 a 9 anos');
+$f_dt5a9_d3    = esniGetCasos($casosPorEtiquetaF, 'dT 3ra - Mujeres 5 a 9 anos');
+// --- 10 a 11 anios (fila 9) ---
+$f_dt10a11_d1  = esniGetCasos($casosPorEtiquetaF, 'dT 1ra - Mujeres 10 a 11 anos');
+$f_dt10a11_d2  = esniGetCasos($casosPorEtiquetaF, 'dT 2da - Mujeres 10 a 11 anos');
+$f_dt10a11_d3  = esniGetCasos($casosPorEtiquetaF, 'dT 3ra - Mujeres 10 a 11 anos');
+// --- 12 a 17 anios (fila 10) ---
+$f_dt12a17_d1  = esniGetCasos($casosPorEtiquetaF, 'dT 1ra - Mujeres 12 a 17 anos');
+$f_dt12a17_d2  = esniGetCasos($casosPorEtiquetaF, 'dT 2da - Mujeres 12 a 17 anos');
+$f_dt12a17_d3  = esniGetCasos($casosPorEtiquetaF, 'dT 3ra - Mujeres 12 a 17 anos');
+// --- 18 a 29 anios (fila 11) ---
+$f_dt18a29_d1  = esniGetCasos($casosPorEtiquetaF, 'dT 1ra - Mujeres 18 a 29 anos');
+$f_dt18a29_d2  = esniGetCasos($casosPorEtiquetaF, 'dT 2da - Mujeres 18 a 29 anos');
+$f_dt18a29_d3  = esniGetCasos($casosPorEtiquetaF, 'dT 3ra - Mujeres 18 a 29 anos');
+// --- 30 a 49 anios (fila 12) ---
+$f_dt30a49_d1  = esniGetCasos($casosPorEtiquetaF, 'dT 1ra - Mujeres 30 a 49 anos');
+$f_dt30a49_d2  = esniGetCasos($casosPorEtiquetaF, 'dT 2da - Mujeres 30 a 49 anos');
+$f_dt30a49_d3  = esniGetCasos($casosPorEtiquetaF, 'dT 3ra - Mujeres 30 a 49 anos');
+// --- 50 a 59 anios (fila 13) ---
+$f_dt50a59_d1  = esniGetCasos($casosPorEtiquetaF, 'dT 1ra - Mujeres 50 a 59 anos');
+$f_dt50a59_d2  = esniGetCasos($casosPorEtiquetaF, 'dT 2da - Mujeres 50 a 59 anos');
+$f_dt50a59_d3  = esniGetCasos($casosPorEtiquetaF, 'dT 3ra - Mujeres 50 a 59 anos');
+// --- 60 anios a mas (fila 14) ---
+$f_dt60mas_d1  = esniGetCasos($casosPorEtiquetaF, 'dT 1ra - Mujeres 60 a mas anos');
+$f_dt60mas_d2  = esniGetCasos($casosPorEtiquetaF, 'dT 2da - Mujeres 60 a mas anos');
+$f_dt60mas_d3  = esniGetCasos($casosPorEtiquetaF, 'dT 3ra - Mujeres 60 a mas anos');
+
+// 4.3F Totales Seccion F (celda P = M + N + O por grupo de edad)
+$f_dt5a9_total    = $f_dt5a9_d1   + $f_dt5a9_d2   + $f_dt5a9_d3;
+$f_dt10a11_total  = $f_dt10a11_d1 + $f_dt10a11_d2 + $f_dt10a11_d3;
+$f_dt12a17_total  = $f_dt12a17_d1 + $f_dt12a17_d2 + $f_dt12a17_d3;
+$f_dt18a29_total  = $f_dt18a29_d1 + $f_dt18a29_d2 + $f_dt18a29_d3;
+$f_dt30a49_total  = $f_dt30a49_d1 + $f_dt30a49_d2 + $f_dt30a49_d3;
+$f_dt50a59_total  = $f_dt50a59_d1 + $f_dt50a59_d2 + $f_dt50a59_d3;
+$f_dt60mas_total  = $f_dt60mas_d1 + $f_dt60mas_d2 + $f_dt60mas_d3;
+
 // 4.4 Construir el mapa final celda => valor
 $cellValues = [
     // Encabezado (texto)
@@ -697,6 +785,44 @@ $cellValues = [
     'M78' => $e2_penta_nv_total,
     // REFUERZO DPT (K=M=Casos)
     'K85' => $e2_ref_dpt,          'M85' => $e2_ref_dpt,
+
+    // --- Seccion F: dT ADULTO EN MUJERES EN EDAD FERTIL DESDE 5 ANIOS ---
+    // (celdas M/N/O/P en filas 8-14, layout matriz_dosis: M=D1, N=D2, O=D3, P=Total)
+    // 5 a 9 anios (fila 8)
+    'M8'  => $f_dt5a9_d1,
+    'N8'  => $f_dt5a9_d2,
+    'O8'  => $f_dt5a9_d3,
+    'P8'  => $f_dt5a9_total,
+    // 10 a 11 anios (fila 9)
+    'M9'  => $f_dt10a11_d1,
+    'N9'  => $f_dt10a11_d2,
+    'O9'  => $f_dt10a11_d3,
+    'P9'  => $f_dt10a11_total,
+    // 12 a 17 anios (fila 10)
+    'M10' => $f_dt12a17_d1,
+    'N10' => $f_dt12a17_d2,
+    'O10' => $f_dt12a17_d3,
+    'P10' => $f_dt12a17_total,
+    // 18 a 29 anios (fila 11)
+    'M11' => $f_dt18a29_d1,
+    'N11' => $f_dt18a29_d2,
+    'O11' => $f_dt18a29_d3,
+    'P11' => $f_dt18a29_total,
+    // 30 a 49 anios (fila 12)
+    'M12' => $f_dt30a49_d1,
+    'N12' => $f_dt30a49_d2,
+    'O12' => $f_dt30a49_d3,
+    'P12' => $f_dt30a49_total,
+    // 50 a 59 anios (fila 13)
+    'M13' => $f_dt50a59_d1,
+    'N13' => $f_dt50a59_d2,
+    'O13' => $f_dt50a59_d3,
+    'P13' => $f_dt50a59_total,
+    // 60 anios a mas (fila 14)
+    'M14' => $f_dt60mas_d1,
+    'N14' => $f_dt60mas_d2,
+    'O14' => $f_dt60mas_d3,
+    'P14' => $f_dt60mas_total,
 ];
 
 // ============================================================================
