@@ -154,6 +154,21 @@
  *     P22 = M22 + N22 + O22
  *     M23/N23/O23 = dT 1ra/2da/3ra - 50 y 59 anos
  *     P23 = M23 + N23 + O23
+ *
+ * Seccion G - dT ADULTO EN VARONES EN RIESGO (celdas M/N/O/P en filas 28-33,
+ * layout matriz_dosis):
+ *     M28/N28/O28 = dT 1ra/2da/3ra - 05 y 09 anios (varones)   (M=D1, N=D2, O=D3)
+ *     P28 = M28 + N28 + O28                                    (suma)
+ *     M29/N29/O29 = dT 1ra/2da/3ra - 10 y 11 anios (varones)
+ *     P29 = M29 + N29 + O29
+ *     M30/N30/O30 = dT 1ra/2da/3ra - 12 y 17 anios (varones)
+ *     P30 = M30 + N30 + O30
+ *     M31/N31/O31 = dT 1ra/2da/3ra - 18 y 29 anios (varones)
+ *     P31 = M31 + N31 + O31
+ *     M32/N32/O32 = dT 1ra/2da/3ra - 30 y 59 anios (varones)
+ *     P32 = M32 + N32 + O32
+ *     M33/N33/O33 = dT 1ra/2da/3ra - 60 anios a mas (varones)
+ *     P33 = M33 + N33 + O33
  */
 
 require_once 'includes/auth.php';
@@ -448,6 +463,32 @@ if ($seccionF2 !== null) {
     }
 }
 
+// -----------------------------------------------------------------------------
+// 3.8 Indexar lineas de la SECCION G (dT ADULTO EN VARONES EN RIESGO) por
+// etiqueta normalizada. Esta seccion tiene layout "matriz_dosis" y alimenta
+// las celdas M/N/O/P de las filas 28-33 de la plantilla oficial (D1, D2, D3
+// y Total por grupo de edad: 05-09, 10-11, 12-17, 18-29, 30-59, 60 a mas).
+// -----------------------------------------------------------------------------
+$seccionG = null;
+foreach ($reporte['secciones'] as $sec) {
+    if (strcasecmp($sec['codigo'], 'G') === 0) {
+        $seccionG = $sec;
+        break;
+    }
+}
+
+$casosPorEtiquetaG = [];
+if ($seccionG !== null) {
+    foreach ($seccionG['lineas'] as $lin) {
+        $etqNorm = esniNormalizarEtiqueta($lin['etiqueta']);
+        if (isset($casosPorEtiquetaG[$etqNorm])) {
+            $casosPorEtiquetaG[$etqNorm] += (int)$lin['cantidad'];
+        } else {
+            $casosPorEtiquetaG[$etqNorm] = (int)$lin['cantidad'];
+        }
+    }
+}
+
 /**
  * Helper: obtiene la cantidad de casos para una etiqueta de linea.
  * Devuelve 0 si la etiqueta no existe en la seccion indicada (no se
@@ -718,6 +759,46 @@ $f2_dt18a29_total = $f2_dt18a29_d1 + $f2_dt18a29_d2 + $f2_dt18a29_d3;
 $f2_dt30a49_total = $f2_dt30a49_d1 + $f2_dt30a49_d2 + $f2_dt30a49_d3;
 $f2_dt50a59_total = $f2_dt50a59_d1 + $f2_dt50a59_d2 + $f2_dt50a59_d3;
 
+//-----------------------------------------------------------------------------
+// 4.2G Casos por linea (Seccion G - dT ADULTO EN VARONES EN RIESGO)
+//-----------------------------------------------------------------------------
+// Etiquetas tomadas literalmente de la configuracion ESNI_LINEA_REPORTE para
+// la seccion con codigo 'G' (id_seccion = 6). Alimentan las celdas M/N/O/P
+// de las filas 28-33 de la plantilla oficial. Las celdas P (columna Total)
+// se calculan como M + N + O (suma de las 3 dosis dT del grupo de edad).
+// --- 05 y 09 anios (fila 28) ---
+$g_dt5a9_d1    = esniGetCasos($casosPorEtiquetaG, 'dT 1ra -05_09A');
+$g_dt5a9_d2    = esniGetCasos($casosPorEtiquetaG, 'dT 2da -05_09A');
+$g_dt5a9_d3    = esniGetCasos($casosPorEtiquetaG, 'dT 3ra -05_09A');
+// --- 10 y 11 anios (fila 29) ---
+$g_dt10a11_d1  = esniGetCasos($casosPorEtiquetaG, 'dT 1ra -10_11A');
+$g_dt10a11_d2  = esniGetCasos($casosPorEtiquetaG, 'dT 2da -10_11A');
+$g_dt10a11_d3  = esniGetCasos($casosPorEtiquetaG, 'dT 3ra -10_11A');
+// --- 12 y 17 anios (fila 30) ---
+$g_dt12a17_d1  = esniGetCasos($casosPorEtiquetaG, 'dT 1ra -12_17A');
+$g_dt12a17_d2  = esniGetCasos($casosPorEtiquetaG, 'dT 2da -12_17A');
+$g_dt12a17_d3  = esniGetCasos($casosPorEtiquetaG, 'dT 3ra -12_17A');
+// --- 18 y 29 anios (fila 31) ---
+$g_dt18a29_d1  = esniGetCasos($casosPorEtiquetaG, 'dT 1ra -18_29A');
+$g_dt18a29_d2  = esniGetCasos($casosPorEtiquetaG, 'dT 2da -18_29A');
+$g_dt18a29_d3  = esniGetCasos($casosPorEtiquetaG, 'dT 3ra -18_29A');
+// --- 30 y 59 anios (fila 32) ---
+$g_dt30a59_d1  = esniGetCasos($casosPorEtiquetaG, 'dT 1ra -30_59A');
+$g_dt30a59_d2  = esniGetCasos($casosPorEtiquetaG, 'dT 2da -30_59A');
+$g_dt30a59_d3  = esniGetCasos($casosPorEtiquetaG, 'dT 3ra -30_59A');
+// --- 60 anios a mas (fila 33) ---
+$g_dt60mas_d1  = esniGetCasos($casosPorEtiquetaG, 'dT 1ra -60A_MAS');
+$g_dt60mas_d2  = esniGetCasos($casosPorEtiquetaG, 'dT 2da -60A_MAS');
+$g_dt60mas_d3  = esniGetCasos($casosPorEtiquetaG, 'dT 3ra -60A_MAS');
+
+// 4.3G Totales Seccion G (celda P = M + N + O por grupo de edad)
+$g_dt5a9_total    = $g_dt5a9_d1   + $g_dt5a9_d2   + $g_dt5a9_d3;
+$g_dt10a11_total  = $g_dt10a11_d1 + $g_dt10a11_d2 + $g_dt10a11_d3;
+$g_dt12a17_total  = $g_dt12a17_d1 + $g_dt12a17_d2 + $g_dt12a17_d3;
+$g_dt18a29_total  = $g_dt18a29_d1 + $g_dt18a29_d2 + $g_dt18a29_d3;
+$g_dt30a59_total  = $g_dt30a59_d1 + $g_dt30a59_d2 + $g_dt30a59_d3;
+$g_dt60mas_total  = $g_dt60mas_d1 + $g_dt60mas_d2 + $g_dt60mas_d3;
+
 // 4.4 Construir el mapa final celda => valor
 $cellValues = [
     // Encabezado (texto)
@@ -924,6 +1005,39 @@ $cellValues = [
     'N23' => $f2_dt50a59_d2,
     'O23' => $f2_dt50a59_d3,
     'P23' => $f2_dt50a59_total,
+
+    // --- Seccion G: dT ADULTO EN VARONES EN RIESGO (celdas M/N/O/P filas 28-33) ---
+    // (layout matriz_dosis: M=D1, N=D2, O=D3, P=Total)
+    // 05 y 09 anios (fila 28)
+    'M28' => $g_dt5a9_d1,
+    'N28' => $g_dt5a9_d2,
+    'O28' => $g_dt5a9_d3,
+    'P28' => $g_dt5a9_total,
+    // 10 y 11 anios (fila 29)
+    'M29' => $g_dt10a11_d1,
+    'N29' => $g_dt10a11_d2,
+    'O29' => $g_dt10a11_d3,
+    'P29' => $g_dt10a11_total,
+    // 12 y 17 anios (fila 30)
+    'M30' => $g_dt12a17_d1,
+    'N30' => $g_dt12a17_d2,
+    'O30' => $g_dt12a17_d3,
+    'P30' => $g_dt12a17_total,
+    // 18 y 29 anios (fila 31)
+    'M31' => $g_dt18a29_d1,
+    'N31' => $g_dt18a29_d2,
+    'O31' => $g_dt18a29_d3,
+    'P31' => $g_dt18a29_total,
+    // 30 y 59 anios (fila 32)
+    'M32' => $g_dt30a59_d1,
+    'N32' => $g_dt30a59_d2,
+    'O32' => $g_dt30a59_d3,
+    'P32' => $g_dt30a59_total,
+    // 60 anios a mas (fila 33)
+    'M33' => $g_dt60mas_d1,
+    'N33' => $g_dt60mas_d2,
+    'O33' => $g_dt60mas_d3,
+    'P33' => $g_dt60mas_total,
 ];
 
 // ============================================================================
