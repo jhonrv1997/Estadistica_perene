@@ -142,6 +142,18 @@
  *     P13 = M13 + N13 + O13
  *     M14/N14/O14 = dT 1ra/2da/3ra - Mujeres 60 a mas anos
  *     P14 = M14 + N14 + O14
+ *
+ * Seccion F2 - dT (GRUPOS DE EDAD)  (celdas M/N/O/P en filas 19-23, layout matriz_dosis):
+ *     M19/N19/O19 = dT 1ra/2da/3ra - 10 y 11 anos         (M=D1, N=D2, O=D3)
+ *     P19 = M19 + N19 + O19                              (suma)
+ *     M20/N20/O20 = dT 1ra/2da/3ra - 12 y 17 anos
+ *     P20 = M20 + N20 + O20
+ *     M21/N21/O21 = dT 1ra/2da/3ra - 18 y 29 anos
+ *     P21 = M21 + N21 + O21
+ *     M22/N22/O22 = dT 1ra/2da/3ra - 30 y 49 anos
+ *     P22 = M22 + N22 + O22
+ *     M23/N23/O23 = dT 1ra/2da/3ra - 50 y 59 anos
+ *     P23 = M23 + N23 + O23
  */
 
 require_once 'includes/auth.php';
@@ -410,6 +422,32 @@ if ($seccionF !== null) {
     }
 }
 
+// -----------------------------------------------------------------------------
+// 3.7 Indexar lineas de la SECCION F2 (dT por grupos de edad 10-11, 12-17,
+// 18-29, 30-49, 50-59 anos) por etiqueta normalizada. Esta seccion tiene
+// layout "matriz_dosis" y alimenta las celdas M/N/O/P de las filas 19-23
+// de la plantilla oficial (D1, D2, D3 y Total por grupo de edad).
+// -----------------------------------------------------------------------------
+$seccionF2 = null;
+foreach ($reporte['secciones'] as $sec) {
+    if (strcasecmp($sec['codigo'], 'F2') === 0) {
+        $seccionF2 = $sec;
+        break;
+    }
+}
+
+$casosPorEtiquetaF2 = [];
+if ($seccionF2 !== null) {
+    foreach ($seccionF2['lineas'] as $lin) {
+        $etqNorm = esniNormalizarEtiqueta($lin['etiqueta']);
+        if (isset($casosPorEtiquetaF2[$etqNorm])) {
+            $casosPorEtiquetaF2[$etqNorm] += (int)$lin['cantidad'];
+        } else {
+            $casosPorEtiquetaF2[$etqNorm] = (int)$lin['cantidad'];
+        }
+    }
+}
+
 /**
  * Helper: obtiene la cantidad de casos para una etiqueta de linea.
  * Devuelve 0 si la etiqueta no existe en la seccion indicada (no se
@@ -645,6 +683,41 @@ $f_dt30a49_total  = $f_dt30a49_d1 + $f_dt30a49_d2 + $f_dt30a49_d3;
 $f_dt50a59_total  = $f_dt50a59_d1 + $f_dt50a59_d2 + $f_dt50a59_d3;
 $f_dt60mas_total  = $f_dt60mas_d1 + $f_dt60mas_d2 + $f_dt60mas_d3;
 
+//-----------------------------------------------------------------------------
+// 4.2F2 Casos por linea (Seccion F2 - dT por grupos de edad 10-59 anos)
+//-----------------------------------------------------------------------------
+// Etiquetas tomadas literalmente de la configuracion ESNI_LINEA_REPORTE para
+// la seccion con codigo 'F2' (id_seccion = 5). Alimentan las celdas M/N/O/P
+// de las filas 19-23 de la plantilla oficial. Las celdas P (columna Total)
+// se calculan como M + N + O (suma de las 3 dosis dT del grupo de edad).
+// --- 10 y 11 anios (fila 19) ---
+$f2_dt10a11_d1   = esniGetCasos($casosPorEtiquetaF2, 'dT 1ra -10_11A');
+$f2_dt10a11_d2   = esniGetCasos($casosPorEtiquetaF2, 'dT 2da -10_11A');
+$f2_dt10a11_d3   = esniGetCasos($casosPorEtiquetaF2, 'dT 3ra -10_11A');
+// --- 12 y 17 anios (fila 20) ---
+$f2_dt12a17_d1   = esniGetCasos($casosPorEtiquetaF2, 'dT 1ra -12_17A');
+$f2_dt12a17_d2   = esniGetCasos($casosPorEtiquetaF2, 'dT 2da -12_17A');
+$f2_dt12a17_d3   = esniGetCasos($casosPorEtiquetaF2, 'dT 3ra -12_17A');
+// --- 18 y 29 anios (fila 21) ---
+$f2_dt18a29_d1   = esniGetCasos($casosPorEtiquetaF2, 'dT 1ra -18_29A');
+$f2_dt18a29_d2   = esniGetCasos($casosPorEtiquetaF2, 'dT 2da -18_29A');
+$f2_dt18a29_d3   = esniGetCasos($casosPorEtiquetaF2, 'dT 3ra -18_29A');
+// --- 30 y 49 anios (fila 22) ---
+$f2_dt30a49_d1   = esniGetCasos($casosPorEtiquetaF2, 'dT 1ra -30_49A');
+$f2_dt30a49_d2   = esniGetCasos($casosPorEtiquetaF2, 'dT 2da -30_49A');
+$f2_dt30a49_d3   = esniGetCasos($casosPorEtiquetaF2, 'dT 3ra -30_49A');
+// --- 50 y 59 anios (fila 23) ---
+$f2_dt50a59_d1   = esniGetCasos($casosPorEtiquetaF2, 'dT 1ra -50_59A');
+$f2_dt50a59_d2   = esniGetCasos($casosPorEtiquetaF2, 'dT 2da -50_59A');
+$f2_dt50a59_d3   = esniGetCasos($casosPorEtiquetaF2, 'dT 3ra -50_59A');
+
+// 4.3F2 Totales Seccion F2 (celda P = M + N + O por grupo de edad)
+$f2_dt10a11_total = $f2_dt10a11_d1 + $f2_dt10a11_d2 + $f2_dt10a11_d3;
+$f2_dt12a17_total = $f2_dt12a17_d1 + $f2_dt12a17_d2 + $f2_dt12a17_d3;
+$f2_dt18a29_total = $f2_dt18a29_d1 + $f2_dt18a29_d2 + $f2_dt18a29_d3;
+$f2_dt30a49_total = $f2_dt30a49_d1 + $f2_dt30a49_d2 + $f2_dt30a49_d3;
+$f2_dt50a59_total = $f2_dt50a59_d1 + $f2_dt50a59_d2 + $f2_dt50a59_d3;
+
 // 4.4 Construir el mapa final celda => valor
 $cellValues = [
     // Encabezado (texto)
@@ -823,6 +896,34 @@ $cellValues = [
     'N14' => $f_dt60mas_d2,
     'O14' => $f_dt60mas_d3,
     'P14' => $f_dt60mas_total,
+
+    // --- Seccion F2: dT (GRUPOS DE EDAD 10-11, 12-17, 18-29, 30-49, 50-59) ---
+    // (celdas M/N/O/P en filas 19-23, layout matriz_dosis: M=D1, N=D2, O=D3, P=Total)
+    // 10 y 11 anios (fila 19)
+    'M19' => $f2_dt10a11_d1,
+    'N19' => $f2_dt10a11_d2,
+    'O19' => $f2_dt10a11_d3,
+    'P19' => $f2_dt10a11_total,
+    // 12 y 17 anios (fila 20)
+    'M20' => $f2_dt12a17_d1,
+    'N20' => $f2_dt12a17_d2,
+    'O20' => $f2_dt12a17_d3,
+    'P20' => $f2_dt12a17_total,
+    // 18 y 29 anios (fila 21)
+    'M21' => $f2_dt18a29_d1,
+    'N21' => $f2_dt18a29_d2,
+    'O21' => $f2_dt18a29_d3,
+    'P21' => $f2_dt18a29_total,
+    // 30 y 49 anios (fila 22)
+    'M22' => $f2_dt30a49_d1,
+    'N22' => $f2_dt30a49_d2,
+    'O22' => $f2_dt30a49_d3,
+    'P22' => $f2_dt30a49_total,
+    // 50 y 59 anios (fila 23)
+    'M23' => $f2_dt50a59_d1,
+    'N23' => $f2_dt50a59_d2,
+    'O23' => $f2_dt50a59_d3,
+    'P23' => $f2_dt50a59_total,
 ];
 
 // ============================================================================
