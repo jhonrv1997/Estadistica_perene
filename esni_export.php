@@ -169,6 +169,31 @@
  *     P32 = M32 + N32 + O32
  *     M33/N33/O33 = dT 1ra/2da/3ra - 60 anios a mas (varones)
  *     P33 = M33 + N33 + O33
+ *
+ * Seccion H - INFLUENZA ESTACIONAL EN OTROS GRUPOS (celdas E en filas 93-120,
+ * layout "lista" con un solo valor "Casos" por linea):
+ *     E93  = CON COMORBILIDAD 05_11A
+ *     E94  = CON COMORBILIDAD 12_17A
+ *     E95  = CON COMORBILIDAD 18_29A
+ *     E96  = CON COMORBILIDAD 30_49A
+ *     E97  = CON COMORBILIDAD 50_59A
+ *     E98  = SIN COMORBILIDAD 5_11A
+ *     E99  = SIN COMORBILIDAD 12_17A
+ *     E100 = SIN COMORBILIDAD 18_29A
+ *     E101 = SIN COMORBILIDAD 30_49A
+ *     E102 = SIN COMORBILIDAD 50_59A
+ *     E103 = MAYORES DE 60A
+ *     E104 = GESTANTES
+ *     E105 = PUERPERAS
+ *     E106 = PERSONAL DE SALUD
+ *     E112 = ESTUDIANTES
+ *     E117 = COMUNIDADES NATIVAS
+ *     E119 = PERSONA CON DISCAPACIDAD
+ *     E120 = OTROS
+ *
+ *   (Las celdas E107-E111, E113-E116 y E118 corresponden a filas intermedias
+ *   con cabeceras/sub-secciones en la plantilla oficial, por lo que no se
+ *   asignan desde el motor.)
  */
 
 require_once 'includes/auth.php';
@@ -489,6 +514,35 @@ if ($seccionG !== null) {
     }
 }
 
+// -----------------------------------------------------------------------------
+// 3.9 Indexar lineas de la SECCION H (INFLUENZA ESTACIONAL EN OTROS GRUPOS)
+// por etiqueta normalizada. Esta seccion tiene layout "lista" y cada linea
+// tiene un unico valor "Casos" que se mapea a la celda E correspondiente de
+// la plantilla oficial (filas 93 a 120). Las lineas con requiere/excluye
+// comorbilidad, valor_lab en la misma cita (GESTANTES/PUERPERAS/PERSONAL
+// DE SALUD), filtro por etnia (COMUNIDADES NATIVAS), etc. son evaluadas por
+// el motor data-driven al ejecutar el reporte.
+// -----------------------------------------------------------------------------
+$seccionH = null;
+foreach ($reporte['secciones'] as $sec) {
+    if (strcasecmp($sec['codigo'], 'H') === 0) {
+        $seccionH = $sec;
+        break;
+    }
+}
+
+$casosPorEtiquetaH = [];
+if ($seccionH !== null) {
+    foreach ($seccionH['lineas'] as $lin) {
+        $etqNorm = esniNormalizarEtiqueta($lin['etiqueta']);
+        if (isset($casosPorEtiquetaH[$etqNorm])) {
+            $casosPorEtiquetaH[$etqNorm] += (int)$lin['cantidad'];
+        } else {
+            $casosPorEtiquetaH[$etqNorm] = (int)$lin['cantidad'];
+        }
+    }
+}
+
 /**
  * Helper: obtiene la cantidad de casos para una etiqueta de linea.
  * Devuelve 0 si la etiqueta no existe en la seccion indicada (no se
@@ -799,6 +853,40 @@ $g_dt18a29_total  = $g_dt18a29_d1 + $g_dt18a29_d2 + $g_dt18a29_d3;
 $g_dt30a59_total  = $g_dt30a59_d1 + $g_dt30a59_d2 + $g_dt30a59_d3;
 $g_dt60mas_total  = $g_dt60mas_d1 + $g_dt60mas_d2 + $g_dt60mas_d3;
 
+//-----------------------------------------------------------------------------
+// 4.2H Casos por linea (Seccion H - INFLUENZA ESTACIONAL EN OTROS GRUPOS)
+//-----------------------------------------------------------------------------
+// Etiquetas tomadas literalmente de la configuracion ESNI_LINEA_REPORTE para
+// la seccion con codigo 'H' (id_seccion = 7). Esta seccion tiene layout
+// "lista" y cada linea se mapea a una unica celda E de la plantilla oficial
+// (filas 93 a 120). Las celdas E107-E111, E113-E116 y E118 no se asignan
+// porque corresponden a filas intermedias con cabeceras/sub-secciones en la
+// plantilla oficial.
+// --- CON COMORBILIDAD (filas 93-97) ---
+$h_comorb_05_11  = esniGetCasos($casosPorEtiquetaH, 'CON COMORBILIDAD 05_11A');
+$h_comorb_12_17  = esniGetCasos($casosPorEtiquetaH, 'CON COMORBILIDAD 12_17A');
+$h_comorb_18_29  = esniGetCasos($casosPorEtiquetaH, 'CON COMORBILIDAD 18_29A');
+$h_comorb_30_49  = esniGetCasos($casosPorEtiquetaH, 'CON COMORBILIDAD 30_49A');
+$h_comorb_50_59  = esniGetCasos($casosPorEtiquetaH, 'CON COMORBILIDAD 50_59A');
+// --- SIN COMORBILIDAD (filas 98-102) ---
+$h_sincom_05_11  = esniGetCasos($casosPorEtiquetaH, 'SIN COMORBILIDAD 5_11A');
+$h_sincom_12_17  = esniGetCasos($casosPorEtiquetaH, 'SIN COMORBILIDAD 12_17A');
+$h_sincom_18_29  = esniGetCasos($casosPorEtiquetaH, 'SIN COMORBILIDAD 18_29A');
+$h_sincom_30_49  = esniGetCasos($casosPorEtiquetaH, 'SIN COMORBILIDAD 30_49A');
+$h_sincom_50_59  = esniGetCasos($casosPorEtiquetaH, 'SIN COMORBILIDAD 50_59A');
+// --- MAYORES DE 60A, GESTANTES, PUERPERAS, PERSONAL DE SALUD (filas 103-106) ---
+$h_mayores_60    = esniGetCasos($casosPorEtiquetaH, 'MAYORES DE 60A');
+$h_gestantes     = esniGetCasos($casosPorEtiquetaH, 'GESTANTES');
+$h_puerperas     = esniGetCasos($casosPorEtiquetaH, 'PUERPERAS');
+$h_personal_salud= esniGetCasos($casosPorEtiquetaH, 'PERSONAL DE SALUD');
+// --- ESTUDIANTES (fila 112) ---
+$h_estudiantes   = esniGetCasos($casosPorEtiquetaH, 'ESTUDIANTES');
+// --- COMUNIDADES NATIVAS (fila 117) ---
+$h_comunidades   = esniGetCasos($casosPorEtiquetaH, 'COMUNIDADES NATIVAS');
+// --- PERSONA CON DISCAPACIDAD (fila 119) y OTROS (fila 120) ---
+$h_discapacidad  = esniGetCasos($casosPorEtiquetaH, 'PERSONA CON DISCAPACIDAD');
+$h_otros         = esniGetCasos($casosPorEtiquetaH, 'OTROS');
+
 // 4.4 Construir el mapa final celda => valor
 $cellValues = [
     // Encabezado (texto)
@@ -1038,6 +1126,32 @@ $cellValues = [
     'N33' => $g_dt60mas_d2,
     'O33' => $g_dt60mas_d3,
     'P33' => $g_dt60mas_total,
+
+    // --- Seccion H: INFLUENZA ESTACIONAL EN OTROS GRUPOS (celda E por linea) ---
+    // CON COMORBILIDAD (filas 93-97)
+    'E93'  => $h_comorb_05_11,
+    'E94'  => $h_comorb_12_17,
+    'E95'  => $h_comorb_18_29,
+    'E96'  => $h_comorb_30_49,
+    'E97'  => $h_comorb_50_59,
+    // SIN COMORBILIDAD (filas 98-102)
+    'E98'  => $h_sincom_05_11,
+    'E99'  => $h_sincom_12_17,
+    'E100' => $h_sincom_18_29,
+    'E101' => $h_sincom_30_49,
+    'E102' => $h_sincom_50_59,
+    // MAYORES DE 60A, GESTANTES, PUERPERAS, PERSONAL DE SALUD (filas 103-106)
+    'E103' => $h_mayores_60,
+    'E104' => $h_gestantes,
+    'E105' => $h_puerperas,
+    'E106' => $h_personal_salud,
+    // ESTUDIANTES (fila 112)
+    'E112' => $h_estudiantes,
+    // COMUNIDADES NATIVAS (fila 117)
+    'E117' => $h_comunidades,
+    // PERSONA CON DISCAPACIDAD (fila 119) y OTROS (fila 120)
+    'E119' => $h_discapacidad,
+    'E120' => $h_otros,
 ];
 
 // ============================================================================
