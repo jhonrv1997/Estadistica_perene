@@ -230,6 +230,14 @@
  *   I112 = 18 a 29 años - Total
  *   I113 = 30 a 59 años - Total
  *   I114 = 60 + años   - Total
+ *
+ * Seccion L - SOLO GESTANTES dTpa (celda O en filas 110-112, layout
+ * total_uno: una sola linea por grupo de edad con un unico valor = total
+ * de dosis aplicadas para ese grupo). Mismo patron que la seccion K:
+ * mapa [etiqueta_normalizada => cantidad] recuperado con esniGetCasos().
+ *   O110 = 12 a 17 años - Total
+ *   O111 = 18 a 29 años - Total
+ *   O112 = 30 a 49 años - Total
  */
 
 require_once 'includes/auth.php';
@@ -638,6 +646,35 @@ if ($seccionK !== null) {
             $casosPorEtiquetaK[$etqNorm] += (int)$lin['cantidad'];
         } else {
             $casosPorEtiquetaK[$etqNorm] = (int)$lin['cantidad'];
+        }
+    }
+}
+
+// -----------------------------------------------------------------------------
+// 3.12 Indexar lineas de la SECCION L (SOLO GESTANTES - dTpa) por etiqueta
+// normalizada. Esta seccion tiene layout "total_uno" (al igual que las
+// secciones H y K): una sola linea por grupo de edad cuyo valor es el total
+// de dosis aplicadas. Se indexa por etiqueta normalizada (mismo patron que
+// A/B/C/H/K) y se recupera con esniGetCasos().
+// Alimenta las celdas O110..O112 de la plantilla oficial:
+//   O110 = 12 a 17 años, O111 = 18 a 29 años, O112 = 30 a 49 años.
+// -----------------------------------------------------------------------------
+$seccionL = null;
+foreach ($reporte['secciones'] as $sec) {
+    if (strcasecmp($sec['codigo'], 'L') === 0) {
+        $seccionL = $sec;
+        break;
+    }
+}
+
+$casosPorEtiquetaL = []; // [etiqueta_normalizada => int]
+if ($seccionL !== null) {
+    foreach ($seccionL['lineas'] as $lin) {
+        $etqNorm = esniNormalizarEtiqueta($lin['etiqueta']);
+        if (isset($casosPorEtiquetaL[$etqNorm])) {
+            $casosPorEtiquetaL[$etqNorm] += (int)$lin['cantidad'];
+        } else {
+            $casosPorEtiquetaL[$etqNorm] = (int)$lin['cantidad'];
         }
     }
 }
@@ -1072,6 +1109,24 @@ $k_antiamar30a59 = esniGetCasos($casosPorEtiquetaK, '30 a 59 años');
 // --- 60 + años (fila 114) ---
 $k_antiamar60mas = esniGetCasos($casosPorEtiquetaK, '60 + años');
 
+//-----------------------------------------------------------------------------
+// 4.2L Casos por linea (Seccion L - SOLO GESTANTES dTpa)
+//-----------------------------------------------------------------------------
+// Etiquetas tomadas literalmente de la configuracion ESNI_LINEA_REPORTE para
+// la seccion con codigo 'L' (id_seccion = 18). Esta seccion tiene layout
+// "total_uno" (al igual que H y K): cada grupo de edad tiene una unica linea
+// cuyo valor es directamente el total de dosis aplicadas para ese grupo (no
+// hay desglose por dosis). Por eso se indexa por etiqueta normalizada y se
+// recupera con el helper esniGetCasos() (mismo patron que A/B/C/H/K).
+// Alimenta las celdas O110..O112 de la plantilla oficial:
+//   O110 = 12 a 17 años, O111 = 18 a 29 años, O112 = 30 a 49 años.
+// --- 12 a 17 años (fila 110) ---
+$l_dtpa12a17 = esniGetCasos($casosPorEtiquetaL, '12 a 17 años');
+// --- 18 a 29 años (fila 111) ---
+$l_dtpa18a29 = esniGetCasos($casosPorEtiquetaL, '18 a 29 años');
+// --- 30 a 49 años (fila 112) ---
+$l_dtpa30a49 = esniGetCasos($casosPorEtiquetaL, '30 a 49 años');
+
 // 4.4 Construir el mapa final celda => valor
 $cellValues = [
     // Encabezado (texto)
@@ -1385,6 +1440,16 @@ $cellValues = [
     'I113' => $k_antiamar30a59,
     // 60 + años (fila 114)
     'I114' => $k_antiamar60mas,
+
+    // --- Seccion L: SOLO GESTANTES (dTpa) ---
+    // (celdas O en filas 110-112, layout total_uno: una sola linea por grupo
+    //  de edad con un unico valor = total de dosis aplicadas para ese grupo)
+    // 12 a 17 años (fila 110)
+    'O110' => $l_dtpa12a17,
+    // 18 a 29 años (fila 111)
+    'O111' => $l_dtpa18a29,
+    // 30 a 49 años (fila 112)
+    'O112' => $l_dtpa30a49,
 ];
 
 // ============================================================================
