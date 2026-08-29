@@ -276,6 +276,19 @@
  *   T80 = 60 A MAS AÑOS              - Total
  *   T84 = PERSONAL DE SALUD          - Total
  *   T85 = SUMA de T70..T80 + T84 (todas las celdas anteriores)
+ *
+ * Seccion P - TOTAL DE DOSIS APLICADAS POR GRUPO DE EDAD (celda C en filas
+ * 126-130, layout total_uno: una sola linea por grupo de edad con un unico
+ * valor = total de dosis aplicadas para ese grupo). Mismo patron que las
+ * secciones H/K/L/O: mapa [etiqueta_normalizada => cantidad] recuperado con
+ * esniGetCasos(). Alimenta las celdas C126..C130 de la plantilla oficial, y la
+ * celda C131 es la SUMA de todas las celdas anteriores (C126..C130).
+ *   C126 = 0 A 11 años   - Total
+ *   C127 = 12 a 17 años  - Total
+ *   C128 = 18 a 29 años  - Total
+ *   C129 = 30 a 59 años  - Total
+ *   C130 = 60 a mas años - Total
+ *   C131 = SUMA de C126..C130 (todas las celdas anteriores)
  */
 
 require_once 'includes/auth.php';
@@ -781,6 +794,38 @@ if ($seccionO !== null) {
             $casosPorEtiquetaO[$etqNorm] += (int)$lin['cantidad'];
         } else {
             $casosPorEtiquetaO[$etqNorm] = (int)$lin['cantidad'];
+        }
+    }
+}
+
+// -----------------------------------------------------------------------------
+// 3.15 Indexar lineas de la SECCION P (TOTAL DE DOSIS APLICADAS POR GRUPO DE
+// EDAD) por etiqueta normalizada. Esta seccion tiene layout "total_uno" (al
+// igual que H, K, L y O): cada grupo de edad tiene una unica linea cuyo valor
+// es directamente el total de dosis aplicadas para ese grupo (no hay desglose
+// por dosis). Por eso se indexa por etiqueta normalizada y se recupera con el
+// helper esniGetCasos() (mismo patron que A/B/C/H/K/L/O).
+// Alimenta las celdas C126..C130 de la plantilla oficial:
+//   C126 = 0 A 11 años,   C127 = 12 a 17 años, C128 = 18 a 29 años,
+//   C129 = 30 a 59 años,  C130 = 60 a mas años.
+// La celda C131 = SUMA de todas las celdas anteriores (C126..C130).
+// -----------------------------------------------------------------------------
+$seccionP = null;
+foreach ($reporte['secciones'] as $sec) {
+    if (strcasecmp($sec['codigo'], 'P') === 0) {
+        $seccionP = $sec;
+        break;
+    }
+}
+
+$casosPorEtiquetaP = []; // [etiqueta_normalizada => int]
+if ($seccionP !== null) {
+    foreach ($seccionP['lineas'] as $lin) {
+        $etqNorm = esniNormalizarEtiqueta($lin['etiqueta']);
+        if (isset($casosPorEtiquetaP[$etqNorm])) {
+            $casosPorEtiquetaP[$etqNorm] += (int)$lin['cantidad'];
+        } else {
+            $casosPorEtiquetaP[$etqNorm] = (int)$lin['cantidad'];
         }
     }
 }
@@ -1333,6 +1378,32 @@ $o_total = $o_comorb_05_11 + $o_comorb_12_17 + $o_comorb_18_29
          + $o_sincom_30_49 + $o_sincom_50_59
          + $o_60amas + $o_personal_salud;
 
+//-----------------------------------------------------------------------------
+// 4.2P Casos por linea (Seccion P - TOTAL DE DOSIS APLICADAS POR GRUPO DE EDAD)
+//-----------------------------------------------------------------------------
+// Etiquetas tomadas literalmente de la configuracion ESNI_LINEA_REPORTE para
+// la seccion con codigo 'P'. Esta seccion tiene layout "total_uno" (al igual
+// que H, K, L y O): cada grupo de edad tiene una unica linea cuyo valor es
+// directamente el total de dosis aplicadas para ese grupo (no hay desglose por
+// dosis). Por eso se indexa por etiqueta normalizada y se recupera con el
+// helper esniGetCasos() (mismo patron que A/B/C/H/K/L/O).
+// Alimenta las celdas C126..C130 de la plantilla oficial:
+//   C126 = 0 A 11 años,   C127 = 12 a 17 años, C128 = 18 a 29 años,
+//   C129 = 30 a 59 años,  C130 = 60 a mas años.
+// --- Grupo de edad 0 A 11 años (fila 126) ---
+$p_0a11   = esniGetCasos($casosPorEtiquetaP, '0 A 11 años');
+// --- Grupo de edad 12 a 17 años (fila 127) ---
+$p_12a17  = esniGetCasos($casosPorEtiquetaP, '12 a 17 años');
+// --- Grupo de edad 18 a 29 años (fila 128) ---
+$p_18a29  = esniGetCasos($casosPorEtiquetaP, '18 a 29 años');
+// --- Grupo de edad 30 a 59 años (fila 129) ---
+$p_30a59  = esniGetCasos($casosPorEtiquetaP, '30 a 59 años');
+// --- Grupo de edad 60 a mas años (fila 130) ---
+$p_60mas  = esniGetCasos($casosPorEtiquetaP, '60 a mas años');
+
+// 4.3P Total Seccion P (celda C131 = SUMA de todas las celdas anteriores)
+$p_total = $p_0a11 + $p_12a17 + $p_18a29 + $p_30a59 + $p_60mas;
+
 // 4.4 Construir el mapa final celda => valor
 $cellValues = [
     // Encabezado (texto)
@@ -1711,6 +1782,23 @@ $cellValues = [
     'T84' => $o_personal_salud,
     // Total General (fila 85): suma de todas las celdas anteriores
     'T85' => $o_total,
+
+    // --- Seccion P: TOTAL DE DOSIS APLICADAS POR GRUPO DE EDAD ---
+    // (celdas C en filas 126-130, layout total_uno: una sola linea por grupo
+    //  de edad con un unico valor = total de dosis aplicadas para ese grupo).
+    //  La celda C131 es la SUMA de todas las celdas anteriores (C126..C130).
+    // 0 A 11 años (fila 126)
+    'C126' => $p_0a11,
+    // 12 a 17 años (fila 127)
+    'C127' => $p_12a17,
+    // 18 a 29 años (fila 128)
+    'C128' => $p_18a29,
+    // 30 a 59 años (fila 129)
+    'C129' => $p_30a59,
+    // 60 a mas años (fila 130)
+    'C130' => $p_60mas,
+    // Total General (fila 131): suma de todas las celdas anteriores
+    'C131' => $p_total,
 ];
 
 // ============================================================================
