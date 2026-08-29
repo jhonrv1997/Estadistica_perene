@@ -289,6 +289,22 @@
  *   C129 = 30 a 59 años  - Total
  *   C130 = 60 a mas años - Total
  *   C131 = SUMA de C126..C130 (todas las celdas anteriores)
+ *
+ * Seccion Q - VARICELA (celdas G/J en filas 128-133, layout total_uno: una
+ * sola linea por grupo de edad con un unico valor = total de dosis aplicadas
+ * para ese grupo). Mismo patron que las secciones H/K/L/O/P: mapa
+ * [etiqueta_normalizada => cantidad] recuperado con esniGetCasos().
+ * Alimenta las celdas G128..G132 de la plantilla oficial (columna G = valor
+ * del grupo de edad) y sus totales en la columna J (J = G, ya que la varicela
+ * es dosis unica y la linea de la seccion Q es directamente el total del
+ * grupo). La fila 133 es la SUMA de todas las celdas anteriores (G128..G132).
+ *   G128/J128 = 3 años            - Total
+ *   G129/J129 = 4 años            - Total
+ *   G130/J130 = 5 años            - Total
+ *   G131/J131 = 6 años a mas      - Total
+ *   G132/J132 = Personal de Salud - Total
+ *   G133 = SUMA de G128..G132
+ *   J133 = SUMA de J128..J132 (igual a G133)
  */
 
 require_once 'includes/auth.php';
@@ -826,6 +842,38 @@ if ($seccionP !== null) {
             $casosPorEtiquetaP[$etqNorm] += (int)$lin['cantidad'];
         } else {
             $casosPorEtiquetaP[$etqNorm] = (int)$lin['cantidad'];
+        }
+    }
+}
+
+// -----------------------------------------------------------------------------
+// 3.16 Indexar lineas de la SECCION Q (VARICELA) por etiqueta normalizada.
+// Esta seccion tiene layout "total_uno" (al igual que H, K, L, O y P): cada
+// grupo de edad tiene una unica linea cuyo valor es directamente el total de
+// dosis aplicadas para ese grupo (no hay desglose por dosis). Por eso se
+// indexa por etiqueta normalizada y se recupera con el helper esniGetCasos()
+// (mismo patron que A/B/C/H/K/L/O/P).
+// Alimenta las celdas G128..G132 (y J128..J132) de la plantilla oficial:
+//   G128 = 3 años,            G129 = 4 años,   G130 = 5 años,
+//   G131 = 6 años a mas,      G132 = Personal de Salud.
+// La fila 133 es la SUMA de todas las celdas anteriores (G128..G132).
+// -----------------------------------------------------------------------------
+$seccionQ = null;
+foreach ($reporte['secciones'] as $sec) {
+    if (strcasecmp($sec['codigo'], 'Q') === 0) {
+        $seccionQ = $sec;
+        break;
+    }
+}
+
+$casosPorEtiquetaQ = []; // [etiqueta_normalizada => int]
+if ($seccionQ !== null) {
+    foreach ($seccionQ['lineas'] as $lin) {
+        $etqNorm = esniNormalizarEtiqueta($lin['etiqueta']);
+        if (isset($casosPorEtiquetaQ[$etqNorm])) {
+            $casosPorEtiquetaQ[$etqNorm] += (int)$lin['cantidad'];
+        } else {
+            $casosPorEtiquetaQ[$etqNorm] = (int)$lin['cantidad'];
         }
     }
 }
@@ -1404,6 +1452,34 @@ $p_60mas  = esniGetCasos($casosPorEtiquetaP, '60 a mas años');
 // 4.3P Total Seccion P (celda C131 = SUMA de todas las celdas anteriores)
 $p_total = $p_0a11 + $p_12a17 + $p_18a29 + $p_30a59 + $p_60mas;
 
+//-----------------------------------------------------------------------------
+// 4.2Q Casos por linea (Seccion Q - VARICELA)
+//-----------------------------------------------------------------------------
+// Etiquetas tomadas literalmente de la configuracion ESNI_LINEA_REPORTE para
+// la seccion con codigo 'Q'. Esta seccion tiene layout "total_uno" (al igual
+// que H, K, L, O y P): cada grupo de edad tiene una unica linea cuyo valor es
+// directamente el total de dosis aplicadas para ese grupo (no hay desglose por
+// dosis). Por eso se indexa por etiqueta normalizada y se recupera con el
+// helper esniGetCasos() (mismo patron que A/B/C/H/K/L/O/P).
+// Alimenta las celdas G128..G132 de la plantilla oficial (columna J = G, pues
+// la varicela es dosis unica y la linea ya es el total del grupo):
+//   G128 = 3 años,   G129 = 4 años,   G130 = 5 años,
+//   G131 = 6 años a mas,   G132 = Personal de Salud.
+// --- Grupo de edad 3 años (fila 128) ---
+$q_3anos = esniGetCasos($casosPorEtiquetaQ, '3 años');
+// --- Grupo de edad 4 años (fila 129) ---
+$q_4anos = esniGetCasos($casosPorEtiquetaQ, '4 años');
+// --- Grupo de edad 5 años (fila 130) ---
+$q_5anos = esniGetCasos($casosPorEtiquetaQ, '5 años');
+// --- Grupo de edad 6 años a mas (fila 131) ---
+$q_6amas = esniGetCasos($casosPorEtiquetaQ, '6 años a mas');
+// --- Personal de Salud (fila 132) ---
+$q_personal_salud = esniGetCasos($casosPorEtiquetaQ, 'Personal de Salud');
+
+// 4.3Q Total Seccion Q (fila 133 = SUMA de todas las celdas anteriores
+// G128..G132; la columna J replica el mismo total)
+$q_total = $q_3anos + $q_4anos + $q_5anos + $q_6amas + $q_personal_salud;
+
 // 4.4 Construir el mapa final celda => valor
 $cellValues = [
     // Encabezado (texto)
@@ -1799,6 +1875,24 @@ $cellValues = [
     'C130' => $p_60mas,
     // Total General (fila 131): suma de todas las celdas anteriores
     'C131' => $p_total,
+
+    // --- Seccion Q: VARICELA ---
+    // (celdas G/J en filas 128-133, layout total_uno: una sola linea por grupo
+    //  de edad con un unico valor = total de dosis aplicadas para ese grupo).
+    //  Columna J = columna G (dosis unica: la linea de la seccion Q ya es el
+    //  total del grupo). La fila 133 es la SUMA de las celdas anteriores.
+    // 3 años (fila 128)
+    'G128' => $q_3anos,         'J128' => $q_3anos,
+    // 4 años (fila 129)
+    'G129' => $q_4anos,         'J129' => $q_4anos,
+    // 5 años (fila 130)
+    'G130' => $q_5anos,         'J130' => $q_5anos,
+    // 6 años a mas (fila 131)
+    'G131' => $q_6amas,         'J131' => $q_6amas,
+    // Personal de Salud (fila 132)
+    'G132' => $q_personal_salud, 'J132' => $q_personal_salud,
+    // Total General (fila 133): suma de G128+G129+G130+G131+G132
+    'G133' => $q_total,         'J133' => $q_total,
 ];
 
 // ============================================================================
