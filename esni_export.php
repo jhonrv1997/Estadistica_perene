@@ -305,6 +305,21 @@
  *   G132/J132 = Personal de Salud - Total
  *   G133 = SUMA de G128..G132
  *   J133 = SUMA de J128..J132 (igual a G133)
+ *
+ * Seccion R - HEPATITIS A (celdas N en filas 125-130, layout total_uno: una
+ * sola linea por grupo de edad con un unico valor = total de dosis aplicadas
+ * para ese grupo). Mismo patron que las secciones H/K/L/O/P/Q: mapa
+ * [etiqueta_normalizada => cantidad] recuperado con esniGetCasos().
+ * Alimenta las celdas N125..N129 de la plantilla oficial (columna N = TOTAL
+ * del grupo de edad, ya que la Hepatitis A es dosis unica y la linea de la
+ * seccion R es directamente el total del grupo). La celda N130 es la SUMA de
+ * todas las celdas anteriores (N125..N129).
+ *   N125 = 1 AÑO  - Total
+ *   N126 = 2 AÑOS - Total
+ *   N127 = 3 AÑOS - Total
+ *   N128 = 4 AÑOS - Total
+ *   N129 = 5 AÑOS - Total
+ *   N130 = SUMA de N125..N129 (todas las celdas anteriores)
  */
 
 require_once 'includes/auth.php';
@@ -874,6 +889,38 @@ if ($seccionQ !== null) {
             $casosPorEtiquetaQ[$etqNorm] += (int)$lin['cantidad'];
         } else {
             $casosPorEtiquetaQ[$etqNorm] = (int)$lin['cantidad'];
+        }
+    }
+}
+
+// -----------------------------------------------------------------------------
+// 3.17 Indexar lineas de la SECCION R (HEPATITIS A) por etiqueta normalizada.
+// Esta seccion tiene layout "total_uno" (al igual que H, K, L, O, P y Q): cada
+// grupo de edad tiene una unica linea cuyo valor es directamente el total de
+// dosis aplicadas para ese grupo (no hay desglose por dosis). Por eso se
+// indexa por etiqueta normalizada y se recupera con el helper esniGetCasos()
+// (mismo patron que A/B/C/H/K/L/O/P/Q).
+// Alimenta las celdas N125..N129 de la plantilla oficial:
+//   N125 = 1 AÑO,   N126 = 2 AÑOS,   N127 = 3 AÑOS,
+//   N128 = 4 AÑOS,   N129 = 5 AÑOS.
+// La celda N130 = SUMA de todas las celdas anteriores (N125..N129).
+// -----------------------------------------------------------------------------
+$seccionR = null;
+foreach ($reporte['secciones'] as $sec) {
+    if (strcasecmp($sec['codigo'], 'R') === 0) {
+        $seccionR = $sec;
+        break;
+    }
+}
+
+$casosPorEtiquetaR = []; // [etiqueta_normalizada => int]
+if ($seccionR !== null) {
+    foreach ($seccionR['lineas'] as $lin) {
+        $etqNorm = esniNormalizarEtiqueta($lin['etiqueta']);
+        if (isset($casosPorEtiquetaR[$etqNorm])) {
+            $casosPorEtiquetaR[$etqNorm] += (int)$lin['cantidad'];
+        } else {
+            $casosPorEtiquetaR[$etqNorm] = (int)$lin['cantidad'];
         }
     }
 }
@@ -1480,6 +1527,35 @@ $q_personal_salud = esniGetCasos($casosPorEtiquetaQ, 'Personal de Salud');
 // G128..G132; la columna J replica el mismo total)
 $q_total = $q_3anos + $q_4anos + $q_5anos + $q_6amas + $q_personal_salud;
 
+//-----------------------------------------------------------------------------
+// 4.2R Casos por linea (Seccion R - HEPATITIS A)
+//-----------------------------------------------------------------------------
+// Etiquetas tomadas literalmente de la configuracion ESNI_LINEA_REPORTE para
+// la seccion con codigo 'R'. Esta seccion tiene layout "total_uno" (al igual
+// que H, K, L, O, P y Q): cada grupo de edad tiene una unica linea cuyo valor
+// es directamente el total de dosis aplicadas para ese grupo (no hay desglose
+// por dosis). Por eso se indexa por etiqueta normalizada y se recupera con el
+// helper esniGetCasos() (mismo patron que A/B/C/H/K/L/O/P/Q).
+// Alimenta las celdas N125..N129 de la plantilla oficial (columna N = TOTAL
+// del grupo de edad, ya que la Hepatitis A en ninos es dosis unica y la linea
+// de la seccion R es directamente el total del grupo):
+//   N125 = 1 AÑO,   N126 = 2 AÑOS,   N127 = 3 AÑOS,
+//   N128 = 4 AÑOS,   N129 = 5 AÑOS.
+// --- Grupo de edad 1 AÑO (fila 125) ---
+$r_1ano = esniGetCasos($casosPorEtiquetaR, '1 AÑO');
+// --- Grupo de edad 2 AÑOS (fila 126) ---
+$r_2anos = esniGetCasos($casosPorEtiquetaR, '2 AÑOS');
+// --- Grupo de edad 3 AÑOS (fila 127) ---
+$r_3anos = esniGetCasos($casosPorEtiquetaR, '3 AÑOS');
+// --- Grupo de edad 4 AÑOS (fila 128) ---
+$r_4anos = esniGetCasos($casosPorEtiquetaR, '4 AÑOS');
+// --- Grupo de edad 5 AÑOS (fila 129) ---
+$r_5anos = esniGetCasos($casosPorEtiquetaR, '5 AÑOS');
+
+// 4.3R Total Seccion R (celda N130 = SUMA de todas las celdas anteriores
+// N125..N129)
+$r_total = $r_1ano + $r_2anos + $r_3anos + $r_4anos + $r_5anos;
+
 // 4.4 Construir el mapa final celda => valor
 $cellValues = [
     // Encabezado (texto)
@@ -1893,6 +1969,25 @@ $cellValues = [
     'G132' => $q_personal_salud, 'J132' => $q_personal_salud,
     // Total General (fila 133): suma de G128+G129+G130+G131+G132
     'G133' => $q_total,         'J133' => $q_total,
+
+    // --- Seccion R: HEPATITIS A ---
+    // (celdas N en filas 125-130, layout total_uno: una sola linea por grupo
+    //  de edad con un unico valor = total de dosis aplicadas para ese grupo).
+    //  Columna N = TOTAL del grupo de edad (dosis unica: la linea de la
+    //  seccion R ya es el total del grupo). La fila 130 es la SUMA de las
+    //  celdas anteriores (N125..N129).
+    // 1 AÑO (fila 125)
+    'N125' => $r_1ano,
+    // 2 AÑOS (fila 126)
+    'N126' => $r_2anos,
+    // 3 AÑOS (fila 127)
+    'N127' => $r_3anos,
+    // 4 AÑOS (fila 128)
+    'N128' => $r_4anos,
+    // 5 AÑOS (fila 129)
+    'N129' => $r_5anos,
+    // Total General (fila 130): suma de N125+N126+N127+N128+N129
+    'N130' => $r_total,
 ];
 
 // ============================================================================
