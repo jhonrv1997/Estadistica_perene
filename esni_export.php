@@ -216,6 +216,20 @@
  *   R97         = O97 + P97 + Q97
  *   O100/P100/Q100 = Gestantes - D1/D2/D3
  *   R100           = O100 + P100 + Q100
+ *
+ * Seccion K - ANTIAMARILICA EN POBLACION NO VACUNADA Y VIAJEROS (celda I en
+ * filas 110-114, layout total_uno: una sola linea por grupo de edad con un
+ * unico valor = total de dosis aplicadas para ese grupo).
+ * A diferencia de la seccion J (matriz_dosis con 3 dosis por grupo), aqui
+ * cada grupo de edad tiene una unica linea cuyo valor es directamente el
+ * total, por lo que se indexa igual que las secciones A/B/C/H (mapa
+ * [etiqueta_normalizada => cantidad]) y se recupera con el helper
+ * esniGetCasos().
+ *   I110 = 05 a 11 años - Total
+ *   I111 = 12 a 17 años - Total
+ *   I112 = 18 a 29 años - Total
+ *   I113 = 30 a 59 años - Total
+ *   I114 = 60 + años   - Total
  */
 
 require_once 'includes/auth.php';
@@ -594,6 +608,36 @@ if ($seccionJ !== null) {
             $casosPorEtiquetaDosisJ[$key] += (int)$lin['cantidad'];
         } else {
             $casosPorEtiquetaDosisJ[$key] = (int)$lin['cantidad'];
+        }
+    }
+}
+
+// -----------------------------------------------------------------------------
+// 3.11 Indexar lineas de la SECCION K (ANTIAMARILICA EN POBLACION NO VACUNADA
+// Y VIAJEROS A ZONAS ENDEMICAS) por etiqueta normalizada. Esta seccion tiene
+// layout "total_uno" (al igual que la seccion H): una sola linea por grupo de
+// edad cuyo valor es el total de dosis aplicadas. Se indexa por etiqueta
+// normalizada (mismo patron que A/B/C/H) y se recupera con esniGetCasos().
+// Alimenta las celdas I110..I114 de la plantilla oficial:
+//   I110 = 05 a 11 años, I111 = 12 a 17 años, I112 = 18 a 29 años,
+//   I113 = 30 a 59 años, I114 = 60 + años.
+// -----------------------------------------------------------------------------
+$seccionK = null;
+foreach ($reporte['secciones'] as $sec) {
+    if (strcasecmp($sec['codigo'], 'K') === 0) {
+        $seccionK = $sec;
+        break;
+    }
+}
+
+$casosPorEtiquetaK = []; // [etiqueta_normalizada => int]
+if ($seccionK !== null) {
+    foreach ($seccionK['lineas'] as $lin) {
+        $etqNorm = esniNormalizarEtiqueta($lin['etiqueta']);
+        if (isset($casosPorEtiquetaK[$etqNorm])) {
+            $casosPorEtiquetaK[$etqNorm] += (int)$lin['cantidad'];
+        } else {
+            $casosPorEtiquetaK[$etqNorm] = (int)$lin['cantidad'];
         }
     }
 }
@@ -1004,6 +1048,30 @@ $j_hvb30a59_total  = $j_hvb30a59_d1 + $j_hvb30a59_d2 + $j_hvb30a59_d3;
 $j_hvbps_total     = $j_hvbps_d1    + $j_hvbps_d2    + $j_hvbps_d3;
 $j_hvbgest_total   = $j_hvbgest_d1  + $j_hvbgest_d2  + $j_hvbgest_d3;
 
+//-----------------------------------------------------------------------------
+// 4.2K Casos por linea (Seccion K - ANTIAMARILICA EN POBLACION NO VACUNADA
+// Y VIAJEROS A ZONAS ENDEMICAS)
+//-----------------------------------------------------------------------------
+// Etiquetas tomadas literalmente de la configuracion ESNI_LINEA_REPORTE para
+// la seccion con codigo 'K' (id_seccion = 10). Esta seccion tiene layout
+// "total_uno" (al igual que la seccion H): cada grupo de edad tiene una unica
+// linea cuyo valor es directamente el total de dosis aplicadas para ese grupo
+// (no hay desglose por dosis). Por eso se indexa por etiqueta normalizada y se
+// recupera con el helper esniGetCasos() (mismo patron que A/B/C/H).
+// Alimenta las celdas I110..I114 de la plantilla oficial:
+//   I110 = 05 a 11 años, I111 = 12 a 17 años, I112 = 18 a 29 años,
+//   I113 = 30 a 59 años, I114 = 60 + años.
+// --- 05 a 11 años (fila 110) ---
+$k_antiamar5a11  = esniGetCasos($casosPorEtiquetaK, '05 a 11 años');
+// --- 12 a 17 años (fila 111) ---
+$k_antiamar12a17 = esniGetCasos($casosPorEtiquetaK, '12 a 17 años');
+// --- 18 a 29 años (fila 112) ---
+$k_antiamar18a29 = esniGetCasos($casosPorEtiquetaK, '18 a 29 años');
+// --- 30 a 59 años (fila 113) ---
+$k_antiamar30a59 = esniGetCasos($casosPorEtiquetaK, '30 a 59 años');
+// --- 60 + años (fila 114) ---
+$k_antiamar60mas = esniGetCasos($casosPorEtiquetaK, '60 + años');
+
 // 4.4 Construir el mapa final celda => valor
 $cellValues = [
     // Encabezado (texto)
@@ -1303,6 +1371,20 @@ $cellValues = [
     'P100' => $j_hvbgest_d2,
     'Q100' => $j_hvbgest_d3,
     'R100' => $j_hvbgest_total,
+
+    // --- Seccion K: ANTIAMARILICA EN POBLACION NO VACUNADA Y VIAJEROS ---
+    // (celdas I en filas 110-114, layout total_uno: una sola linea por grupo
+    //  de edad con un unico valor = total de dosis aplicadas para ese grupo)
+    // 05 a 11 años (fila 110)
+    'I110' => $k_antiamar5a11,
+    // 12 a 17 años (fila 111)
+    'I111' => $k_antiamar12a17,
+    // 18 a 29 años (fila 112)
+    'I112' => $k_antiamar18a29,
+    // 30 a 59 años (fila 113)
+    'I113' => $k_antiamar30a59,
+    // 60 + años (fila 114)
+    'I114' => $k_antiamar60mas,
 ];
 
 // ============================================================================
