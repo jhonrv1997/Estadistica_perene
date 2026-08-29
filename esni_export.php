@@ -256,6 +256,26 @@
  *   R113 = SUMA de todas las celdas Masculino (R107..R112)
  *   S113 = SUMA de todas las celdas Femenino  (S107..S112)
  *   T113 = SUMA de todas las celdas Total     (T107..T112)
+ *
+ * Seccion O - NEUMOCOCO EN POBLACION EN RIESGO (celdas T en filas 70-84,
+ * layout total_uno: una sola linea por grupo de edad con un unico valor =
+ * total de dosis aplicadas para ese grupo). Mismo patron que las secciones
+ * H/K/L: mapa [etiqueta_normalizada => cantidad] recuperado con esniGetCasos().
+ * Alimenta las celdas T70..T84 de la plantilla oficial, y la celda T85 es la
+ * SUMA de todas las celdas anteriores (T70..T84, sin contar filas vacias).
+ *   T70 = CON COMORBILIDAD 5-11a     - Total
+ *   T71 = CON COMORBILIDAD 12-17a    - Total
+ *   T72 = CON COMORBILIDAD 18-29a    - Total
+ *   T73 = CON COMORBILIDAD 30-49a    - Total
+ *   T74 = CON COMORBILIDAD 50-59a    - Total
+ *   T75 = SIN COMORBILIDAD 05-11a    - Total
+ *   T76 = SIN COMORBILIDAD 12-17a    - Total
+ *   T77 = SIN COMORBILIDAD 18-29a    - Total
+ *   T78 = SIN COMORBILIDAD 30-49a    - Total
+ *   T79 = SIN COMORBILIDAD 50-59a    - Total
+ *   T80 = 60 A MAS AÑOS              - Total
+ *   T84 = PERSONAL DE SALUD          - Total
+ *   T85 = SUMA de T70..T80 + T84 (todas las celdas anteriores)
  */
 
 require_once 'includes/auth.php';
@@ -725,6 +745,42 @@ if ($seccionN !== null) {
             $casosPorEtiquetaSexoN[$key] += (int)$lin['cantidad'];
         } else {
             $casosPorEtiquetaSexoN[$key] = (int)$lin['cantidad'];
+        }
+    }
+}
+
+// -----------------------------------------------------------------------------
+// 3.14 Indexar lineas de la SECCION O (NEUMOCOCO EN POBLACION EN RIESGO) por
+// etiqueta normalizada. Esta seccion tiene layout "total_uno" (al igual que
+// las secciones H, K y L): cada grupo de edad tiene una unica linea cuyo valor
+// es directamente el total de dosis aplicadas para ese grupo (no hay
+// desglose por dosis). Por eso se indexa por etiqueta normalizada y se
+// recupera con el helper esniGetCasos() (mismo patron que A/B/C/H/K/L).
+// Alimenta las celdas T70..T84 de la plantilla oficial:
+//   T70 = CON COMORBILIDAD 5-11a,  T71 = CON COMORBILIDAD 12-17a,
+//   T72 = CON COMORBILIDAD 18-29a, T73 = CON COMORBILIDAD 30-49a,
+//   T74 = CON COMORBILIDAD 50-59a, T75 = SIN COMORBILIDAD 05-11a,
+//   T76 = SIN COMORBILIDAD 12-17a, T77 = SIN COMORBILIDAD 18-29a,
+//   T78 = SIN COMORBILIDAD 30-49a, T79 = SIN COMORBILIDAD 50-59a,
+//   T80 = 60 A MAS AÑOS,           T84 = PERSONAL DE SALUD.
+// La celda T85 = SUMA de todas las celdas anteriores (T70..T80 + T84).
+// -----------------------------------------------------------------------------
+$seccionO = null;
+foreach ($reporte['secciones'] as $sec) {
+    if (strcasecmp($sec['codigo'], 'O') === 0) {
+        $seccionO = $sec;
+        break;
+    }
+}
+
+$casosPorEtiquetaO = []; // [etiqueta_normalizada => int]
+if ($seccionO !== null) {
+    foreach ($seccionO['lineas'] as $lin) {
+        $etqNorm = esniNormalizarEtiqueta($lin['etiqueta']);
+        if (isset($casosPorEtiquetaO[$etqNorm])) {
+            $casosPorEtiquetaO[$etqNorm] += (int)$lin['cantidad'];
+        } else {
+            $casosPorEtiquetaO[$etqNorm] = (int)$lin['cantidad'];
         }
     }
 }
@@ -1239,6 +1295,44 @@ $n_vph_total_m = $n_vph9_m  + $n_vph10_m  + $n_vph11_m  + $n_vph12_m  + $n_vph13
 $n_vph_total_f = $n_vph9_f  + $n_vph10_f  + $n_vph11_f  + $n_vph12_f  + $n_vph13_f  + $n_vph14mas_f;
 $n_vph_total_t = $n_vph9_total + $n_vph10_total + $n_vph11_total + $n_vph12_total + $n_vph13_total + $n_vph14mas_total;
 
+//-----------------------------------------------------------------------------
+// 4.2O Casos por linea (Seccion O - NEUMOCOCO EN POBLACION EN RIESGO)
+//-----------------------------------------------------------------------------
+// Etiquetas tomadas literalmente de la configuracion ESNI_LINEA_REPORTE para
+// la seccion con codigo 'O' (id_seccion = 13). Esta seccion tiene layout
+// "total_uno" (al igual que H, K y L): cada grupo de edad tiene una unica linea
+// cuyo valor es directamente el total de dosis aplicadas para ese grupo (no hay
+// desglose por dosis). Por eso se indexa por etiqueta normalizada y se
+// recupera con el helper esniGetCasos() (mismo patron que A/B/C/H/K/L).
+// Alimenta las celdas T70..T84 de la plantilla oficial:
+//   T70..T74 = CON COMORBILIDAD 5-11a / 12-17a / 18-29a / 30-49a / 50-59a
+//   T75..T79 = SIN COMORBILIDAD 05-11a / 12-17a / 18-29a / 30-49a / 50-59a
+//   T80      = 60 A MAS AÑOS
+//   T84      = PERSONAL DE SALUD
+// --- CON COMORBILIDAD (filas 70-74) ---
+$o_comorb_05_11  = esniGetCasos($casosPorEtiquetaO, 'CON COMORBILIDAD 5-11a');
+$o_comorb_12_17  = esniGetCasos($casosPorEtiquetaO, 'CON COMORBILIDAD 12-17a');
+$o_comorb_18_29  = esniGetCasos($casosPorEtiquetaO, 'CON COMORBILIDAD 18-29a');
+$o_comorb_30_49  = esniGetCasos($casosPorEtiquetaO, 'CON COMORBILIDAD 30-49a');
+$o_comorb_50_59  = esniGetCasos($casosPorEtiquetaO, 'CON COMORBILIDAD 50-59a');
+// --- SIN COMORBILIDAD (filas 75-79) ---
+$o_sincom_05_11  = esniGetCasos($casosPorEtiquetaO, 'SIN COMORBILIDAD 05-11a');
+$o_sincom_12_17  = esniGetCasos($casosPorEtiquetaO, 'SIN COMORBILIDAD 12-17a');
+$o_sincom_18_29  = esniGetCasos($casosPorEtiquetaO, 'SIN COMORBILIDAD 18-29a');
+$o_sincom_30_49  = esniGetCasos($casosPorEtiquetaO, 'SIN COMORBILIDAD 30-49a');
+$o_sincom_50_59  = esniGetCasos($casosPorEtiquetaO, 'SIN COMORBILIDAD 50-59a');
+// --- 60 A MAS AÑOS (fila 80) ---
+$o_60amas        = esniGetCasos($casosPorEtiquetaO, '60 A MAS AÑOS');
+// --- PERSONAL DE SALUD (fila 84) ---
+$o_personal_salud = esniGetCasos($casosPorEtiquetaO, 'PERSONAL DE SALUD');
+
+// 4.3O Total Seccion O (celda T85 = SUMA de todas las celdas anteriores)
+$o_total = $o_comorb_05_11 + $o_comorb_12_17 + $o_comorb_18_29
+         + $o_comorb_30_49 + $o_comorb_50_59
+         + $o_sincom_05_11 + $o_sincom_12_17 + $o_sincom_18_29
+         + $o_sincom_30_49 + $o_sincom_50_59
+         + $o_60amas + $o_personal_salud;
+
 // 4.4 Construir el mapa final celda => valor
 $cellValues = [
     // Encabezado (texto)
@@ -1594,6 +1688,29 @@ $cellValues = [
     'R113' => $n_vph_total_m,
     'S113' => $n_vph_total_f,
     'T113' => $n_vph_total_t,
+
+    // --- Seccion O: NEUMOCOCO EN POBLACION EN RIESGO ---
+    // (celdas T en filas 70-84, layout total_uno: una sola linea por grupo
+    //  de edad con un unico valor = total de dosis aplicadas para ese grupo).
+    //  La celda T85 es la SUMA de todas las celdas anteriores (T70..T80 + T84).
+    // CON COMORBILIDAD (filas 70-74)
+    'T70' => $o_comorb_05_11,
+    'T71' => $o_comorb_12_17,
+    'T72' => $o_comorb_18_29,
+    'T73' => $o_comorb_30_49,
+    'T74' => $o_comorb_50_59,
+    // SIN COMORBILIDAD (filas 75-79)
+    'T75' => $o_sincom_05_11,
+    'T76' => $o_sincom_12_17,
+    'T77' => $o_sincom_18_29,
+    'T78' => $o_sincom_30_49,
+    'T79' => $o_sincom_50_59,
+    // 60 A MAS AÑOS (fila 80)
+    'T80' => $o_60amas,
+    // PERSONAL DE SALUD (fila 84)
+    'T84' => $o_personal_salud,
+    // Total General (fila 85): suma de todas las celdas anteriores
+    'T85' => $o_total,
 ];
 
 // ============================================================================
