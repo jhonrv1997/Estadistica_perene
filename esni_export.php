@@ -320,6 +320,19 @@
  *   N128 = 4 AÑOS - Total
  *   N129 = 5 AÑOS - Total
  *   N130 = SUMA de N125..N129 (todas las celdas anteriores)
+ *
+ * Seccion T - SPR-SARAMPION (celdas S en filas 125-128, layout total_uno: una
+ * sola linea por grupo de edad con un unico valor = total de dosis aplicadas
+ * para ese grupo). Mismo patron que las secciones H/K/L/O/P/Q/R: mapa
+ * [etiqueta_normalizada => cantidad] recuperado con esniGetCasos().
+ * Alimenta las celdas S125..S127 de la plantilla oficial (columna S = TOTAL
+ * del grupo de edad, ya que la SPR-Sarampion es dosis unica y la linea de la
+ * seccion T es directamente el total del grupo). La celda S128 es la SUMA de
+ * todas las celdas anteriores (S125..S127).
+ *   S125 = 5 a 10 años         - Total
+ *   S126 = 11 a 59 años         - Total
+ *   S127 = Trabajador de Salud  - Total
+ *   S128 = SUMA de S125..S127 (todas las celdas anteriores)
  */
 
 require_once 'includes/auth.php';
@@ -921,6 +934,38 @@ if ($seccionR !== null) {
             $casosPorEtiquetaR[$etqNorm] += (int)$lin['cantidad'];
         } else {
             $casosPorEtiquetaR[$etqNorm] = (int)$lin['cantidad'];
+        }
+    }
+}
+
+// -----------------------------------------------------------------------------
+// 3.18 Indexar lineas de la SECCION T (SPR-SARAMPION) por etiqueta normalizada.
+// Esta seccion tiene layout "total_uno" (al igual que H, K, L, O, P, Q y R):
+// cada grupo de edad tiene una unica linea cuyo valor es directamente el total
+// de dosis aplicadas para ese grupo (no hay desglose por dosis). Por eso se
+// indexa por etiqueta normalizada y se recupera con el helper esniGetCasos()
+// (mismo patron que A/B/C/H/K/L/O/P/Q/R).
+// Alimenta las celdas S125..S127 de la plantilla oficial:
+//   S125 = 5 a 10 años,          S126 = 11 a 59 años,
+//   S127 = Trabajador de Salud.
+// La celda S128 = SUMA de todas las celdas anteriores (S125..S127).
+// -----------------------------------------------------------------------------
+$seccionT = null;
+foreach ($reporte['secciones'] as $sec) {
+    if (strcasecmp($sec['codigo'], 'T') === 0) {
+        $seccionT = $sec;
+        break;
+    }
+}
+
+$casosPorEtiquetaT = []; // [etiqueta_normalizada => int]
+if ($seccionT !== null) {
+    foreach ($seccionT['lineas'] as $lin) {
+        $etqNorm = esniNormalizarEtiqueta($lin['etiqueta']);
+        if (isset($casosPorEtiquetaT[$etqNorm])) {
+            $casosPorEtiquetaT[$etqNorm] += (int)$lin['cantidad'];
+        } else {
+            $casosPorEtiquetaT[$etqNorm] = (int)$lin['cantidad'];
         }
     }
 }
@@ -1556,6 +1601,30 @@ $r_5anos = esniGetCasos($casosPorEtiquetaR, '5 AÑOS');
 // N125..N129)
 $r_total = $r_1ano + $r_2anos + $r_3anos + $r_4anos + $r_5anos;
 
+//-----------------------------------------------------------------------------
+// 4.2T Casos por linea (Seccion T - SPR-SARAMPION)
+//-----------------------------------------------------------------------------
+// Etiquetas tomadas literalmente de la configuracion ESNI_LINEA_REPORTE para
+// la seccion con codigo 'T'. Esta seccion tiene layout "total_uno" (al igual
+// que H, K, L, O, P, Q y R): cada grupo de edad tiene una unica linea cuyo
+// valor es directamente el total de dosis aplicadas para ese grupo (no hay
+// desglose por dosis). Por eso se indexa por etiqueta normalizada y se recupera
+// con el helper esniGetCasos() (mismo patron que A/B/C/H/K/L/O/P/Q/R).
+// Alimenta las celdas S125..S127 de la plantilla oficial (columna S = TOTAL
+// del grupo de edad, ya que la SPR-Sarampion es dosis unica y la linea de la
+// seccion T ya es el total del grupo):
+//   S125 = 5 a 10 años,   S126 = 11 a 59 años,   S127 = Trabajador de Salud.
+// --- Grupo de edad 5 a 10 años (fila 125) ---
+$t_5a10  = esniGetCasos($casosPorEtiquetaT, '5 a 10 años');
+// --- Grupo de edad 11 a 59 años (fila 126) ---
+$t_11a59 = esniGetCasos($casosPorEtiquetaT, '11 a 59 años');
+// --- Trabajador de Salud (fila 127) ---
+$t_trabajador_salud = esniGetCasos($casosPorEtiquetaT, 'Trabajador de Salud');
+
+// 4.3T Total Seccion T (celda S128 = SUMA de todas las celdas anteriores
+// S125..S127)
+$t_total = $t_5a10 + $t_11a59 + $t_trabajador_salud;
+
 // 4.4 Construir el mapa final celda => valor
 $cellValues = [
     // Encabezado (texto)
@@ -1988,6 +2057,21 @@ $cellValues = [
     'N129' => $r_5anos,
     // Total General (fila 130): suma de N125+N126+N127+N128+N129
     'N130' => $r_total,
+
+    // --- Seccion T: SPR-SARAMPION ---
+    // (celdas S en filas 125-128, layout total_uno: una sola linea por grupo
+    //  de edad con un unico valor = total de dosis aplicadas para ese grupo).
+    //  Columna S = TOTAL del grupo de edad (dosis unica: la linea de la
+    //  seccion T ya es el total del grupo). La fila 128 es la SUMA de las
+    //  celdas anteriores (S125..S127).
+    // 5 a 10 años (fila 125)
+    'S125' => $t_5a10,
+    // 11 a 59 años (fila 126)
+    'S126' => $t_11a59,
+    // Trabajador de Salud (fila 127)
+    'S127' => $t_trabajador_salud,
+    // Total General (fila 128): suma de S125+S126+S127
+    'S128' => $t_total,
 ];
 
 // ============================================================================
