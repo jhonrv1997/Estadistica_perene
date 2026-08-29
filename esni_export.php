@@ -194,6 +194,28 @@
  *   (Las celdas E107-E111, E113-E116 y E118 corresponden a filas intermedias
  *   con cabeceras/sub-secciones en la plantilla oficial, por lo que no se
  *   asignan desde el motor.)
+ *
+ * Seccion J - HEPATITIS B EN POBLACION DE 05 A 59 AÑOS (celdas O/P/Q/R en
+ * filas 92-100, layout matriz_dosis: O=D1, P=D2, Q=D3, R=Total=D1+D2+D3).
+ * A diferencia de las secciones F/F2/G, en la seccion J las 3 lineas (D1,
+ * D2, D3) de cada grupo de edad comparten la MISMA etiqueta (p.ej. las 3
+ * lineas del grupo "05 a 11 años" usan etiqueta="05 a 11 años" y se
+ * distinguen por dosis_codigo). Por eso el indexado se hace con la clave
+ * compuesta (etiqueta_normalizada + dosis_codigo) en lugar de la etiqueta
+ * sola, y se usa el helper esniGetCasosJDosis() para recuperar el conteo
+ * de cada dosis por separado.
+ *   O92/P92/Q92 = 05 a 11 años - D1/D2/D3
+ *   R92         = O92 + P92 + Q92
+ *   O93/P93/Q93 = 12 a 17 años - D1/D2/D3
+ *   R93         = O93 + P93 + Q93
+ *   O94/P94/Q94 = 18 a 29 años - D1/D2/D3
+ *   R94         = O94 + P94 + Q94
+ *   O95/P95/Q95 = 30 a 59 años - D1/D2/D3
+ *   R95         = O95 + P95 + Q95
+ *   O97/P97/Q97 = Personal de Salud - D1/D2/D3
+ *   R97         = O97 + P97 + Q97
+ *   O100/P100/Q100 = Gestantes - D1/D2/D3
+ *   R100           = O100 + P100 + Q100
  */
 
 require_once 'includes/auth.php';
@@ -543,6 +565,39 @@ if ($seccionH !== null) {
     }
 }
 
+// -----------------------------------------------------------------------------
+// 3.10 Indexar lineas de la SECCION J (HEPATITIS B EN POBLACION DE 05 A 59
+// AÑOS) por etiqueta normalizada + dosis_codigo. Esta seccion tiene layout
+// "matriz_dosis" y, a diferencia de las secciones F/F2/G (donde cada linea
+// tiene una etiqueta unica por dosis, p.ej. "dT 1ra - Mujeres 5 a 9 anos"),
+// en la seccion J las 3 lineas (D1, D2, D3) de un mismo grupo de edad
+// comparten la MISMA etiqueta (p.ej. "05 a 11 años", "Personal de Salud",
+// "Gestantes"). Por eso el indexado se hace con una clave compuesta:
+//   "etiqueta_normalizada|dosis_codigo"
+// para poder recuperar luego el conteo de cada dosis por separado.
+// -----------------------------------------------------------------------------
+$seccionJ = null;
+foreach ($reporte['secciones'] as $sec) {
+    if (strcasecmp($sec['codigo'], 'J') === 0) {
+        $seccionJ = $sec;
+        break;
+    }
+}
+
+$casosPorEtiquetaDosisJ = []; // [etqNorm . '|' . dosis_codigo => int]
+if ($seccionJ !== null) {
+    foreach ($seccionJ['lineas'] as $lin) {
+        $etqNorm  = esniNormalizarEtiqueta($lin['etiqueta']);
+        $dosisCod = isset($lin['dosis_codigo']) ? strtoupper(trim((string)$lin['dosis_codigo'])) : '';
+        $key = $etqNorm . '|' . $dosisCod;
+        if (isset($casosPorEtiquetaDosisJ[$key])) {
+            $casosPorEtiquetaDosisJ[$key] += (int)$lin['cantidad'];
+        } else {
+            $casosPorEtiquetaDosisJ[$key] = (int)$lin['cantidad'];
+        }
+    }
+}
+
 /**
  * Helper: obtiene la cantidad de casos para una etiqueta de linea.
  * Devuelve 0 si la etiqueta no existe en la seccion indicada (no se
@@ -556,6 +611,25 @@ function esniGetCasos(array $casosPorEtiqueta, string $etiqueta): int
 {
     $etqNorm = esniNormalizarEtiqueta($etiqueta);
     return $casosPorEtiqueta[$etqNorm] ?? 0;
+}
+
+/**
+ * Helper: obtiene la cantidad de casos para una etiqueta + dosis de la
+ * seccion J (Hepatitis B Adulto). Necesario porque en la seccion J las 3
+ * lineas de cada grupo de edad (D1/D2/D3) comparten la misma etiqueta; el
+ * indexado se hace por la clave compuesta "etiqueta_normalizada|dosis_codigo".
+ *
+ * @param array  $casosPorEtiquetaDosis Mapa [etqNorm . '|' . dosis_codigo => int].
+ * @param string $etiqueta              Etiqueta de la linea en ESNI_LINEA_REPORTE.
+ * @param string $dosisCodigo           Codigo de dosis (D1, D2, D3, ...).
+ * @return int
+ */
+function esniGetCasosJDosis(array $casosPorEtiquetaDosis, string $etiqueta, string $dosisCodigo): int
+{
+    $etqNorm  = esniNormalizarEtiqueta($etiqueta);
+    $dosisCod = strtoupper(trim($dosisCodigo));
+    $key      = $etqNorm . '|' . $dosisCod;
+    return $casosPorEtiquetaDosis[$key] ?? 0;
 }
 
 /**
@@ -887,6 +961,49 @@ $h_comunidades   = esniGetCasos($casosPorEtiquetaH, 'COMUNIDADES NATIVAS');
 $h_discapacidad  = esniGetCasos($casosPorEtiquetaH, 'PERSONA CON DISCAPACIDAD');
 $h_otros         = esniGetCasos($casosPorEtiquetaH, 'OTROS');
 
+//-----------------------------------------------------------------------------
+// 4.2J Casos por linea (Seccion J - HEPATITIS B EN POBLACION DE 05 A 59 AÑOS)
+//-----------------------------------------------------------------------------
+// Etiquetas tomadas literalmente de la configuracion ESNI_LINEA_REPORTE para
+// la seccion con codigo 'J' (id_seccion = 9). Esta seccion tiene layout
+// "matriz_dosis" y, a diferencia de F/F2/G, las 3 lineas (D1/D2/D3) de cada
+// grupo de edad comparten la MISMA etiqueta. Por eso se usa el helper
+// esniGetCasosJDosis() que indexa por la clave compuesta etiqueta+dosis.
+// Alimenta las celdas O/P/Q/R de las filas 92-100 de la plantilla oficial
+// (O=D1, P=D2, Q=D3, R=Total=D1+D2+D3).
+// --- 05 a 11 años (fila 92) ---
+$j_hvb5a11_d1   = esniGetCasosJDosis($casosPorEtiquetaDosisJ, '05 a 11 años', 'D1');
+$j_hvb5a11_d2   = esniGetCasosJDosis($casosPorEtiquetaDosisJ, '05 a 11 años', 'D2');
+$j_hvb5a11_d3   = esniGetCasosJDosis($casosPorEtiquetaDosisJ, '05 a 11 años', 'D3');
+// --- 12 a 17 años (fila 93) ---
+$j_hvb12a17_d1  = esniGetCasosJDosis($casosPorEtiquetaDosisJ, '12 a 17 años', 'D1');
+$j_hvb12a17_d2  = esniGetCasosJDosis($casosPorEtiquetaDosisJ, '12 a 17 años', 'D2');
+$j_hvb12a17_d3  = esniGetCasosJDosis($casosPorEtiquetaDosisJ, '12 a 17 años', 'D3');
+// --- 18 a 29 años (fila 94) ---
+$j_hvb18a29_d1  = esniGetCasosJDosis($casosPorEtiquetaDosisJ, '18 a 29 años', 'D1');
+$j_hvb18a29_d2  = esniGetCasosJDosis($casosPorEtiquetaDosisJ, '18 a 29 años', 'D2');
+$j_hvb18a29_d3  = esniGetCasosJDosis($casosPorEtiquetaDosisJ, '18 a 29 años', 'D3');
+// --- 30 a 59 años (fila 95) ---
+$j_hvb30a59_d1  = esniGetCasosJDosis($casosPorEtiquetaDosisJ, '30 a 59 años', 'D1');
+$j_hvb30a59_d2  = esniGetCasosJDosis($casosPorEtiquetaDosisJ, '30 a 59 años', 'D2');
+$j_hvb30a59_d3  = esniGetCasosJDosis($casosPorEtiquetaDosisJ, '30 a 59 años', 'D3');
+// --- Personal de Salud (fila 97) ---
+$j_hvbps_d1     = esniGetCasosJDosis($casosPorEtiquetaDosisJ, 'Personal de Salud', 'D1');
+$j_hvbps_d2     = esniGetCasosJDosis($casosPorEtiquetaDosisJ, 'Personal de Salud', 'D2');
+$j_hvbps_d3     = esniGetCasosJDosis($casosPorEtiquetaDosisJ, 'Personal de Salud', 'D3');
+// --- Gestantes (fila 100) ---
+$j_hvbgest_d1   = esniGetCasosJDosis($casosPorEtiquetaDosisJ, 'Gestantes', 'D1');
+$j_hvbgest_d2   = esniGetCasosJDosis($casosPorEtiquetaDosisJ, 'Gestantes', 'D2');
+$j_hvbgest_d3   = esniGetCasosJDosis($casosPorEtiquetaDosisJ, 'Gestantes', 'D3');
+
+// 4.3J Totales Seccion J (celda R = O + P + Q por grupo de edad)
+$j_hvb5a11_total   = $j_hvb5a11_d1  + $j_hvb5a11_d2  + $j_hvb5a11_d3;
+$j_hvb12a17_total  = $j_hvb12a17_d1 + $j_hvb12a17_d2 + $j_hvb12a17_d3;
+$j_hvb18a29_total  = $j_hvb18a29_d1 + $j_hvb18a29_d2 + $j_hvb18a29_d3;
+$j_hvb30a59_total  = $j_hvb30a59_d1 + $j_hvb30a59_d2 + $j_hvb30a59_d3;
+$j_hvbps_total     = $j_hvbps_d1    + $j_hvbps_d2    + $j_hvbps_d3;
+$j_hvbgest_total   = $j_hvbgest_d1  + $j_hvbgest_d2  + $j_hvbgest_d3;
+
 // 4.4 Construir el mapa final celda => valor
 $cellValues = [
     // Encabezado (texto)
@@ -1152,6 +1269,40 @@ $cellValues = [
     // PERSONA CON DISCAPACIDAD (fila 119) y OTROS (fila 120)
     'E119' => $h_discapacidad,
     'E120' => $h_otros,
+
+    // --- Seccion J: HEPATITIS B EN POBLACION DE 05 A 59 AÑOS ---
+    // (celdas O/P/Q/R en filas 92-100, layout matriz_dosis:
+    //  O=D1, P=D2, Q=D3, R=Total = O + P + Q por grupo de edad)
+    // 05 a 11 años (fila 92)
+    'O92'  => $j_hvb5a11_d1,
+    'P92'  => $j_hvb5a11_d2,
+    'Q92'  => $j_hvb5a11_d3,
+    'R92'  => $j_hvb5a11_total,
+    // 12 a 17 años (fila 93)
+    'O93'  => $j_hvb12a17_d1,
+    'P93'  => $j_hvb12a17_d2,
+    'Q93'  => $j_hvb12a17_d3,
+    'R93'  => $j_hvb12a17_total,
+    // 18 a 29 años (fila 94)
+    'O94'  => $j_hvb18a29_d1,
+    'P94'  => $j_hvb18a29_d2,
+    'Q94'  => $j_hvb18a29_d3,
+    'R94'  => $j_hvb18a29_total,
+    // 30 a 59 años (fila 95)
+    'O95'  => $j_hvb30a59_d1,
+    'P95'  => $j_hvb30a59_d2,
+    'Q95'  => $j_hvb30a59_d3,
+    'R95'  => $j_hvb30a59_total,
+    // Personal de Salud (fila 97)
+    'O97'  => $j_hvbps_d1,
+    'P97'  => $j_hvbps_d2,
+    'Q97'  => $j_hvbps_d3,
+    'R97'  => $j_hvbps_total,
+    // Gestantes (fila 100)
+    'O100' => $j_hvbgest_d1,
+    'P100' => $j_hvbgest_d2,
+    'Q100' => $j_hvbgest_d3,
+    'R100' => $j_hvbgest_total,
 ];
 
 // ============================================================================
