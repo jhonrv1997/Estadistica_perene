@@ -1,0 +1,357 @@
+<?php
+/**
+ * Sistema de Gestion de Datos HIS
+ * Pagina: Exportar Reporte Operacional ESNI a Excel (.xlsx) - PLANO HORIZONTAL
+ *
+ * Genera un archivo Excel usando como base la plantilla "Operacional.xlsx"
+ * (ubicada en uploads/Operacional.xlsx) y llenando las celdas de la fila 28
+ * con los datos de la Seccion A (Menores de 01 anio) del reporte ESNI.
+ *
+ * Mapeo de celdas (plantilla Operacional.xlsx):
+ *
+ *   ENCABEZADO (filtros seleccionados por el usuario):
+ *     B5  = Mes (nombre, ej: "Enero")      <- dato del select "mes"
+ *     C28 = Establecimiento (nombre)        <- dato del select "establecimiento"
+ *
+ *   Seccion A - fila 28 (Casos por vacuna/dosis, menores de 01 anio):
+ *
+ *   BCG:
+ *     E28 = BCG - 24 HORAS                       (Casos)
+ *     F28 = BCG - 28 DIAS                        (Casos)
+ *     G28 = BCG - DE 01M A 11M 29D               (Casos)
+ *
+ *   HEPATITIS VIRAL B:
+ *     I28 = HEPATITIS VIRAL B - 12 HORAS         (Casos)
+ *     J28 = HEPATITIS VIRAL B - 24 HORAS         (Casos)
+ *
+ *   ANTIPOLIO - IPV:
+ *     QA28 = ANTIPOLIO - IPV - 02 Y 04 MESES - 1RA DOSIS   (Casos)
+ *     QB28 = ANTIPOLIO - IPV - 02 Y 04 MESES - 2DA DOSIS   (Casos)
+ *     QC28 = ANTIPOLIO - IPV - 06 MESES - 3RA DOSIS        (Casos)
+ *
+ *   PENTAVALENTE:
+ *     Q28  = PENTAVALENTE - 02, 04 Y 06 MESES - 1RA DOSIS  (Casos)
+ *     R28  = PENTAVALENTE - 02, 04 Y 06 MESES - 2DA DOSIS  (Casos)
+ *     S28  = PENTAVALENTE - 02, 04 Y 06 MESES - 3RA DOSIS  (Casos)
+ *
+ *   ROTAVIRUS:
+ *     AF28 = ROTAVIRUS - 02 Y 04 MESES - 1RA DOSIS         (Casos)
+ *     AG28 = ROTAVIRUS - 02 Y 04 MESES - 2DA DOSIS         (Casos)
+ *
+ *   NEUMOCOCO:
+ *     AJ28 = NEUMOCOCO - 02 Y 04 MESES - 1RA DOSIS         (Casos)
+ *     AK28 = NEUMOCOCO - 02 Y 04 MESES - 2DA DOSIS         (Casos)
+ *
+ *   INFLUENZA:
+ *     AN28 = INFLUENZA - 06 Y 07 MESES - 1RA DOSIS         (Casos)
+ *     AO28 = INFLUENZA - 06 Y 07 MESES - 2RA DOSIS         (Casos)
+ *
+ * Funcionamiento:
+ *   1) Recibe por GET los filtros: anio, mes, establecimiento (los mismos
+ *      que reporte_esni.php).
+ *   2) Ejecuta el motor data-driven de ESNI contra la tabla consolidada MySQL
+ *      con Id_Ups = 301204 (estrategia Inmunizaciones).
+ *   3) Indexa las lineas de la Seccion A por etiqueta normalizada.
+ *   4) Recupera el conteo de cada vacuna/dosis con esniGetCasos().
+ *   5) Llena la plantilla Operacional.xlsx con ExcelTemplateFiller (sin
+ *      requerir PhpSpreadsheet ni composer, solo ZipArchive de PHP).
+ *   6) Envia el archivo como descarga al navegador.
+ */
+
+require_once 'includes/auth.php';
+verificarAutenticacion();
+require_once 'includes/functions.php';
+require_once 'includes/esni_data.php';
+require_once 'includes/ExcelTemplateFiller.php';
+
+// ============================================================================
+// 0. Validar que exista la plantilla en uploads/Operacional.xlsx
+// ============================================================================
+$templatePath = __DIR__ . '/uploads/Operacional.xlsx';
+if (!is_readable($templatePath)) {
+    http_response_code(500);
+    htmlErrorPlano(
+        'Falta la plantilla Excel',
+        'No se encontro <code>uploads/Operacional.xlsx</code> en el servidor.<br><br>' .
+        '<b>Soluci&oacute;n:</b> Suba el archivo <code>Operacional.xlsx</code> a la carpeta <code>uploads/</code> del proyecto mediante FTP o el administrador de archivos del hosting.<br><br>' .
+        'Ruta esperada: <code>' . htmlspecialchars($templatePath) . '</code>'
+    );
+}
+
+// Verificar que la extension ZipArchive este disponible
+if (!class_exists('ZipArchive')) {
+    http_response_code(500);
+    htmlErrorPlano(
+        'Extension ZIP no disponible',
+        'El servidor PHP no tiene cargada la extension <code>zip</code> (clase <code>ZipArchive</code>).<br><br>' .
+        '<b>Soluci&oacute;n:</b> En InfinityFree esto se activa desde el panel de control &rarr; PHP Configuration &rarr; marcar "zip". En otros hostings, editar <code>php.ini</code> y agregar <code>extension=zip</code>.'
+    );
+}
+
+// Crear el directorio uploads/tmp/ con permisos adecuados (si no existe)
+$uploadsTmp = __DIR__ . '/uploads/tmp';
+if (!is_dir($uploadsTmp)) {
+    @mkdir($uploadsTmp, 0755, true);
+}
+
+// ============================================================================
+// 1. Filtros (los mismos que reporte_esni.php)
+// ============================================================================
+$pdo = getDBConnection();
+
+if (!esniEsquemaInstalado($pdo)) {
+    http_response_code(500);
+    htmlErrorPlano(
+        'Esquema ESNI no instalado',
+        'El esquema de tablas ESNI no esta instalado en la base de datos.<br><br>' .
+        '<b>Soluci&oacute;n:</b> Ejecute <code>Database/install_esni.sql</code> desde el administrador de MySQL o phpMyAdmin.'
+    );
+}
+
+// Estrategia fija del modulo ESNI: solo Id_Ups = 301204 (Inmunizaciones)
+define('ESNI_ID_UPS', '301204');
+
+$filtros = [
+    'anio'            => trim($_GET['anio'] ?? ''),
+    'mes'             => trim($_GET['mes'] ?? ''),
+    'establecimiento' => trim($_GET['establecimiento'] ?? ''),
+    'id_ups'          => ESNI_ID_UPS,
+];
+
+// El valor de "establecimiento" llega como Codigo_Unico (cargado desde ZSPERENE).
+// Se resuelve el nombre para mostrarlo en el encabezado de la plantilla.
+$nombreEstablecimiento = '';
+$estExport = esniGetEstablecimientosZS($pdo);
+$establecimientosPermitidos = array_keys($estExport);
+if ($filtros['establecimiento'] !== '') {
+    $nombreEstablecimiento = $estExport[$filtros['establecimiento']] ?? $filtros['establecimiento'];
+}
+
+// ----------------------------------------------------------------------------
+// Resolucion de NOMBRES legibles para las celdas de encabezado B5 (mes) y
+// C28 (establecimiento). Se usa el nombre legible ("Enero", "P.S. Chazuta")
+// en lugar del valor crudo del select (numero 1-12, Codigo_Unico), porque un
+// Excel de reporte debe ser legible por humanos. Si prefiere el valor crudo,
+// reemplazar $nombreMes por $filtros['mes'] y $nombreEst por
+// $filtros['establecimiento'] en el array $cellValues (seccion 4).
+// ----------------------------------------------------------------------------
+$nombreMes = $filtros['mes'] !== ''
+    ? getNombreMes((int)$filtros['mes'])
+    : 'TODOS';
+$nombreEst = $nombreEstablecimiento !== '' ? $nombreEstablecimiento : 'TODOS';
+
+// ============================================================================
+// 2. Ejecutar reporte ESNI
+// ============================================================================
+$cols = esniResolverColumnas($pdo);
+$reporte = esniEjecutarReporte($pdo, $filtros, $cols, $establecimientosPermitidos);
+
+if (!empty($reporte['error'])) {
+    http_response_code(500);
+    htmlErrorPlano(
+        'Error al generar el reporte',
+        'No se pudo generar el reporte ESNI.<br><br>' .
+        '<b>Error tecnico:</b><br>' .
+        '<pre style="background:#f8f9fa;padding:.6rem;border-radius:.25rem;overflow:auto;">' .
+        htmlspecialchars($reporte['error']) . '</pre>'
+    );
+}
+
+// ============================================================================
+// 3. Indexar lineas de la SECCION A por etiqueta normalizada
+// ----------------------------------------------------------------------------
+// El motor de reglas devuelve $reporte['secciones'] con todas las secciones
+// (A, B, C, D, H, ...). Aqui solo nos interesa la seccion "A" (Menores de
+// 01 anio). Las etiquetas de las lineas pueden tener ligeras variaciones
+// (espacios extra, Mayusculas) respecto a la nomenclatura de la plantilla.
+// Por eso se normalizan con esniNormalizarEtiquetaPlano() que:
+//   - Pasa a MAYUSCULAS
+//   - Colapsa espacios multiples
+//   - Quita espacios al inicio/final
+//   - Quita asterisco inicial "*" (marcador de "linea informativa")
+// ============================================================================
+$seccionA = null;
+foreach ($reporte['secciones'] as $sec) {
+    if (strcasecmp($sec['codigo'], 'A') === 0) {
+        $seccionA = $sec;
+        break;
+    }
+}
+
+$casosPorEtiqueta = [];
+if ($seccionA !== null) {
+    foreach ($seccionA['lineas'] as $lin) {
+        $etqNorm = esniNormalizarEtiquetaPlano($lin['etiqueta']);
+        // Si la etiqueta ya existe (no deberia), sumamos las cantidades
+        // para ser tolerantes con configuraciones que registren la misma
+        // vacuna en varias lineas con la misma etiqueta.
+        if (isset($casosPorEtiqueta[$etqNorm])) {
+            $casosPorEtiqueta[$etqNorm] += (int)$lin['cantidad'];
+        } else {
+            $casosPorEtiqueta[$etqNorm] = (int)$lin['cantidad'];
+        }
+    }
+}
+
+// ============================================================================
+// 4. Recuperar casos por linea y mapear a celdas de la plantilla
+// ----------------------------------------------------------------------------
+// El mapa $cellMap asocia cada celda destino de la plantilla Operacional.xlsx
+// (fila 28) con la etiqueta exacta de la linea (campo
+// ESNI_LINEA_REPORTE.etiqueta) de donde se toma el valor "Casos".
+// ============================================================================
+$cellMap = [
+    // BCG
+    'E28' => 'BCG - 24 HORAS',
+    'F28' => 'BCG - 28 DIAS',
+    'G28' => 'BCG - DE 01M A 11M 29D',
+    // HEPATITIS VIRAL B
+    'I28' => 'HEPATITIS VIRAL B - 12 HORAS',
+    'J28' => 'HEPATITIS VIRAL B - 24 HORAS',
+    // ANTIPOLIO - IPV
+    'QA28' => 'ANTIPOLIO - IPV - 02 Y 04 MESES - 1RA DOSIS',
+    'QB28' => 'ANTIPOLIO - IPV - 02 Y 04 MESES - 2DA DOSIS',
+    'QC28' => 'ANTIPOLIO - IPV - 06 MESES - 3RA DOSIS',
+    // PENTAVALENTE
+    'Q28' => 'PENTAVALENTE - 02, 04 Y 06 MESES - 1RA DOSIS',
+    'R28' => 'PENTAVALENTE - 02, 04 Y 06 MESES - 2RA DOSIS',
+    'S28' => 'PENTAVALENTE - 02, 04 Y 06 MESES - 3RA DOSIS',
+    // ROTAVIRUS
+    'AF28' => 'ROTAVIRUS - 02 Y 04 MESES - 1RA DOSIS',
+    'AG28' => 'ROTAVIRUS - 02 Y 04 MESES - 2DA DOSIS',
+    // NEUMOCOCO
+    'AJ28' => 'NEUMOCOCO - 02 Y 04 MESES - 1RA DOSIS',
+    'AK28' => 'NEUMOCOCO - 02 Y 04 MESES - 2DA DOSIS',
+    // INFLUENZA
+    'AN28' => 'INFLUENZA - 06 Y 07 MESES - 1RA DOSIS',
+    'AO28' => 'INFLUENZA - 06 Y 07 MESES - 2DA DOSIS',
+];
+
+// Construir el mapa final [celda => valor]
+// -----------------------------------------------------------------------------
+// Nota sobre tipos: ExcelTemplateFiller decide si escribir el valor como
+// numero (<v>11</v>) o como texto (<is><t>Enero</t></is>) en funcion del tipo
+// PHP del valor:
+//   - int / float             -> numero  (Casos)
+//   - string numerica "123"   -> numero  (Casos)
+//   - string no numerica      -> texto   (nombres de mes, establecimiento)
+// Por eso las celdas B5 y C28 (textos) y las celdas de Casos (numeros) pueden
+// convivir en el mismo array $cellValues.
+// -----------------------------------------------------------------------------
+$cellValues = [
+    // === ENCABEZADO (filtros seleccionados por el usuario) ===
+    // B5 = Mes seleccionado (nombre legible: Enero, Febrero, ...)
+    'B5'  => $nombreMes,
+    // C28 = Establecimiento seleccionado (nombre legible)
+    'C28' => $nombreEst,
+];
+foreach ($cellMap as $cellRef => $etiqueta) {
+    $cellValues[$cellRef] = esniGetCasosPlano($casosPorEtiqueta, $etiqueta);
+}
+
+// ============================================================================
+// 5. Llenar la plantilla y descargar
+// ============================================================================
+$filler = new ExcelTemplateFiller($templatePath);
+$filler->setCellValues($cellValues);
+
+// Nombre del archivo descargable. Incluye anio, mes (si viene) y timestamp
+// para evitar colisiones de cache en el navegador.
+$nombreArchivo = 'Reporte_Operacional_ESNI_Plano_'
+               . ($filtros['anio'] !== '' ? $filtros['anio'] : 'all')
+               . ($filtros['mes'] !== '' ? '_' . str_pad($filtros['mes'], 2, '0', STR_PAD_LEFT) : '')
+               . '_' . date('Ymd_His')
+               . '.xlsx';
+
+try {
+    $filler->download($nombreArchivo);
+} catch (Throwable $e) {
+    http_response_code(500);
+    htmlErrorPlano(
+        'Error al generar el Excel',
+        'No se pudo generar el archivo Excel.<br><br>' .
+        '<b>Error tecnico:</b><br>' .
+        '<pre style="background:#f8f9fa;padding:.6rem;border-radius:.25rem;overflow:auto;">' .
+        htmlspecialchars($e->getMessage()) . '</pre><br>' .
+        '<b>Posibles causas:</b><br>' .
+        '<ul>' .
+        '<li>El directorio <code>uploads/tmp/</code> no existe o no es escribible. Cree la carpeta con permisos 0755 (o 0777).</li>' .
+        '<li>La plantilla <code>uploads/Operacional.xlsx</code> esta corrupta o no es un .xlsx valido.</li>' .
+        '<li>El hosting tiene funciones restringidas (tempnam, copy, etc.).</li>' .
+        '</ul>'
+    );
+}
+exit;
+
+// ============================================================================
+// FUNCIONES AUXILIARES (locales, para no depender de esni_export.php)
+// ============================================================================
+
+/**
+ * Devuelve la cantidad de casos para una etiqueta normalizada dada.
+ *
+ * @param array  $casosPorEtiqueta Mapa [etiqueta_normalizada => cantidad].
+ * @param string $etiqueta         Etiqueta tal como viene en la config ESNI.
+ * @return int Cantidad de casos (0 si no hay linea con esa etiqueta).
+ */
+function esniGetCasosPlano(array $casosPorEtiqueta, string $etiqueta): int
+{
+    $etqNorm = esniNormalizarEtiquetaPlano($etiqueta);
+    return $casosPorEtiqueta[$etqNorm] ?? 0;
+}
+
+/**
+ * Normaliza una etiqueta de linea para comparacion robusta.
+ *   - MAYUSCULAS (preserva acentos)
+ *   - Colapsa espacios multiples a uno solo
+ *   - Quita espacios al inicio/final
+ *   - Quita asterisco inicial "*" (marcador de "linea informativa")
+ *
+ * @param string $etiqueta
+ * @return string
+ */
+function esniNormalizarEtiquetaPlano(string $etiqueta): string
+{
+    $s = trim($etiqueta);
+    // Quitar asterisco inicial si lo hay (lineas informativas como "* Personal de Salud")
+    $s = preg_replace('/^\*\s*/', '', $s);
+    // PASAR A MAYUSCULAS (preserva acentos)
+    $s = mb_strtoupper($s, 'UTF-8');
+    // Colapsar espacios multiples
+    $s = preg_replace('/\s+/', ' ', $s);
+    return $s;
+}
+
+/**
+ * Muestra un error HTML amigable y termina la ejecucion.
+ *
+ * @param string $titulo  Titulo corto del error.
+ * @param string $mensaje Mensaje HTML con detalles y soluciones.
+ */
+function htmlErrorPlano(string $titulo, string $mensaje): void
+{
+    // Asegurar que no haya salida previa que rompa el HTML
+    while (ob_get_level() > 0) {
+        ob_end_clean();
+    }
+    header('Content-Type: text/html; charset=utf-8');
+    echo '<!DOCTYPE html><html lang="es"><head><meta charset="UTF-8">'
+       . '<title>Error - ' . htmlspecialchars($titulo) . '</title>'
+       . '<style>'
+       . 'body{font-family:Arial,Helvetica,sans-serif;background:#f5f5f5;margin:0;padding:20px;color:#333;}'
+       . '.container{max-width:720px;margin:40px auto;background:#fff;padding:30px;border-radius:8px;box-shadow:0 2px 8px rgba(0,0,0,.1);}'
+       . 'h1{color:#dc3545;margin:0 0 16px 0;font-size:1.5rem;}'
+       . '.icon{font-size:48px;color:#dc3545;margin-bottom:16px;}'
+       . 'pre{font-family:Consolas,monospace;font-size:.85rem;}'
+       . 'a{color:#0d6efd;}'
+       . '</style></head><body>'
+       . '<div class="container">'
+       . '<div class="icon">&#9888;</div>'
+       . '<h1>' . htmlspecialchars($titulo) . '</h1>'
+       . '<div style="line-height:1.6;">' . $mensaje . '</div>'
+       . '<hr style="margin:24px 0;border:none;border-top:1px solid #eee;">'
+       . '<p style="font-size:.85rem;color:#6c757d;margin:0;">'
+       . 'Sistema de Gestion de Datos HIS - Modulo ESNI (Exportar Plano)</p>'
+       . '</div></body></html>';
+    exit;
+}
