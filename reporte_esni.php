@@ -130,7 +130,7 @@ include 'includes/header.php';
         <div class="d-flex gap-2">
             <?php if ($esquemaOK): ?>
             <?php if (esAdmin()): ?>
-            <a href="install_esni_extra.php" class="btn btn-sm btn-outline-warning" title="Cargar reglas adicionales para codigos de item HIS reales"><i class="fas fa-plus-circle me-1"></i> Reglas extra</a>
+            <a href="" class="btn btn-sm btn-outline-warning" title="Exportar Operacional Excel Horizontal"><i class="fas fa-plus-circle me-1"></i> Exportar Plano</a>
             <?php endif; ?>
             <a href="esni_config.php" class="btn btn-sm btn-outline-secondary"><i class="fas fa-cog me-1"></i> Configurar</a>
             <a href="esni_export.php?<?= http_build_query($filtros) ?>" class="btn btn-sm btn-success"><i class="fas fa-file-excel me-1"></i> Exportar Excel</a>
