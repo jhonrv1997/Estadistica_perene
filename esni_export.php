@@ -238,6 +238,24 @@
  *   O110 = 12 a 17 años - Total
  *   O111 = 18 a 29 años - Total
  *   O112 = 30 a 49 años - Total
+ *
+ * Seccion N - VACUNA VPH (celdas R/S/T en filas 107-113, layout matriz_sexo:
+ * R=Masculino, S=Femenino, T=Total=R+S). Al igual que en la seccion J
+ * (matriz_dosis, donde las 3 lineas D1/D2/D3 de cada grupo comparten la
+ * MISMA etiqueta), aqui las 2 lineas (M y F) de cada grupo de edad comparten
+ * la MISMA etiqueta (p.ej. "9 años", "14 a mas") y se distinguen por el
+ * campo sexo. Por eso el indexado se hace con la clave compuesta
+ * (etiqueta_normalizada + sexo) y se usa el helper esniGetCasosNSexo() para
+ * recuperar el conteo de cada sexo por separado.
+ *   R107/S107/T107 = 9 años   - Masculino/Femenino/Total
+ *   R108/S108/T108 = 10 años  - Masculino/Femenino/Total
+ *   R109/S109/T109 = 11 años  - Masculino/Femenino/Total
+ *   R110/S110/T110 = 12 años  - Masculino/Femenino/Total
+ *   R111/S111/T111 = 13 años  - Masculino/Femenino/Total
+ *   R112/S112/T112 = 14 a mas - Masculino/Femenino/Total
+ *   R113 = SUMA de todas las celdas Masculino (R107..R112)
+ *   S113 = SUMA de todas las celdas Femenino  (S107..S112)
+ *   T113 = SUMA de todas las celdas Total     (T107..T112)
  */
 
 require_once 'includes/auth.php';
@@ -679,6 +697,38 @@ if ($seccionL !== null) {
     }
 }
 
+// -----------------------------------------------------------------------------
+// 3.13 Indexar lineas de la SECCION N (VACUNA VPH) por etiqueta normalizada +
+// sexo. Esta seccion tiene layout "matriz_sexo" y, al igual que en la seccion
+// J (matriz_dosis, donde las 3 lineas D1/D2/D3 de cada grupo de edad
+// comparten la MISMA etiqueta), aqui las 2 lineas (M y F) de cada grupo de
+// edad comparten la MISMA etiqueta (p.ej. "9 años", "14 a mas"). Por eso el
+// indexado se hace con una clave compuesta:
+//   "etiqueta_normalizada|sexo"
+// para poder recuperar luego el conteo de cada sexo por separado.
+// -----------------------------------------------------------------------------
+$seccionN = null;
+foreach ($reporte['secciones'] as $sec) {
+    if (strcasecmp($sec['codigo'], 'N') === 0) {
+        $seccionN = $sec;
+        break;
+    }
+}
+
+$casosPorEtiquetaSexoN = []; // [etqNorm . '|' . sexo => int]
+if ($seccionN !== null) {
+    foreach ($seccionN['lineas'] as $lin) {
+        $etqNorm = esniNormalizarEtiqueta($lin['etiqueta']);
+        $sexoCod = isset($lin['sexo']) ? strtoupper(trim((string)$lin['sexo'])) : '';
+        $key = $etqNorm . '|' . $sexoCod;
+        if (isset($casosPorEtiquetaSexoN[$key])) {
+            $casosPorEtiquetaSexoN[$key] += (int)$lin['cantidad'];
+        } else {
+            $casosPorEtiquetaSexoN[$key] = (int)$lin['cantidad'];
+        }
+    }
+}
+
 /**
  * Helper: obtiene la cantidad de casos para una etiqueta de linea.
  * Devuelve 0 si la etiqueta no existe en la seccion indicada (no se
@@ -711,6 +761,25 @@ function esniGetCasosJDosis(array $casosPorEtiquetaDosis, string $etiqueta, stri
     $dosisCod = strtoupper(trim($dosisCodigo));
     $key      = $etqNorm . '|' . $dosisCod;
     return $casosPorEtiquetaDosis[$key] ?? 0;
+}
+
+/**
+ * Helper: obtiene la cantidad de casos para una etiqueta + sexo de la
+ * seccion N (Vacuna VPH). Necesario porque en la seccion N las 2 lineas
+ * de cada grupo de edad (M/F) comparten la misma etiqueta; el indexado se
+ * hace por la clave compuesta "etiqueta_normalizada|sexo".
+ *
+ * @param array  $casosPorEtiquetaSexo Mapa [etqNorm . '|' . sexo => int].
+ * @param string $etiqueta             Etiqueta de la linea en ESNI_LINEA_REPORTE.
+ * @param string $sexo                 Sexo ('M' = Masculino, 'F' = Femenino).
+ * @return int
+ */
+function esniGetCasosNSexo(array $casosPorEtiquetaSexo, string $etiqueta, string $sexo): int
+{
+    $etqNorm = esniNormalizarEtiqueta($etiqueta);
+    $sexoCod = strtoupper(trim($sexo));
+    $key     = $etqNorm . '|' . $sexoCod;
+    return $casosPorEtiquetaSexo[$key] ?? 0;
 }
 
 /**
@@ -1127,6 +1196,49 @@ $l_dtpa18a29 = esniGetCasos($casosPorEtiquetaL, '18 a 29 años');
 // --- 30 a 49 años (fila 112) ---
 $l_dtpa30a49 = esniGetCasos($casosPorEtiquetaL, '30 a 49 años');
 
+//-----------------------------------------------------------------------------
+// 4.2N Casos por linea (Seccion N - VACUNA VPH)
+//-----------------------------------------------------------------------------
+// Etiquetas tomadas literalmente de la configuracion ESNI_LINEA_REPORTE para
+// la seccion con codigo 'N' (id_seccion = 14). Esta seccion tiene layout
+// "matriz_sexo" y, a diferencia de las secciones indexadas solo por etiqueta,
+// las 2 lineas (M y F) de cada grupo de edad comparten la MISMA etiqueta. Por
+// eso se usa el helper esniGetCasosNSexo() que indexa por la clave compuesta
+// etiqueta+sexo. Alimenta las celdas R/S/T de las filas 107-113 de la
+// plantilla oficial (R=Masculino, S=Femenino, T=Total=R+S).
+// --- 9 años (fila 107) ---
+$n_vph9_m     = esniGetCasosNSexo($casosPorEtiquetaSexoN, '9 años', 'M');
+$n_vph9_f     = esniGetCasosNSexo($casosPorEtiquetaSexoN, '9 años', 'F');
+// --- 10 años (fila 108) ---
+$n_vph10_m    = esniGetCasosNSexo($casosPorEtiquetaSexoN, '10 años', 'M');
+$n_vph10_f    = esniGetCasosNSexo($casosPorEtiquetaSexoN, '10 años', 'F');
+// --- 11 años (fila 109) ---
+$n_vph11_m    = esniGetCasosNSexo($casosPorEtiquetaSexoN, '11 años', 'M');
+$n_vph11_f    = esniGetCasosNSexo($casosPorEtiquetaSexoN, '11 años', 'F');
+// --- 12 años (fila 110) ---
+$n_vph12_m    = esniGetCasosNSexo($casosPorEtiquetaSexoN, '12 años', 'M');
+$n_vph12_f    = esniGetCasosNSexo($casosPorEtiquetaSexoN, '12 años', 'F');
+// --- 13 años (fila 111) ---
+$n_vph13_m    = esniGetCasosNSexo($casosPorEtiquetaSexoN, '13 años', 'M');
+$n_vph13_f    = esniGetCasosNSexo($casosPorEtiquetaSexoN, '13 años', 'F');
+// --- 14 a mas (fila 112) ---
+$n_vph14mas_m = esniGetCasosNSexo($casosPorEtiquetaSexoN, '14 a mas', 'M');
+$n_vph14mas_f = esniGetCasosNSexo($casosPorEtiquetaSexoN, '14 a mas', 'F');
+
+// 4.3N Totales Seccion N:
+//   - Columna T (Total) = R + S (Masculino + Femenino) por grupo de edad.
+//   - Fila 113: suma de todas las filas por columna (R113, S113 y T113).
+$n_vph9_total     = $n_vph9_m     + $n_vph9_f;
+$n_vph10_total    = $n_vph10_m    + $n_vph10_f;
+$n_vph11_total    = $n_vph11_m    + $n_vph11_f;
+$n_vph12_total    = $n_vph12_m    + $n_vph12_f;
+$n_vph13_total    = $n_vph13_m    + $n_vph13_f;
+$n_vph14mas_total = $n_vph14mas_m + $n_vph14mas_f;
+
+$n_vph_total_m = $n_vph9_m  + $n_vph10_m  + $n_vph11_m  + $n_vph12_m  + $n_vph13_m  + $n_vph14mas_m;
+$n_vph_total_f = $n_vph9_f  + $n_vph10_f  + $n_vph11_f  + $n_vph12_f  + $n_vph13_f  + $n_vph14mas_f;
+$n_vph_total_t = $n_vph9_total + $n_vph10_total + $n_vph11_total + $n_vph12_total + $n_vph13_total + $n_vph14mas_total;
+
 // 4.4 Construir el mapa final celda => valor
 $cellValues = [
     // Encabezado (texto)
@@ -1450,6 +1562,38 @@ $cellValues = [
     'O111' => $l_dtpa18a29,
     // 30 a 49 años (fila 112)
     'O112' => $l_dtpa30a49,
+
+    // --- Seccion N: VACUNA VPH ---
+    // (celdas R/S/T en filas 107-113, layout matriz_sexo:
+    //  R=Masculino, S=Femenino, T=Total = R + S por grupo de edad)
+    // 9 años (fila 107)
+    'R107' => $n_vph9_m,
+    'S107' => $n_vph9_f,
+    'T107' => $n_vph9_total,
+    // 10 años (fila 108)
+    'R108' => $n_vph10_m,
+    'S108' => $n_vph10_f,
+    'T108' => $n_vph10_total,
+    // 11 años (fila 109)
+    'R109' => $n_vph11_m,
+    'S109' => $n_vph11_f,
+    'T109' => $n_vph11_total,
+    // 12 años (fila 110)
+    'R110' => $n_vph12_m,
+    'S110' => $n_vph12_f,
+    'T110' => $n_vph12_total,
+    // 13 años (fila 111)
+    'R111' => $n_vph13_m,
+    'S111' => $n_vph13_f,
+    'T111' => $n_vph13_total,
+    // 14 a mas (fila 112)
+    'R112' => $n_vph14mas_m,
+    'S112' => $n_vph14mas_f,
+    'T112' => $n_vph14mas_total,
+    // Totales (fila 113): suma de todas las celdas Masculino / Femenino / Total
+    'R113' => $n_vph_total_m,
+    'S113' => $n_vph_total_f,
+    'T113' => $n_vph_total_t,
 ];
 
 // ============================================================================
