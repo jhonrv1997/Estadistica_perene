@@ -129,13 +129,20 @@
  *     FQ28 = Pentavalente D3 -No vacunado                   (Casos)
  *     TY28 = Refuerzo Pentavalente                          (Casos)
  *
+ *   Seccion E2 - fila 28 (Casos por vacuna/dosis, DE 05 - 07 ANIOS):
+ *
+ *     TD28 = REFUERZO DPT                                   (Casos)
+ *     SK28 = Pentavalente D1 -No vacunado                   (Casos)
+ *     SL28 = Pentavalente D2 -No vacunado                   (Casos)
+ *     SM28 = Pentavalente D3 -No vacunado                   (Casos)
+ *
  * Funcionamiento:
  *   1) Recibe por GET los filtros: anio, mes, establecimiento (los mismos
  *      que reporte_esni.php).
  *   2) Ejecuta el motor data-driven de ESNI contra la tabla consolidada MySQL
  *      con Id_Ups = 301204 (estrategia Inmunizaciones).
- *   3) Indexa las lineas de la Seccion A, Seccion B, Seccion C, Seccion D
- *      y Seccion E1 por etiqueta normalizada.
+ *   3) Indexa las lineas de la Seccion A, Seccion B, Seccion C, Seccion D,
+ *      Seccion E1 y Seccion E2 por etiqueta normalizada.
  *   4) Recupera el conteo de cada vacuna/dosis con esniGetCasos().
  *   5) Llena la plantilla Operacional.xlsx con ExcelTemplateFiller (sin
  *      requerir PhpSpreadsheet ni composer, solo ZipArchive de PHP).
@@ -261,17 +268,19 @@ $casosPorEtiquetaB = esniIndexarCasosSeccionPlano($reporte, 'B');
 $casosPorEtiquetaC = esniIndexarCasosSeccionPlano($reporte, 'C');
 $casosPorEtiquetaD = esniIndexarCasosSeccionPlano($reporte, 'D');
 $casosPorEtiquetaE1 = esniIndexarCasosSeccionPlano($reporte, 'E1');
+$casosPorEtiquetaE2 = esniIndexarCasosSeccionPlano($reporte, 'E2');
 
 // ============================================================================
 // 4. Recuperar casos por linea y mapear a celdas de la plantilla
 // ----------------------------------------------------------------------------
-// Los mapas $cellMapA, $cellMapB, $cellMapC, $cellMapD y $cellMapE1 asocian
+// Los mapas $cellMapA, $cellMapB, $cellMapC, $cellMapD, $cellMapE1 y $cellMapE2 asocian
 // cada celda destino de la plantilla Operacional.xlsx (fila 28) con la
 // etiqueta exacta de la linea (campo ESNI_LINEA_REPORTE.etiqueta) de donde se
 // toma el valor "Casos". $cellMapA toma los casos de la Seccion A (Menores de
 // 01 anio), $cellMapB los de la Seccion B (De 01 anio), $cellMapC los de la
-// Seccion C (Mayores de 01 anio), $cellMapD los de la Seccion D (De 03 anios)
-// y $cellMapE1 los de la Seccion E1 (De 04 anios).
+// Seccion C (Mayores de 01 anio), $cellMapD los de la Seccion D (De 03 anios),
+// $cellMapE1 los de la Seccion E1 (De 04 anios) y $cellMapE2 los de la
+// Seccion E2 (De 05 - 07 anios).
 // ============================================================================
 $cellMapA = [
     // BCG
@@ -402,6 +411,15 @@ $cellMapE1 = [
     'TY28' => 'Refuerzo Pentavalente',
 ];
 
+$cellMapE2 = [
+    // REFUERZO DPT
+    'TD28' => 'REFUERZO DPT',
+    // PENTAVALENTE NO VACUNADO
+    'SK28' => 'Pentavalente D1 -No vacunado',
+    'SL28' => 'Pentavalente D2 -No vacunado',
+    'SM28' => 'Pentavalente D3 -No vacunado',
+];
+
 // Construir el mapa final [celda => valor]
 // -----------------------------------------------------------------------------
 // Nota sobre tipos: ExcelTemplateFiller decide si escribir el valor como
@@ -434,6 +452,9 @@ foreach ($cellMapD as $cellRef => $etiqueta) {
 }
 foreach ($cellMapE1 as $cellRef => $etiqueta) {
     $cellValues[$cellRef] = esniGetCasosPlano($casosPorEtiquetaE1, $etiqueta);
+}
+foreach ($cellMapE2 as $cellRef => $etiqueta) {
+    $cellValues[$cellRef] = esniGetCasosPlano($casosPorEtiquetaE2, $etiqueta);
 }
 
 // ============================================================================
