@@ -5,8 +5,10 @@
  *
  * Genera un archivo Excel usando como base la plantilla "Operacional.xlsx"
  * (ubicada en uploads/Operacional.xlsx) y llenando las celdas de la fila 28
- * con los datos de la Seccion A (Menores de 01 anio) y de la Seccion B
- * (De 01 anio) del reporte ESNI.
+ * con los datos de la Seccion A (Menores de 01 anio), Seccion B (De 01 anio),
+ * Seccion C (Mayores de 01 anio), Seccion D (De 03 anios), Seccion E1
+ * (De 04 anios), Seccion E2 (De 05 - 07 anios) y Seccion F
+ * (dT ADULTO EN MUJERES EN EDAD FERTIL DESDE 5 ANIOS) del reporte ESNI.
  *
  * Mapeo de celdas (plantilla Operacional.xlsx):
  *
@@ -136,13 +138,51 @@
  *     SL28 = Pentavalente D2 -No vacunado                   (Casos)
  *     SM28 = Pentavalente D3 -No vacunado                   (Casos)
  *
+ *   Seccion F - fila 28 (dT ADULTO EN MUJERES EN EDAD FERTIL DESDE 5 ANIOS,
+ *   por grupo de edad y dosis):
+ *
+ *   GRUPO DE EDAD "05 y 09 años" (Mujeres 5 a 9 anos):
+ *     GK28 = dT 1ra - Mujeres 5 a 9 anos          (D1) (Casos)
+ *     GL28 = dT 2da - Mujeres 5 a 9 anos          (D2) (Casos)
+ *     GM28 = dT 3ra - Mujeres 5 a 9 anos          (D3) (Casos)
+ *
+ *   GRUPO DE EDAD "10 y 11 años" (Mujeres 10 a 11 anos):
+ *     GO28 = dT 1ra - Mujeres 10 a 11 anos        (D1) (Casos)
+ *     GP28 = dT 2da - Mujeres 10 a 11 anos        (D2) (Casos)
+ *     GQ28 = dT 3ra - Mujeres 10 a 11 anos        (D3) (Casos)
+ *
+ *   GRUPO DE EDAD "12 y 17 años" (Mujeres 12 a 17 anos):
+ *     GT28 = dT 1ra - Mujeres 12 a 17 anos        (D1) (Casos)
+ *     GU28 = dT 2da - Mujeres 12 a 17 anos        (D2) (Casos)
+ *     GV28 = dT 3ra - Mujeres 12 a 17 anos        (D3) (Casos)
+ *
+ *   GRUPO DE EDAD "18 y 29 años" (Mujeres 18 a 29 anos):
+ *     GY28 = dT 1ra - Mujeres 18 a 29 anos        (D1) (Casos)
+ *     GZ28 = dT 2da - Mujeres 18 a 29 anos        (D2) (Casos)
+ *     HA28 = dT 3ra - Mujeres 18 a 29 anos        (D3) (Casos)
+ *
+ *   GRUPO DE EDAD "30 y 49 años" (Mujeres 30 a 49 anos):
+ *     HD28 = dT 1ra - Mujeres 30 a 49 anos        (D1) (Casos)
+ *     HE28 = dT 2da - Mujeres 30 a 49 anos        (D2) (Casos)
+ *     HF28 = dT 3ra - Mujeres 30 a 49 anos        (D3) (Casos)
+ *
+ *   GRUPO DE EDAD "50 y 59 años" (Mujeres 50 a 59 anos):
+ *     HI28 = dT 1ra - Mujeres 50 a 59 anos        (D1) (Casos)
+ *     HJ28 = dT 2da - Mujeres 50 a 59 anos        (D2) (Casos)
+ *     HK28 = dT 3ra - Mujeres 50 a 59 anos        (D3) (Casos)
+ *
+ *   GRUPO DE EDAD "60 años a mas" (Mujeres 60 a mas anos):
+ *     HN28 = dT 1ra - Mujeres 60 a mas anos       (D1) (Casos)
+ *     HO28 = dT 2da - Mujeres 60 a mas anos       (D2) (Casos)
+ *     HP28 = dT 3ra - Mujeres 60 a mas anos       (D3) (Casos)
+ *
  * Funcionamiento:
  *   1) Recibe por GET los filtros: anio, mes, establecimiento (los mismos
  *      que reporte_esni.php).
  *   2) Ejecuta el motor data-driven de ESNI contra la tabla consolidada MySQL
  *      con Id_Ups = 301204 (estrategia Inmunizaciones).
  *   3) Indexa las lineas de la Seccion A, Seccion B, Seccion C, Seccion D,
- *      Seccion E1 y Seccion E2 por etiqueta normalizada.
+ *      Seccion E1, Seccion E2 y Seccion F por etiqueta normalizada.
  *   4) Recupera el conteo de cada vacuna/dosis con esniGetCasos().
  *   5) Llena la plantilla Operacional.xlsx con ExcelTemplateFiller (sin
  *      requerir PhpSpreadsheet ni composer, solo ZipArchive de PHP).
@@ -249,38 +289,43 @@ if (!empty($reporte['error'])) {
 }
 
 // ============================================================================
-// 3. Indexar lineas de las SECCIONES A, B, C, D y E1 por etiqueta normalizada
+// 3. Indexar lineas de las SECCIONES A, B, C, D, E1, E2 y F por etiqueta normalizada
 // ----------------------------------------------------------------------------
 // El motor de reglas devuelve $reporte['secciones'] con todas las secciones
-// (A, B, C, D, E1, H, ...). Aqui nos interesan la seccion "A" (Menores de 01
-// anio), la seccion "B" (De 01 anio), la seccion "C" (Mayores de 01 anio),
-// la seccion "D" (De 03 anios) y la seccion "E1" (De 04 anios). Las etiquetas
-// de las lineas pueden tener ligeras variaciones (espacios extra, Mayusculas)
-// respecto a la nomenclatura de la plantilla. Por eso se normalizan con
+// (A, B, C, D, E1, E2, F, F2, G, H, ...). Aqui nos interesan la seccion "A"
+// (Menores de 01 anio), la seccion "B" (De 01 anio), la seccion "C" (Mayores
+// de 01 anio), la seccion "D" (De 03 anios), la seccion "E1" (De 04 anios),
+// la seccion "E2" (De 05 - 07 anios) y la seccion "F" (dT ADULTO EN MUJERES
+// EN EDAD FERTIL DESDE 5 ANIOS). Las etiquetas de las lineas pueden tener
+// ligeras variaciones (espacios extra, Mayusculas) respecto a la
+// nomenclatura de la plantilla. Por eso se normalizan con
 // esniNormalizarEtiquetaPlano() que:
 //   - Pasa a MAYUSCULAS
 //   - Colapsa espacios multiples
 //   - Quita espacios al inicio/final
 //   - Quita asterisco inicial "*" (marcador de "linea informativa")
 // ============================================================================
-$casosPorEtiquetaA = esniIndexarCasosSeccionPlano($reporte, 'A');
-$casosPorEtiquetaB = esniIndexarCasosSeccionPlano($reporte, 'B');
-$casosPorEtiquetaC = esniIndexarCasosSeccionPlano($reporte, 'C');
-$casosPorEtiquetaD = esniIndexarCasosSeccionPlano($reporte, 'D');
+$casosPorEtiquetaA  = esniIndexarCasosSeccionPlano($reporte, 'A');
+$casosPorEtiquetaB  = esniIndexarCasosSeccionPlano($reporte, 'B');
+$casosPorEtiquetaC  = esniIndexarCasosSeccionPlano($reporte, 'C');
+$casosPorEtiquetaD  = esniIndexarCasosSeccionPlano($reporte, 'D');
 $casosPorEtiquetaE1 = esniIndexarCasosSeccionPlano($reporte, 'E1');
 $casosPorEtiquetaE2 = esniIndexarCasosSeccionPlano($reporte, 'E2');
+$casosPorEtiquetaF  = esniIndexarCasosSeccionPlano($reporte, 'F');
 
 // ============================================================================
 // 4. Recuperar casos por linea y mapear a celdas de la plantilla
 // ----------------------------------------------------------------------------
-// Los mapas $cellMapA, $cellMapB, $cellMapC, $cellMapD, $cellMapE1 y $cellMapE2 asocian
-// cada celda destino de la plantilla Operacional.xlsx (fila 28) con la
-// etiqueta exacta de la linea (campo ESNI_LINEA_REPORTE.etiqueta) de donde se
-// toma el valor "Casos". $cellMapA toma los casos de la Seccion A (Menores de
-// 01 anio), $cellMapB los de la Seccion B (De 01 anio), $cellMapC los de la
-// Seccion C (Mayores de 01 anio), $cellMapD los de la Seccion D (De 03 anios),
-// $cellMapE1 los de la Seccion E1 (De 04 anios) y $cellMapE2 los de la
-// Seccion E2 (De 05 - 07 anios).
+// Los mapas $cellMapA, $cellMapB, $cellMapC, $cellMapD, $cellMapE1, $cellMapE2
+// y $cellMapF asocian cada celda destino de la plantilla Operacional.xlsx
+// (fila 28) con la etiqueta exacta de la linea (campo
+// ESNI_LINEA_REPORTE.etiqueta) de donde se toma el valor "Casos".
+// $cellMapA toma los casos de la Seccion A (Menores de 01 anio), $cellMapB los
+// de la Seccion B (De 01 anio), $cellMapC los de la Seccion C (Mayores de 01
+// anio), $cellMapD los de la Seccion D (De 03 anios), $cellMapE1 los de la
+// Seccion E1 (De 04 anios), $cellMapE2 los de la Seccion E2 (De 05 - 07 anios)
+// y $cellMapF los de la Seccion F (dT ADULTO EN MUJERES EN EDAD FERTIL DESDE
+// 5 ANIOS, por grupo de edad y dosis D1/D2/D3).
 // ============================================================================
 $cellMapA = [
     // BCG
@@ -420,6 +465,44 @@ $cellMapE2 = [
     'SM28' => 'Pentavalente D3 -No vacunado',
 ];
 
+$cellMapF = [
+    // GRUPO DE EDAD "05 y 09 años" (Mujeres 5 a 9 anos)
+    // D1 / D2 / D3
+    'GK28' => 'dT 1ra - Mujeres 5 a 9 anos',
+    'GL28' => 'dT 2da - Mujeres 5 a 9 anos',
+    'GM28' => 'dT 3ra - Mujeres 5 a 9 anos',
+    // GRUPO DE EDAD "10 y 11 años" (Mujeres 10 a 11 anos)
+    // D1 / D2 / D3
+    'GO28' => 'dT 1ra - Mujeres 10 a 11 anos',
+    'GP28' => 'dT 2da - Mujeres 10 a 11 anos',
+    'GQ28' => 'dT 3ra - Mujeres 10 a 11 anos',
+    // GRUPO DE EDAD "12 y 17 años" (Mujeres 12 a 17 anos)
+    // D1 / D2 / D3
+    'GT28' => 'dT 1ra - Mujeres 12 a 17 anos',
+    'GU28' => 'dT 2da - Mujeres 12 a 17 anos',
+    'GV28' => 'dT 3ra - Mujeres 12 a 17 anos',
+    // GRUPO DE EDAD "18 y 29 años" (Mujeres 18 a 29 anos)
+    // D1 / D2 / D3
+    'GY28' => 'dT 1ra - Mujeres 18 a 29 anos',
+    'GZ28' => 'dT 2da - Mujeres 18 a 29 anos',
+    'HA28' => 'dT 3ra - Mujeres 18 a 29 anos',
+    // GRUPO DE EDAD "30 y 49 años" (Mujeres 30 a 49 anos)
+    // D1 / D2 / D3
+    'HD28' => 'dT 1ra - Mujeres 30 a 49 anos',
+    'HE28' => 'dT 2da - Mujeres 30 a 49 anos',
+    'HF28' => 'dT 3ra - Mujeres 30 a 49 anos',
+    // GRUPO DE EDAD "50 y 59 años" (Mujeres 50 a 59 anos)
+    // D1 / D2 / D3
+    'HI28' => 'dT 1ra - Mujeres 50 a 59 anos',
+    'HJ28' => 'dT 2da - Mujeres 50 a 59 anos',
+    'HK28' => 'dT 3ra - Mujeres 50 a 59 anos',
+    // GRUPO DE EDAD "60 años a mas" (Mujeres 60 a mas anos)
+    // D1 / D2 / D3
+    'HN28' => 'dT 1ra - Mujeres 60 a mas anos',
+    'HO28' => 'dT 2da - Mujeres 60 a mas anos',
+    'HP28' => 'dT 3ra - Mujeres 60 a mas anos',
+];
+
 // Construir el mapa final [celda => valor]
 // -----------------------------------------------------------------------------
 // Nota sobre tipos: ExcelTemplateFiller decide si escribir el valor como
@@ -455,6 +538,9 @@ foreach ($cellMapE1 as $cellRef => $etiqueta) {
 }
 foreach ($cellMapE2 as $cellRef => $etiqueta) {
     $cellValues[$cellRef] = esniGetCasosPlano($casosPorEtiquetaE2, $etiqueta);
+}
+foreach ($cellMapF as $cellRef => $etiqueta) {
+    $cellValues[$cellRef] = esniGetCasosPlano($casosPorEtiquetaF, $etiqueta);
 }
 
 // ============================================================================
