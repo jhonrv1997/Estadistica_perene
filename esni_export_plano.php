@@ -5,7 +5,8 @@
  *
  * Genera un archivo Excel usando como base la plantilla "Operacional.xlsx"
  * (ubicada en uploads/Operacional.xlsx) y llenando las celdas de la fila 28
- * con los datos de la Seccion A (Menores de 01 anio) del reporte ESNI.
+ * con los datos de la Seccion A (Menores de 01 anio) y de la Seccion B
+ * (De 01 anio) del reporte ESNI.
  *
  * Mapeo de celdas (plantilla Operacional.xlsx):
  *
@@ -46,12 +47,31 @@
  *     AN28 = INFLUENZA - 06 Y 07 MESES - 1RA DOSIS         (Casos)
  *     AO28 = INFLUENZA - 06 Y 07 MESES - 2RA DOSIS         (Casos)
  *
+ *   Seccion B - fila 28 (Casos por vacuna/dosis, de 01 anio):
+ *
+ *     AX28 = 1A 11M 29D - NEUMOCOCO - 01 ANIO - 3RA DOSIS  (Casos)
+ *     AY28 = 1A 11M 29D - SPR - 01 ANIO - 1RA DOSIS        (Casos)
+ *     AZ28 = 1A 11M 29D - DOSIS UNICA - INFLUENZA          (Casos)
+ *     BA28 = VARICELA 1RA                                  (Casos)
+ *     BB28 = NEUMOCOCO 1RA                                 (Casos)
+ *     BC28 = NEUMOCOCO 2DA                                 (Casos)
+ *     BF28 = 15 MESES - ANTIAMARILICA - DOSIS UNICA        (Casos)
+ *     BG28 = 18 MESES - SPR - 2DA DOSIS                    (Casos)
+ *     BH28 = 18 MESES - REF. DPT - 1RA DOSIS               (Casos)
+ *     BI28 = 18 MESES - REF. IPV                           (Casos)
+ *     BQ28 = No vacunado PENTAVALENTE 2da                  (Casos)
+ *     BR28 = No vacunado PENTAVALENTE 3ra                  (Casos)
+ *     TG28 = 15 MESES - HEPATITIS A - DOSIS UNICA          (Casos)
+ *     TH28 = No vacunado IPV                               (Casos)
+ *     TV28 = 18 MESES - REF. PENTAVALENTE                  (Casos)
+ *
  * Funcionamiento:
  *   1) Recibe por GET los filtros: anio, mes, establecimiento (los mismos
  *      que reporte_esni.php).
  *   2) Ejecuta el motor data-driven de ESNI contra la tabla consolidada MySQL
  *      con Id_Ups = 301204 (estrategia Inmunizaciones).
- *   3) Indexa las lineas de la Seccion A por etiqueta normalizada.
+ *   3) Indexa las lineas de la Seccion A y de la Seccion B por etiqueta
+ *      normalizada.
  *   4) Recupera el conteo de cada vacuna/dosis con esniGetCasos().
  *   5) Llena la plantilla Operacional.xlsx con ExcelTemplateFiller (sin
  *      requerir PhpSpreadsheet ni composer, solo ZipArchive de PHP).
@@ -158,49 +178,32 @@ if (!empty($reporte['error'])) {
 }
 
 // ============================================================================
-// 3. Indexar lineas de la SECCION A por etiqueta normalizada
+// 3. Indexar lineas de la SECCION A y de la SECCION B por etiqueta normalizada
 // ----------------------------------------------------------------------------
 // El motor de reglas devuelve $reporte['secciones'] con todas las secciones
-// (A, B, C, D, H, ...). Aqui solo nos interesa la seccion "A" (Menores de
-// 01 anio). Las etiquetas de las lineas pueden tener ligeras variaciones
-// (espacios extra, Mayusculas) respecto a la nomenclatura de la plantilla.
-// Por eso se normalizan con esniNormalizarEtiquetaPlano() que:
+// (A, B, C, D, H, ...). Aqui nos interesan la seccion "A" (Menores de 01
+// anio) y la seccion "B" (De 01 anio). Las etiquetas de las lineas pueden
+// tener ligeras variaciones (espacios extra, Mayusculas) respecto a la
+// nomenclatura de la plantilla. Por eso se normalizan con
+// esniNormalizarEtiquetaPlano() que:
 //   - Pasa a MAYUSCULAS
 //   - Colapsa espacios multiples
 //   - Quita espacios al inicio/final
 //   - Quita asterisco inicial "*" (marcador de "linea informativa")
 // ============================================================================
-$seccionA = null;
-foreach ($reporte['secciones'] as $sec) {
-    if (strcasecmp($sec['codigo'], 'A') === 0) {
-        $seccionA = $sec;
-        break;
-    }
-}
-
-$casosPorEtiqueta = [];
-if ($seccionA !== null) {
-    foreach ($seccionA['lineas'] as $lin) {
-        $etqNorm = esniNormalizarEtiquetaPlano($lin['etiqueta']);
-        // Si la etiqueta ya existe (no deberia), sumamos las cantidades
-        // para ser tolerantes con configuraciones que registren la misma
-        // vacuna en varias lineas con la misma etiqueta.
-        if (isset($casosPorEtiqueta[$etqNorm])) {
-            $casosPorEtiqueta[$etqNorm] += (int)$lin['cantidad'];
-        } else {
-            $casosPorEtiqueta[$etqNorm] = (int)$lin['cantidad'];
-        }
-    }
-}
+$casosPorEtiquetaA = esniIndexarCasosSeccionPlano($reporte, 'A');
+$casosPorEtiquetaB = esniIndexarCasosSeccionPlano($reporte, 'B');
 
 // ============================================================================
 // 4. Recuperar casos por linea y mapear a celdas de la plantilla
 // ----------------------------------------------------------------------------
-// El mapa $cellMap asocia cada celda destino de la plantilla Operacional.xlsx
-// (fila 28) con la etiqueta exacta de la linea (campo
+// Los mapas $cellMapA y $cellMapB asocian cada celda destino de la plantilla
+// Operacional.xlsx (fila 28) con la etiqueta exacta de la linea (campo
 // ESNI_LINEA_REPORTE.etiqueta) de donde se toma el valor "Casos".
+// $cellMapA toma los casos de la Seccion A (Menores de 01 anio) y $cellMapB
+// los de la Seccion B (De 01 anio).
 // ============================================================================
-$cellMap = [
+$cellMapA = [
     // BCG
     'E28' => 'BCG - 24 HORAS',
     'F28' => 'BCG - 28 DIAS',
@@ -227,6 +230,36 @@ $cellMap = [
     'AO28' => 'INFLUENZA - 06 Y 07 MESES - 2DA DOSIS',
 ];
 
+$cellMapB = [
+    // NEUMOCOCO (01 anio)
+    'AX28' => '1A 11M 29D - NEUMOCOCO - 01 ANIO - 3RA DOSIS',
+    // SPR (01 anio)
+    'AY28' => '1A 11M 29D - SPR - 01 ANIO - 1RA DOSIS',
+    // VARICELA
+    'BA28' => 'VARICELA 1RA',
+    // INFLUENZA (dosis unica)
+    'AZ28' => '1A 11M 29D - DOSIS UNICA - INFLUENZA',
+    // NEUMOCOCO 12 a 23 meses
+    'BB28' => 'NEUMOCOCO 1RA',
+    'BC28' => 'NEUMOCOCO 2DA',
+    // ANTIAMARILICA (15 meses)
+    'BF28' => '15 MESES - ANTIAMARILICA - DOSIS UNICA',
+    // HEPATITIS A (15 meses)
+    'TG28' => '15 MESES - HEPATITIS A - DOSIS UNICA',
+    // SPR 2da dosis (18 meses)
+    'BG28' => '18 MESES - SPR - 2DA DOSIS',
+    // Refuerzo DPT (18 meses)
+    'BH28' => '18 MESES - REF. DPT - 1RA DOSIS',
+    // Refuerzo IPV (18 meses)
+    'BI28' => '18 MESES - REF. IPV',
+    // Refuerzo PENTAVALENTE (18 meses)
+    'TV28' => '18 MESES - REF. PENTAVALENTE',
+    // Vacunacion no oportuna
+    'TH28' => 'No vacunado IPV',
+    'BQ28' => 'No vacunado PENTAVALENTE 2da',
+    'BR28' => 'No vacunado PENTAVALENTE 3ra',
+];
+
 // Construir el mapa final [celda => valor]
 // -----------------------------------------------------------------------------
 // Nota sobre tipos: ExcelTemplateFiller decide si escribir el valor como
@@ -245,8 +278,11 @@ $cellValues = [
     // C28 = Establecimiento seleccionado (nombre legible)
     'C28' => $nombreEst,
 ];
-foreach ($cellMap as $cellRef => $etiqueta) {
-    $cellValues[$cellRef] = esniGetCasosPlano($casosPorEtiqueta, $etiqueta);
+foreach ($cellMapA as $cellRef => $etiqueta) {
+    $cellValues[$cellRef] = esniGetCasosPlano($casosPorEtiquetaA, $etiqueta);
+}
+foreach ($cellMapB as $cellRef => $etiqueta) {
+    $cellValues[$cellRef] = esniGetCasosPlano($casosPorEtiquetaB, $etiqueta);
 }
 
 // ============================================================================
@@ -286,6 +322,42 @@ exit;
 // ============================================================================
 // FUNCIONES AUXILIARES (locales, para no depender de esni_export.php)
 // ============================================================================
+
+/**
+ * Indexa las lineas de una seccion del reporte ESNI por etiqueta normalizada.
+ *
+ * Recorre $reporte['secciones'] buscando la seccion cuyo codigo coincida
+ * (comparacion case-insensitive) con $codigoSeccion y devuelve un mapa
+ * [etiqueta_normalizada => cantidad]. Si la etiqueta ya existe (no deberia),
+ * suma las cantidades para ser tolerante con configuraciones que registren
+ * la misma vacuna en varias lineas con la misma etiqueta.
+ *
+ * @param array  $reporte        Resultado de esniEjecutarReporte().
+ * @param string $codigoSeccion Codigo de la seccion a indexar ('A', 'B', ...).
+ * @return array Mapa [etiqueta_normalizada => cantidad].
+ */
+function esniIndexarCasosSeccionPlano(array $reporte, string $codigoSeccion): array
+{
+    $casosPorEtiqueta = [];
+    foreach ($reporte['secciones'] as $sec) {
+        if (strcasecmp($sec['codigo'], $codigoSeccion) !== 0) {
+            continue;
+        }
+        foreach ($sec['lineas'] as $lin) {
+            $etqNorm = esniNormalizarEtiquetaPlano($lin['etiqueta']);
+            // Si la etiqueta ya existe (no deberia), sumamos las cantidades
+            // para ser tolerantes con configuraciones que registren la misma
+            // vacuna en varias lineas con la misma etiqueta.
+            if (isset($casosPorEtiqueta[$etqNorm])) {
+                $casosPorEtiqueta[$etqNorm] += (int)$lin['cantidad'];
+            } else {
+                $casosPorEtiqueta[$etqNorm] = (int)$lin['cantidad'];
+            }
+        }
+        break; // Solo existe una seccion con ese codigo
+    }
+    return $casosPorEtiqueta;
+}
 
 /**
  * Devuelve la cantidad de casos para una etiqueta normalizada dada.
