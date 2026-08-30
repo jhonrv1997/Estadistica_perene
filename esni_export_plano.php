@@ -98,13 +98,28 @@
  *     TW28 = REFUERZO PENTAVALENTE - 1RA DOSIS             (Casos)
  *     DO28 = REFUERZO ANTIPOLIO IPV- 1RA DOSIS             (Casos)
  *
+ *   Seccion D - fila 28 (Casos por vacuna/dosis, Seccion D):
+ *
+ *     DS28 = Neumococo con Comorbilidad                    (Casos)
+ *     EE28 = Pentavalente No vacunado D1                   (Casos)
+ *     EF28 = Pentavalente No vacunado D2                   (Casos)
+ *     EG28 = Pentavalente No vacunado D3                   (Casos)
+ *     EX28 = Refuerzo DPT                                   (Casos)
+ *     EY28 = Refuerzo Antipolio IPV                         (Casos)
+ *     DQ28 = INFLUENZA CON COMORBILIDAD - 1RA DOSIS        (Casos)
+ *     DR28 = INFLUENZA SIN COMORBILIDAD - 1RA DOSIS        (Casos)
+ *     DX28 = ANTIAMARILICA                                  (Casos)
+ *     ES28 = SPR 1RA Dosis                                  (Casos)
+ *     ET28 = SPR 2DA Dosis                                  (Casos)
+ *     TX28 = REFUERZO PENTAVALENTE                          (Casos)
+ *
  * Funcionamiento:
  *   1) Recibe por GET los filtros: anio, mes, establecimiento (los mismos
  *      que reporte_esni.php).
  *   2) Ejecuta el motor data-driven de ESNI contra la tabla consolidada MySQL
  *      con Id_Ups = 301204 (estrategia Inmunizaciones).
- *   3) Indexa las lineas de la Seccion A y de la Seccion B por etiqueta
- *      normalizada.
+ *   3) Indexa las lineas de la Seccion A, Seccion B, Seccion C y Seccion D
+ *      por etiqueta normalizada.
  *   4) Recupera el conteo de cada vacuna/dosis con esniGetCasos().
  *   5) Llena la plantilla Operacional.xlsx con ExcelTemplateFiller (sin
  *      requerir PhpSpreadsheet ni composer, solo ZipArchive de PHP).
@@ -211,14 +226,14 @@ if (!empty($reporte['error'])) {
 }
 
 // ============================================================================
-// 3. Indexar lineas de las SECCIONES A, B y C por etiqueta normalizada
+// 3. Indexar lineas de las SECCIONES A, B, C y D por etiqueta normalizada
 // ----------------------------------------------------------------------------
 // El motor de reglas devuelve $reporte['secciones'] con todas las secciones
 // (A, B, C, D, H, ...). Aqui nos interesan la seccion "A" (Menores de 01
-// anio), la seccion "B" (De 01 anio) y la seccion "C" (Mayores de 01 anio).
-// Las etiquetas de las lineas pueden tener ligeras variaciones (espacios
-// extra, Mayusculas) respecto a la nomenclatura de la plantilla. Por eso se
-// normalizan con esniNormalizarEtiquetaPlano() que:
+// anio), la seccion "B" (De 01 anio), la seccion "C" (Mayores de 01 anio)
+// y la seccion "D". Las etiquetas de las lineas pueden tener ligeras
+// variaciones (espacios extra, Mayusculas) respecto a la nomenclatura de la
+// plantilla. Por eso se normalizan con esniNormalizarEtiquetaPlano() que:
 //   - Pasa a MAYUSCULAS
 //   - Colapsa espacios multiples
 //   - Quita espacios al inicio/final
@@ -227,16 +242,17 @@ if (!empty($reporte['error'])) {
 $casosPorEtiquetaA = esniIndexarCasosSeccionPlano($reporte, 'A');
 $casosPorEtiquetaB = esniIndexarCasosSeccionPlano($reporte, 'B');
 $casosPorEtiquetaC = esniIndexarCasosSeccionPlano($reporte, 'C');
+$casosPorEtiquetaD = esniIndexarCasosSeccionPlano($reporte, 'D');
 
 // ============================================================================
 // 4. Recuperar casos por linea y mapear a celdas de la plantilla
 // ----------------------------------------------------------------------------
-// Los mapas $cellMapA, $cellMapB y $cellMapC asocian cada celda destino de la
-// plantilla Operacional.xlsx (fila 28) con la etiqueta exacta de la linea
-// (campo ESNI_LINEA_REPORTE.etiqueta) de donde se toma el valor "Casos".
-// $cellMapA toma los casos de la Seccion A (Menores de 01 anio), $cellMapB
-// los de la Seccion B (De 01 anio) y $cellMapC los de la Seccion C
-// (Mayores de 01 anio).
+// Los mapas $cellMapA, $cellMapB, $cellMapC y $cellMapD asocian cada celda
+// destino de la plantilla Operacional.xlsx (fila 28) con la etiqueta exacta
+// de la linea (campo ESNI_LINEA_REPORTE.etiqueta) de donde se toma el valor
+// "Casos". $cellMapA toma los casos de la Seccion A (Menores de 01 anio),
+// $cellMapB los de la Seccion B (De 01 anio), $cellMapC los de la Seccion C
+// (Mayores de 01 anio) y $cellMapD los de la Seccion D.
 // ============================================================================
 $cellMapA = [
     // BCG
@@ -322,6 +338,28 @@ $cellMapC = [
     'DO28' => 'REFUERZO ANTIPOLIO IPV- 1RA DOSIS',
 ];
 
+$cellMapD = [
+    // NEUMOCOCO CON COMORBILIDAD
+    'DS28' => 'Neumococo con Comorbilidad',
+    // PENTAVALENTE NO VACUNADO
+    'EE28' => 'Pentavalente No vacunado D1',
+    'EF28' => 'Pentavalente No vacunado D2',
+    'EG28' => 'Pentavalente No vacunado D3',
+    // REFUERZOS
+    'EX28' => 'Refuerzo DPT',
+    'EY28' => 'Refuerzo Antipolio IPV',
+    // INFLUENZA CON/SIN COMORBILIDAD
+    'DQ28' => 'INFLUENZA CON COMORBILIDAD - 1RA DOSIS',
+    'DR28' => 'INFLUENZA SIN COMORBILIDAD - 1RA DOSIS',
+    // ANTIAMARILICA
+    'DX28' => 'ANTIAMARILICA',
+    // SPR
+    'ES28' => 'SPR 1RA Dosis',
+    'ET28' => 'SPR 2DA Dosis',
+    // REFUERZO PENTAVALENTE
+    'TX28' => 'REFUERZO PENTAVALENTE',
+];
+
 // Construir el mapa final [celda => valor]
 // -----------------------------------------------------------------------------
 // Nota sobre tipos: ExcelTemplateFiller decide si escribir el valor como
@@ -348,6 +386,9 @@ foreach ($cellMapB as $cellRef => $etiqueta) {
 }
 foreach ($cellMapC as $cellRef => $etiqueta) {
     $cellValues[$cellRef] = esniGetCasosPlano($casosPorEtiquetaC, $etiqueta);
+}
+foreach ($cellMapD as $cellRef => $etiqueta) {
+    $cellValues[$cellRef] = esniGetCasosPlano($casosPorEtiquetaD, $etiqueta);
 }
 
 // ============================================================================
