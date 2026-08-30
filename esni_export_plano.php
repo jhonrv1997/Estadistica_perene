@@ -65,6 +65,39 @@
  *     TH28 = No vacunado IPV                               (Casos)
  *     TV28 = 18 MESES - REF. PENTAVALENTE                  (Casos)
  *
+ *   Seccion C - fila 28 (Casos por vacuna/dosis, Mayores de 01 anio):
+ *
+ *   INFLUENZA / NEUMOCOCO CON/SIN COMORBILIDAD:
+ *     CF28 = INFLUENZA CON COMORBILIDAD - 1RA DOSIS        (Casos)
+ *     CG28 = INFLUENZA SIN COMORBILIDAD - 1RA DOSIS        (Casos)
+ *     CH28 = NEUMOCOCO CON COMORBILIDAD - 1RA DOSIS        (Casos)
+ *
+ *   VACUNACION NO OPORTUNA - NEUMOCOCO:
+ *     CI28 = VACUNACION NO OPORTUNA - NEUMOCOCO D1         (Casos)
+ *     CJ28 = VACUNACION NO OPORTUNA - NEUMOCOCO D2         (Casos)
+ *     CK28 = VACUNACION NO OPORTUNA - NEUMOCOCO D3         (Casos)
+ *
+ *   ANTIAMARILICA:
+ *     CN28 = ANTIAMARILICA - 1RA DOSIS                     (Casos)
+ *
+ *   VACUNACION NO OPORTUNA - ANTIPOLIO - IPV:
+ *     CO28 = VACUNACION NO OPORTUNA - ANTIPOLIO - IPV - 1RA DOSIS  (Casos)
+ *     CP28 = VACUNACION NO OPORTUNA - ANTIPOLIO - IPV - 2DA DOSIS  (Casos)
+ *     TI28 = VACUNACION NO OPORTUNA - ANTIPOLIO - IPV - 3RA DOSIS  (Casos)
+ *
+ *   VACUNACION NO OPORTUNA - PENTAVALENTE:
+ *     CU28 = VACUNACION NO OPORTUNA - PENTAVALENTE - 1RA DOSIS    (Casos)
+ *     CV28 = VACUNACION NO OPORTUNA - PENTAVALENTE - 2DA DOSIS    (Casos)
+ *     CW28 = VACUNACION NO OPORTUNA - PENTAVALENTE - 3RA DOSIS    (Casos)
+ *
+ *   VACUNACION NO OPORTUNA - SPR:
+ *     DI28 = VACUNACION NO OPORTUNA - SPR - 1RA DOSIS      (Casos)
+ *     DJ28 = VACUNACION NO OPORTUNA - SPR - 2DA DOSIS      (Casos)
+ *
+ *   REFUERZOS:
+ *     TW28 = REFUERZO PENTAVALENTE - 1RA DOSIS             (Casos)
+ *     DO28 = REFUERZO ANTIPOLIO IPV- 1RA DOSIS             (Casos)
+ *
  * Funcionamiento:
  *   1) Recibe por GET los filtros: anio, mes, establecimiento (los mismos
  *      que reporte_esni.php).
@@ -178,14 +211,14 @@ if (!empty($reporte['error'])) {
 }
 
 // ============================================================================
-// 3. Indexar lineas de la SECCION A y de la SECCION B por etiqueta normalizada
+// 3. Indexar lineas de las SECCIONES A, B y C por etiqueta normalizada
 // ----------------------------------------------------------------------------
 // El motor de reglas devuelve $reporte['secciones'] con todas las secciones
 // (A, B, C, D, H, ...). Aqui nos interesan la seccion "A" (Menores de 01
-// anio) y la seccion "B" (De 01 anio). Las etiquetas de las lineas pueden
-// tener ligeras variaciones (espacios extra, Mayusculas) respecto a la
-// nomenclatura de la plantilla. Por eso se normalizan con
-// esniNormalizarEtiquetaPlano() que:
+// anio), la seccion "B" (De 01 anio) y la seccion "C" (Mayores de 01 anio).
+// Las etiquetas de las lineas pueden tener ligeras variaciones (espacios
+// extra, Mayusculas) respecto a la nomenclatura de la plantilla. Por eso se
+// normalizan con esniNormalizarEtiquetaPlano() que:
 //   - Pasa a MAYUSCULAS
 //   - Colapsa espacios multiples
 //   - Quita espacios al inicio/final
@@ -193,15 +226,17 @@ if (!empty($reporte['error'])) {
 // ============================================================================
 $casosPorEtiquetaA = esniIndexarCasosSeccionPlano($reporte, 'A');
 $casosPorEtiquetaB = esniIndexarCasosSeccionPlano($reporte, 'B');
+$casosPorEtiquetaC = esniIndexarCasosSeccionPlano($reporte, 'C');
 
 // ============================================================================
 // 4. Recuperar casos por linea y mapear a celdas de la plantilla
 // ----------------------------------------------------------------------------
-// Los mapas $cellMapA y $cellMapB asocian cada celda destino de la plantilla
-// Operacional.xlsx (fila 28) con la etiqueta exacta de la linea (campo
-// ESNI_LINEA_REPORTE.etiqueta) de donde se toma el valor "Casos".
-// $cellMapA toma los casos de la Seccion A (Menores de 01 anio) y $cellMapB
-// los de la Seccion B (De 01 anio).
+// Los mapas $cellMapA, $cellMapB y $cellMapC asocian cada celda destino de la
+// plantilla Operacional.xlsx (fila 28) con la etiqueta exacta de la linea
+// (campo ESNI_LINEA_REPORTE.etiqueta) de donde se toma el valor "Casos".
+// $cellMapA toma los casos de la Seccion A (Menores de 01 anio), $cellMapB
+// los de la Seccion B (De 01 anio) y $cellMapC los de la Seccion C
+// (Mayores de 01 anio).
 // ============================================================================
 $cellMapA = [
     // BCG
@@ -260,6 +295,33 @@ $cellMapB = [
     'BR28' => 'No vacunado PENTAVALENTE 3ra',
 ];
 
+$cellMapC = [
+    // INFLUENZA / NEUMOCOCO CON/SIN COMORBILIDAD
+    'CF28' => 'INFLUENZA CON COMORBILIDAD - 1RA DOSIS',
+    'CG28' => 'INFLUENZA SIN COMORBILIDAD - 1RA DOSIS',
+    'CH28' => 'NEUMOCOCO CON COMORBILIDAD - 1RA DOSIS',
+    // VACUNACION NO OPORTUNA - NEUMOCOCO
+    'CI28' => 'VACUNACION NO OPORTUNA - NEUMOCOCO D1',
+    'CJ28' => 'VACUNACION NO OPORTUNA - NEUMOCOCO D2',
+    'CK28' => 'VACUNACION NO OPORTUNA - NEUMOCOCO D3',
+    // ANTIAMARILICA
+    'CN28' => 'ANTIAMARILICA - 1RA DOSIS',
+    // VACUNACION NO OPORTUNA - ANTIPOLIO - IPV
+    'CO28' => 'VACUNACION NO OPORTUNA - ANTIPOLIO - IPV - 1RA DOSIS',
+    'CP28' => 'VACUNACION NO OPORTUNA - ANTIPOLIO - IPV - 2DA DOSIS',
+    'TI28' => 'VACUNACION NO OPORTUNA - ANTIPOLIO - IPV - 3RA DOSIS',
+    // VACUNACION NO OPORTUNA - PENTAVALENTE
+    'CU28' => 'VACUNACION NO OPORTUNA - PENTAVALENTE - 1RA DOSIS',
+    'CV28' => 'VACUNACION NO OPORTUNA - PENTAVALENTE - 2DA DOSIS',
+    'CW28' => 'VACUNACION NO OPORTUNA - PENTAVALENTE - 3RA DOSIS',
+    // VACUNACION NO OPORTUNA - SPR
+    'DI28' => 'VACUNACION NO OPORTUNA - SPR - 1RA DOSIS',
+    'DJ28' => 'VACUNACION NO OPORTUNA - SPR - 2DA DOSIS',
+    // REFUERZOS
+    'TW28' => 'REFUERZO PENTAVALENTE - 1RA DOSIS',
+    'DO28' => 'REFUERZO ANTIPOLIO IPV- 1RA DOSIS',
+];
+
 // Construir el mapa final [celda => valor]
 // -----------------------------------------------------------------------------
 // Nota sobre tipos: ExcelTemplateFiller decide si escribir el valor como
@@ -283,6 +345,9 @@ foreach ($cellMapA as $cellRef => $etiqueta) {
 }
 foreach ($cellMapB as $cellRef => $etiqueta) {
     $cellValues[$cellRef] = esniGetCasosPlano($casosPorEtiquetaB, $etiqueta);
+}
+foreach ($cellMapC as $cellRef => $etiqueta) {
+    $cellValues[$cellRef] = esniGetCasosPlano($casosPorEtiquetaC, $etiqueta);
 }
 
 // ============================================================================
