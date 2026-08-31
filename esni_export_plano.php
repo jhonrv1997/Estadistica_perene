@@ -13,9 +13,10 @@
  * (dT ADULTO EN VARONES EN RIESGO POR GRUPO DE EDAD), Seccion H
  * (INFLUENZA ESTACIONAL EN OTROS GRUPOS), Seccion J
  * (POBLACION DE 05 A 59 ANIOS: VACUNACION CONTRA LA HEPATITIS B), Seccion K
- * (ANTIAMARILICA EN POBLACION NO VACUNADA Y VIAJEROS A ZONAS ENDEMICAS) y
- * Seccion L (SOLO GESTANTES (dtpa)) y Seccion N (VACUNA VPH:
- * femenino y masculino, dosis unica) del reporte ESNI.
+ * (ANTIAMARILICA EN POBLACION NO VACUNADA Y VIAJEROS A ZONAS ENDEMICAS),
+ * Seccion L (SOLO GESTANTES (dtpa)), Seccion N (VACUNA VPH:
+ * femenino y masculino, dosis unica), Seccion O (NEUMOCOCO EN POBLACION
+ * EN RIESGO) y Seccion P (DT-DOSIS ADICIONALES) del reporte ESNI.
  *
  * Mapeo de celdas (plantilla Operacional.xlsx):
  *
@@ -346,6 +347,44 @@
  *     RO28 = 14 a mas - Masculino                            (Casos)
  *     RP28 = 14 a mas - Femenino                             (Casos)
  *
+ *   Seccion O - fila 28 (NEUMOCOCO EN POBLACION EN RIESGO, por grupo de
+ *   edad / riesgo). Layout "total_uno" (al igual que las secciones H, K y
+ *   L): cada grupo de edad / riesgo tiene una unica linea en
+ *   ESNI_LINEA_REPORTE cuyo valor es directamente el TOTAL de dosis
+ *   aplicadas para ese grupo (no hay desglose por dosis).
+ *
+ *     OD28 = CON COMORBILIDAD 5-11a   - Total                 (Casos)
+ *     OE28 = SIN COMORBILIDAD 50-59a  - Total                 (Casos)
+ *     OF28 = 60 A MAS AÑOS            - Total                 (Casos)
+ *     OI28 = PERSONAL DE SALUD        - Total                 (Casos)
+ *     OJ28 = CON COMORBILIDAD 12-17a  - Total                 (Casos)
+ *     OK28 = CON COMORBILIDAD 18-29a  - Total                 (Casos)
+ *     OL28 = CON COMORBILIDAD 30-49a  - Total                 (Casos)
+ *     OM28 = CON COMORBILIDAD 50-59a  - Total                 (Casos)
+ *     ON28 = SIN COMORBILIDAD 05-11a  - Total                 (Casos)
+ *     OO28 = SIN COMORBILIDAD 12-17a  - Total                 (Casos)
+ *     OP28 = SIN COMORBILIDAD 18-29a  - Total                 (Casos)
+ *     OQ28 = SIN COMORBILIDAD 30-49a  - Total                 (Casos)
+ *
+ *     Las celdas OG28 y OH28 no forman parte del mapeo (la plantilla las
+ *     reserva para otros fines) y OR28 = SUM(OD28:OQ28) es formula propia
+ *     de la plantilla (total de la Seccion O).
+ *
+ *   Seccion P - fila 28 (DT-DOSIS ADICIONALES, por grupo de edad). Layout
+ *   "total_uno" (al igual que las secciones H, K, L y O): cada grupo de
+ *   edad tiene una unica linea en ESNI_LINEA_REPORTE cuyo valor es
+ *   directamente el TOTAL de dosis aplicadas para ese grupo (no hay
+ *   desglose por dosis).
+ *
+ *     OS28 = 0 A 11 años   - Total                     (Casos)
+ *     OT28 = 12 a 17 años  - Total                     (Casos)
+ *     OU28 = 18 a 29 años  - Total                     (Casos)
+ *     OV28 = 30 a 59 años  - Total                     (Casos)
+ *     OW28 = 60 a mas años - Total                     (Casos)
+ *
+ *     OX28 = SUM(OS28:OW28) es formula propia de la plantilla (total de
+ *     la Seccion P).
+ *
  * Funcionamiento:
  *   1) Recibe por GET los filtros: anio, mes, establecimiento (los mismos
  *      que reporte_esni.php).
@@ -353,7 +392,9 @@
  *      con Id_Ups = 301204 (estrategia Inmunizaciones).
  *   3) Indexa las lineas de la Seccion A, Seccion B, Seccion C, Seccion D,
  *      Seccion E1, Seccion E2, Seccion F, Seccion F2, Seccion G, Seccion H,
- *      Seccion K y Seccion L por etiqueta normalizada; las de la Seccion J
+ *      Seccion K, Seccion L, Seccion O y Seccion P por etiqueta
+ *      normalizada; las de la
+ *      Seccion J
  *      por la clave compuesta etiqueta normalizada + dosis_codigo (D1/D2/D3);
  *      y las de la Seccion N por la clave compuesta etiqueta normalizada +
  *      sexo (M/F).
@@ -463,7 +504,7 @@ if (!empty($reporte['error'])) {
 }
 
 // ============================================================================
-// 3. Indexar lineas de las SECCIONES A, B, C, D, E1, E2, F, F2, G, H, J, K, L y N
+// 3. Indexar lineas de las SECCIONES A, B, C, D, E1, E2, F, F2, G, H, J, K, L, N, O y P
 // ----------------------------------------------------------------------------
 // El motor de reglas devuelve $reporte['secciones'] con todas las secciones
 // (A, B, C, D, E1, E2, F, F2, G, H, J, K, L, ...). Aqui nos interesan la
@@ -513,6 +554,26 @@ $casosPorEtiquetaK  = esniIndexarCasosSeccionPlano($reporte, 'K');
 // esniGetCasosPlano().
 // ----------------------------------------------------------------------------
 $casosPorEtiquetaL  = esniIndexarCasosSeccionPlano($reporte, 'L');
+
+// ----------------------------------------------------------------------------
+// La Seccion O (NEUMOCOCO EN POBLACION EN RIESGO, id_seccion = 13) tiene
+// layout "total_uno" (al igual que las secciones H, K y L): cada grupo de
+// edad / riesgo tiene una unica linea cuyo valor es directamente el total de
+// dosis aplicadas (columna "Total" del reporte ESNI). Por eso se indexa por
+// etiqueta normalizada (mismo patron que A/B/C/H/K/L) y se recupera con
+// esniGetCasosPlano().
+// ----------------------------------------------------------------------------
+$casosPorEtiquetaO  = esniIndexarCasosSeccionPlano($reporte, 'O');
+
+// ----------------------------------------------------------------------------
+// La Seccion P (DT-DOSIS ADICIONALES, id_seccion = 21) tiene layout
+// "total_uno" (al igual que las secciones H, K, L y O): cada grupo de edad
+// tiene una unica linea cuyo valor es directamente el total de dosis
+// aplicadas (columna "Total" del reporte ESNI). Por eso se indexa por
+// etiqueta normalizada (mismo patron que A/B/C/H/K/L/O) y se recupera con
+// esniGetCasosPlano().
+// ----------------------------------------------------------------------------
+$casosPorEtiquetaP  = esniIndexarCasosSeccionPlano($reporte, 'P');
 
 // ----------------------------------------------------------------------------
 // La Seccion N (VACUNA VPH, id_seccion = 14) tiene layout "matriz_sexo": por
@@ -598,7 +659,10 @@ foreach ($reporte['secciones'] as $sec) {
 // (HEPATITIS B EN POBLACION DE 05 A 59 ANIOS, por grupo de edad y dosis
 // D1/D2/D3; cada celda se mapea al par [etiqueta, dosis_codigo] y se
 // resuelve con esniGetCasosJDosisPlano()), $cellMapL los de la Seccion L
-// (SOLO GESTANTES (dtpa), por grupo de edad / riesgo) y $cellMapN los de la
+// (SOLO GESTANTES (dtpa), por grupo de edad / riesgo), $cellMapO los de la
+// Seccion O (NEUMOCOCO EN POBLACION EN RIESGO, por grupo de edad / riesgo),
+// $cellMapP los de la Seccion P (DT-DOSIS ADICIONALES, por grupo de edad)
+// y $cellMapN los de la
 // Seccion N (VACUNA VPH, por grupo de edad y sexo M/F; cada celda se mapea
 // al par [etiqueta, sexo] y se resuelve con esniGetCasosNSexoPlano()).
 // ============================================================================
@@ -899,6 +963,55 @@ $cellMapL = [
     'MO28' => '30 a 49 años',
 ];
 
+// La Seccion O (NEUMOCOCO EN POBLACION EN RIESGO, id_seccion = 13) tiene
+// layout "total_uno" (al igual que las secciones H, K y L): cada grupo de
+// edad / riesgo tiene una unica linea en ESNI_LINEA_REPORTE cuyo valor es
+// directamente el total de dosis aplicadas para ese grupo (columna "Total"
+// del reporte ESNI, sin desglose por dosis). Por eso se indexa por etiqueta
+// normalizada (mismo patron que A/B/C/H/K/L) y se recupera con
+// esniGetCasosPlano(). El orden de las celdas sigue el layout horizontal de
+// la plantilla Operacional.xlsx (fila 28); las celdas OG28 y OH28 no forman
+// parte del mapeo y OR28 = SUM(OD28:OQ28) es formula propia de la plantilla
+// (total de la Seccion O).
+$cellMapO = [
+    // --- CON COMORBILIDAD ---
+    'OD28' => 'CON COMORBILIDAD 5-11a',
+    'OJ28' => 'CON COMORBILIDAD 12-17a',
+    'OK28' => 'CON COMORBILIDAD 18-29a',
+    'OL28' => 'CON COMORBILIDAD 30-49a',
+    'OM28' => 'CON COMORBILIDAD 50-59a',
+    // --- SIN COMORBILIDAD ---
+    'ON28' => 'SIN COMORBILIDAD 05-11a',
+    'OO28' => 'SIN COMORBILIDAD 12-17a',
+    'OP28' => 'SIN COMORBILIDAD 18-29a',
+    'OQ28' => 'SIN COMORBILIDAD 30-49a',
+    'OE28' => 'SIN COMORBILIDAD 50-59a',
+    // --- OTROS GRUPOS DE RIESGO ---
+    'OF28' => '60 A MAS AÑOS',
+    'OI28' => 'PERSONAL DE SALUD',
+];
+
+// La Seccion P (DT-DOSIS ADICIONALES, id_seccion = 21) tiene layout
+// "total_uno" (al igual que las secciones H, K, L y O): cada grupo de edad
+// tiene una unica linea en ESNI_LINEA_REPORTE cuyo valor es directamente
+// el total de dosis aplicadas para ese grupo (columna "Total" del reporte
+// ESNI, sin desglose por dosis). Por eso se indexa por etiqueta
+// normalizada (mismo patron que A/B/C/H/K/L/O) y se recupera con
+// esniGetCasosPlano(). OX28 = SUM(OS28:OW28) es formula propia de la
+// plantilla (total de la Seccion P).
+$cellMapP = [
+    // GRUPO DE EDAD "0 A 11 años" (Total)
+    'OS28' => '0 A 11 años',
+    // GRUPO DE EDAD "12 a 17 años" (Total)
+    'OT28' => '12 a 17 años',
+    // GRUPO DE EDAD "18 a 29 años" (Total)
+    'OU28' => '18 a 29 años',
+    // GRUPO DE EDAD "30 a 59 años" (Total)
+    'OV28' => '30 a 59 años',
+    // GRUPO DE EDAD "60 a mas años" (Total)
+    'OW28' => '60 a mas años',
+];
+
 // La Seccion J (HEPATITIS B EN POBLACION DE 05 A 59 ANIOS) tiene layout
 // "matriz_dosis": las 3 lineas (D1/D2/D3) de cada grupo de edad comparten la
 // MISMA etiqueta en ESNI_LINEA_REPORTE, por eso cada celda se mapea al par
@@ -1017,6 +1130,12 @@ foreach ($cellMapK as $cellRef => $etiqueta) {
 }
 foreach ($cellMapL as $cellRef => $etiqueta) {
     $cellValues[$cellRef] = esniGetCasosPlano($casosPorEtiquetaL, $etiqueta);
+}
+foreach ($cellMapO as $cellRef => $etiqueta) {
+    $cellValues[$cellRef] = esniGetCasosPlano($casosPorEtiquetaO, $etiqueta);
+}
+foreach ($cellMapP as $cellRef => $etiqueta) {
+    $cellValues[$cellRef] = esniGetCasosPlano($casosPorEtiquetaP, $etiqueta);
 }
 foreach ($cellMapJ as $cellRef => $parJ) {
     [$etiquetaJ, $dosisJ] = $parJ;
