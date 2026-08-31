@@ -16,8 +16,10 @@
  * (ANTIAMARILICA EN POBLACION NO VACUNADA Y VIAJEROS A ZONAS ENDEMICAS),
  * Seccion L (SOLO GESTANTES (dtpa)), Seccion N (VACUNA VPH:
  * femenino y masculino, dosis unica), Seccion O (NEUMOCOCO EN POBLACION
- * EN RIESGO), Seccion P (DT-DOSIS ADICIONALES) y Seccion Q (VARICELA
- * POR GRUPO DE EDAD / RIESGO) del reporte ESNI.
+ * EN RIESGO), Seccion P (DT-DOSIS ADICIONALES), Seccion Q (VARICELA
+ * POR GRUPO DE EDAD / RIESGO), Seccion R (HEPATITIS A POR GRUPO DE
+ * EDAD / RIESGO) y Seccion T (SPR-SARAMPION POR GRUPO DE EDAD /
+ * RIESGO) del reporte ESNI.
  *
  * Mapeo de celdas (plantilla Operacional.xlsx):
  *
@@ -402,6 +404,33 @@
  *     plantilla Operacional.xlsx (paso de 4 columnas entre cada celda
  *     de datos: PG, PK, PO, PS, PW).
  *
+ *   Seccion R - fila 28 (HEPATITIS A, por grupo de edad / riesgo). Layout
+ *   "total_uno" (al igual que las secciones H, K, L, O, P y Q): cada grupo
+ *   de edad / riesgo tiene una unica linea en ESNI_LINEA_REPORTE cuyo
+ *   valor es directamente el TOTAL de dosis aplicadas para ese grupo (no
+ *   hay desglose por dosis; la hepatitis A es dosis unica).
+ *
+ *     TP28 = 2 AÑOS           - Total                 (Casos)
+ *     TQ28 = 3 AÑOS           - Total                 (Casos)
+ *     TR28 = 4 AÑOS           - Total                 (Casos)
+ *
+ *     Las celdas siguen el layout horizontal de la fila 28 de la
+ *     plantilla Operacional.xlsx (columnas consecutivas TP, TQ, TR).
+ *
+ *   Seccion T - fila 28 (SPR-SARAMPION, por grupo de edad / riesgo).
+ *   Layout "total_uno" (al igual que las secciones H, K, L, O, P, Q y R):
+ *   cada grupo de edad / riesgo tiene una unica linea en
+ *   ESNI_LINEA_REPORTE cuyo valor es directamente el TOTAL de dosis
+ *   aplicadas para ese grupo (no hay desglose por dosis; la SPR es dosis
+ *   unica).
+ *
+ *     UA28 = 5 a 10 años      - Total                 (Casos)
+ *     UB28 = 11 a 59 años     - Total                 (Casos)
+ *     UC28 = Trabajador de Salud - Total              (Casos)
+ *
+ *     Las celdas siguen el layout horizontal de la fila 28 de la
+ *     plantilla Operacional.xlsx (columnas consecutivas UA, UB, UC).
+ *
  * Funcionamiento:
  *   1) Recibe por GET los filtros: anio, mes, establecimiento (los mismos
  *      que reporte_esni.php).
@@ -409,8 +438,8 @@
  *      con Id_Ups = 301204 (estrategia Inmunizaciones).
  *   3) Indexa las lineas de la Seccion A, Seccion B, Seccion C, Seccion D,
  *      Seccion E1, Seccion E2, Seccion F, Seccion F2, Seccion G, Seccion H,
- *      Seccion K, Seccion L, Seccion O y Seccion P por etiqueta
- *      normalizada; las de la
+ *      Seccion K, Seccion L, Seccion O, Seccion P, Seccion Q, Seccion R y
+ *      Seccion T por etiqueta normalizada; las de la
  *      Seccion J
  *      por la clave compuesta etiqueta normalizada + dosis_codigo (D1/D2/D3);
  *      y las de la Seccion N por la clave compuesta etiqueta normalizada +
@@ -521,7 +550,7 @@ if (!empty($reporte['error'])) {
 }
 
 // ============================================================================
-// 3. Indexar lineas de las SECCIONES A, B, C, D, E1, E2, F, F2, G, H, J, K, L, N, O, P y Q
+// 3. Indexar lineas de las SECCIONES A, B, C, D, E1, E2, F, F2, G, H, J, K, L, N, O, P, Q, R y T
 // ----------------------------------------------------------------------------
 // El motor de reglas devuelve $reporte['secciones'] con todas las secciones
 // (A, B, C, D, E1, E2, F, F2, G, H, J, K, L, ...). Aqui nos interesan la
@@ -600,6 +629,26 @@ $casosPorEtiquetaP  = esniIndexarCasosSeccionPlano($reporte, 'P');
 // (mismo patron que A/B/C/H/K/L/O/P) y se recupera con esniGetCasosPlano().
 // ----------------------------------------------------------------------------
 $casosPorEtiquetaQ  = esniIndexarCasosSeccionPlano($reporte, 'Q');
+
+// ----------------------------------------------------------------------------
+// La Seccion R (HEPATITIS A, id_seccion = 19) tiene layout "total_uno" (al
+// igual que las secciones H, K, L, O, P y Q): cada grupo de edad / riesgo
+// tiene una unica linea cuyo valor es directamente el total de dosis
+// aplicadas (columna "Total" del reporte ESNI). Por eso se indexa por
+// etiqueta normalizada (mismo patron que A/B/C/H/K/L/O/P/Q) y se recupera
+// con esniGetCasosPlano().
+// ----------------------------------------------------------------------------
+$casosPorEtiquetaR  = esniIndexarCasosSeccionPlano($reporte, 'R');
+
+// ----------------------------------------------------------------------------
+// La Seccion T (SPR-SARAMPION, id_seccion = 20) tiene layout "total_uno"
+// (al igual que las secciones H, K, L, O, P, Q y R): cada grupo de edad /
+// riesgo tiene una unica linea cuyo valor es directamente el total de
+// dosis aplicadas (columna "Total" del reporte ESNI). Por eso se indexa
+// por etiqueta normalizada (mismo patron que A/B/C/H/K/L/O/P/Q/R) y se
+// recupera con esniGetCasosPlano().
+// ----------------------------------------------------------------------------
+$casosPorEtiquetaT  = esniIndexarCasosSeccionPlano($reporte, 'T');
 
 // ----------------------------------------------------------------------------
 // La Seccion N (VACUNA VPH, id_seccion = 14) tiene layout "matriz_sexo": por
@@ -688,7 +737,9 @@ foreach ($reporte['secciones'] as $sec) {
 // (SOLO GESTANTES (dtpa), por grupo de edad / riesgo), $cellMapO los de la
 // Seccion O (NEUMOCOCO EN POBLACION EN RIESGO, por grupo de edad / riesgo),
 // $cellMapP los de la Seccion P (DT-DOSIS ADICIONALES, por grupo de edad),
-// $cellMapQ los de la Seccion Q (VARICELA, por grupo de edad / riesgo)
+// $cellMapQ los de la Seccion Q (VARICELA, por grupo de edad / riesgo),
+// $cellMapR los de la Seccion R (HEPATITIS A, por grupo de edad / riesgo),
+// $cellMapT los de la Seccion T (SPR-SARAMPION, por grupo de edad / riesgo)
 // y $cellMapN los de la
 // Seccion N (VACUNA VPH, por grupo de edad y sexo M/F; cada celda se mapea
 // al par [etiqueta, sexo] y se resuelve con esniGetCasosNSexoPlano()).
@@ -1062,6 +1113,46 @@ $cellMapQ = [
     'PW28' => 'Personal de Salud',
 ];
 
+// La Seccion R (HEPATITIS A, id_seccion = 19) tiene layout "total_uno" (al
+// igual que las secciones H, K, L, O, P y Q): cada grupo de edad / riesgo
+// tiene una unica linea en ESNI_LINEA_REPORTE cuyo valor es directamente
+// el total de dosis aplicadas para ese grupo (columna "Total" del reporte
+// ESNI, sin desglose por dosis; la hepatitis A es dosis unica). Por eso se
+// indexa por etiqueta normalizada (mismo patron que A/B/C/H/K/L/O/P/Q) y
+// se recupera con esniGetCasosPlano(). Las etiquetas "2 AÑOS", "3 AÑOS" y
+// "4 AÑOS" corresponden a las lineas de ESNI_LINEA_REPORTE de la seccion R
+// (id_linea 197, 198 y 199). Las celdas siguen el layout horizontal de la
+// fila 28 de la plantilla Operacional.xlsx (columnas consecutivas TP, TQ,
+// TR).
+$cellMapR = [
+    // GRUPO DE EDAD / RIESGO "2 AÑOS" (Total)
+    'TP28' => '2 AÑOS',
+    // GRUPO DE EDAD / RIESGO "3 AÑOS" (Total)
+    'TQ28' => '3 AÑOS',
+    // GRUPO DE EDAD / RIESGO "4 AÑOS" (Total)
+    'TR28' => '4 AÑOS',
+];
+
+// La Seccion T (SPR-SARAMPION, id_seccion = 20) tiene layout "total_uno"
+// (al igual que las secciones H, K, L, O, P, Q y R): cada grupo de edad /
+// riesgo tiene una unica linea en ESNI_LINEA_REPORTE cuyo valor es
+// directamente el total de dosis aplicadas para ese grupo (columna "Total"
+// del reporte ESNI, sin desglose por dosis; la SPR es dosis unica). Por eso
+// se indexa por etiqueta normalizada (mismo patron que
+// A/B/C/H/K/L/O/P/Q/R) y se recupera con esniGetCasosPlano(). Las etiquetas
+// "5 a 10 años", "11 a 59 años" y "Trabajador de Salud" corresponden a las
+// lineas de ESNI_LINEA_REPORTE de la seccion T (id_linea 201, 202 y 203).
+// Las celdas siguen el layout horizontal de la fila 28 de la plantilla
+// Operacional.xlsx (columnas consecutivas UA, UB, UC).
+$cellMapT = [
+    // GRUPO DE EDAD / RIESGO "5 a 10 años" (Total)
+    'UA28' => '5 a 10 años',
+    // GRUPO DE EDAD / RIESGO "11 a 59 años" (Total)
+    'UB28' => '11 a 59 años',
+    // GRUPO DE EDAD / RIESGO "Trabajador de Salud" (Total)
+    'UC28' => 'Trabajador de Salud',
+];
+
 // La Seccion J (HEPATITIS B EN POBLACION DE 05 A 59 ANIOS) tiene layout
 // "matriz_dosis": las 3 lineas (D1/D2/D3) de cada grupo de edad comparten la
 // MISMA etiqueta en ESNI_LINEA_REPORTE, por eso cada celda se mapea al par
@@ -1189,6 +1280,12 @@ foreach ($cellMapP as $cellRef => $etiqueta) {
 }
 foreach ($cellMapQ as $cellRef => $etiqueta) {
     $cellValues[$cellRef] = esniGetCasosPlano($casosPorEtiquetaQ, $etiqueta);
+}
+foreach ($cellMapR as $cellRef => $etiqueta) {
+    $cellValues[$cellRef] = esniGetCasosPlano($casosPorEtiquetaR, $etiqueta);
+}
+foreach ($cellMapT as $cellRef => $etiqueta) {
+    $cellValues[$cellRef] = esniGetCasosPlano($casosPorEtiquetaT, $etiqueta);
 }
 foreach ($cellMapJ as $cellRef => $parJ) {
     [$etiquetaJ, $dosisJ] = $parJ;
