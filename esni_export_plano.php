@@ -12,9 +12,10 @@
  * (dT EN GESTANTES POR GRUPO DE EDAD 10-59 ANIOS), Seccion G
  * (dT ADULTO EN VARONES EN RIESGO POR GRUPO DE EDAD), Seccion H
  * (INFLUENZA ESTACIONAL EN OTROS GRUPOS), Seccion J
- * (POBLACION DE 05 A 59 ANIOS: VACUNACION CONTRA LA HEPATITIS B) y Seccion K
- * (ANTIAMARILICA EN POBLACION NO VACUNADA Y VIAJEROS A ZONAS ENDEMICAS) del
- * reporte ESNI.
+ * (POBLACION DE 05 A 59 ANIOS: VACUNACION CONTRA LA HEPATITIS B), Seccion K
+ * (ANTIAMARILICA EN POBLACION NO VACUNADA Y VIAJEROS A ZONAS ENDEMICAS) y
+ * Seccion L (SOLO GESTANTES (dtpa)) y Seccion N (VACUNA VPH:
+ * femenino y masculino, dosis unica) del reporte ESNI.
  *
  * Mapeo de celdas (plantilla Operacional.xlsx):
  *
@@ -316,15 +317,46 @@
  *     MI28 = 30 a 59 años - Total                            (Casos)
  *     MK28 = 60 + años - Total                               (Casos)
  *
+ *   Seccion L - fila 28 (SOLO GESTANTES (dtpa), por grupo de edad /
+ *   riesgo). Layout "total_uno" (al igual que las secciones H y K): cada
+ *   grupo de edad tiene una unica linea en ESNI_LINEA_REPORTE cuyo valor
+ *   es directamente el TOTAL de dosis aplicadas para ese grupo (no hay
+ *   desglose por dosis).
+ *
+ *     MM28 = 12 a 17 años - Total                            (Casos)
+ *     MN28 = 18 a 29 años - Total                            (Casos)
+ *     MO28 = 30 a 49 años - Total                            (Casos)
+ *
+ *   Seccion N - fila 28 (VACUNA VPH: femenino y masculino, dosis unica,
+ *   por grupo de edad). Layout "matriz_sexo": por cada grupo de edad
+ *   existen DOS lineas en ESNI_LINEA_REPORTE con la MISMA etiqueta que se
+ *   distinguen unicamente por el campo sexo ('M' = Masculino, 'F' =
+ *   Femenino).
+ *
+ *     QF28 = 9 años   - Masculino                            (Casos)
+ *     QG28 = 9 años   - Femenino                             (Casos)
+ *     QM28 = 10 años  - Masculino                            (Casos)
+ *     QN28 = 10 años  - Femenino                             (Casos)
+ *     QT28 = 11 años  - Masculino                            (Casos)
+ *     QU28 = 11 años  - Femenino                             (Casos)
+ *     RA28 = 12 años  - Masculino                            (Casos)
+ *     RB28 = 12 años  - Femenino                             (Casos)
+ *     RH28 = 13 años  - Masculino                            (Casos)
+ *     RI28 = 13 años  - Femenino                             (Casos)
+ *     RO28 = 14 a mas - Masculino                            (Casos)
+ *     RP28 = 14 a mas - Femenino                             (Casos)
+ *
  * Funcionamiento:
  *   1) Recibe por GET los filtros: anio, mes, establecimiento (los mismos
  *      que reporte_esni.php).
  *   2) Ejecuta el motor data-driven de ESNI contra la tabla consolidada MySQL
  *      con Id_Ups = 301204 (estrategia Inmunizaciones).
  *   3) Indexa las lineas de la Seccion A, Seccion B, Seccion C, Seccion D,
- *      Seccion E1, Seccion E2, Seccion F, Seccion F2, Seccion G, Seccion H
- *      y Seccion K por etiqueta normalizada, y las de la Seccion J por la
- *      clave compuesta etiqueta normalizada + dosis_codigo (D1/D2/D3).
+ *      Seccion E1, Seccion E2, Seccion F, Seccion F2, Seccion G, Seccion H,
+ *      Seccion K y Seccion L por etiqueta normalizada; las de la Seccion J
+ *      por la clave compuesta etiqueta normalizada + dosis_codigo (D1/D2/D3);
+ *      y las de la Seccion N por la clave compuesta etiqueta normalizada +
+ *      sexo (M/F).
  *   4) Recupera el conteo de cada vacuna/dosis con esniGetCasos().
  *   5) Llena la plantilla Operacional.xlsx con ExcelTemplateFiller (sin
  *      requerir PhpSpreadsheet ni composer, solo ZipArchive de PHP).
@@ -431,19 +463,19 @@ if (!empty($reporte['error'])) {
 }
 
 // ============================================================================
-// 3. Indexar lineas de las SECCIONES A, B, C, D, E1, E2, F, F2, G, H, J y K por etiqueta normalizada
+// 3. Indexar lineas de las SECCIONES A, B, C, D, E1, E2, F, F2, G, H, J, K, L y N
 // ----------------------------------------------------------------------------
 // El motor de reglas devuelve $reporte['secciones'] con todas las secciones
-// (A, B, C, D, E1, E2, F, F2, G, H, J, K, ...). Aqui nos interesan la seccion
-// "A" (Menores de 01 anio), la seccion "B" (De 01 anio), la seccion "C"
-// (Mayores de 01 anio), la seccion "D" (De 03 anios), la seccion "E1"
+// (A, B, C, D, E1, E2, F, F2, G, H, J, K, L, ...). Aqui nos interesan la
+// seccion "A" (Menores de 01 anio), la seccion "B" (De 01 anio), la seccion
+// "C" (Mayores de 01 anio), la seccion "D" (De 03 anios), la seccion "E1"
 // (De 04 anios), la seccion "E2" (De 05 - 07 anios), la seccion "F"
 // (dT ADULTO EN MUJERES EN EDAD FERTIL DESDE 5 ANIOS), la seccion "F2"
 // (dT EN GESTANTES POR GRUPO DE EDAD 10-59 ANIOS), la seccion "G"
 // (dT ADULTO EN VARONES EN RIESGO POR GRUPO DE EDAD), la seccion "H"
-// (INFLUENZA ESTACIONAL EN OTROS GRUPOS) y la seccion "K" (ANTIAMARILICA
-// EN POBLACION NO VACUNADA Y VIAJEROS A ZONAS ENDEMICAS). Las etiquetas de
-// las lineas pueden tener
+// (INFLUENZA ESTACIONAL EN OTROS GRUPOS), la seccion "K" (ANTIAMARILICA
+// EN POBLACION NO VACUNADA Y VIAJEROS A ZONAS ENDEMICAS) y la seccion "L"
+// (SOLO GESTANTES (dtpa)). Las etiquetas de las lineas pueden tener
 // ligeras variaciones (espacios extra, Mayusculas) respecto a la
 // nomenclatura de la plantilla. Por eso se normalizan con
 // esniNormalizarEtiquetaPlano() que:
@@ -471,6 +503,46 @@ $casosPorEtiquetaH  = esniIndexarCasosSeccionPlano($reporte, 'H');
 // normalizada (mismo patron que A/B/C/H) y se recupera con esniGetCasosPlano().
 // ----------------------------------------------------------------------------
 $casosPorEtiquetaK  = esniIndexarCasosSeccionPlano($reporte, 'K');
+
+// ----------------------------------------------------------------------------
+// La Seccion L (SOLO GESTANTES (dtpa), id_seccion = 18) tiene layout
+// "total_uno" (al igual que las secciones H y K): cada grupo de edad tiene
+// una unica linea cuyo valor es directamente el total de dosis aplicadas
+// (columna "Total" del reporte ESNI). Por eso se indexa por etiqueta
+// normalizada (mismo patron que A/B/C/H/K) y se recupera con
+// esniGetCasosPlano().
+// ----------------------------------------------------------------------------
+$casosPorEtiquetaL  = esniIndexarCasosSeccionPlano($reporte, 'L');
+
+// ----------------------------------------------------------------------------
+// La Seccion N (VACUNA VPH, id_seccion = 14) tiene layout "matriz_sexo": por
+// cada grupo de edad existen DOS lineas en ESNI_LINEA_REPORTE con la MISMA
+// etiqueta ("9 años", "10 años", ...) que se distinguen unicamente por el
+// campo sexo ('M' = Masculino, 'F' = Femenino). Por eso NO se usa
+// esniIndexarCasosSeccionPlano('N') (que sumaria las cantidades de las
+// etiquetas repetidas, mezclando Masculino + Femenino); el indexado se hace
+// con una clave compuesta "etiqueta_normalizada|sexo" (mismo criterio que la
+// Seccion J) para recuperar el conteo de cada sexo por separado.
+// ----------------------------------------------------------------------------
+$casosPorEtiquetaSexoN = []; // [etqNorm . '|' . sexo => int]
+foreach ($reporte['secciones'] as $sec) {
+    if (strcasecmp($sec['codigo'], 'N') !== 0) {
+        continue;
+    }
+    foreach ($sec['lineas'] as $lin) {
+        $etqNorm = esniNormalizarEtiquetaPlano($lin['etiqueta']);
+        $sexoCod = isset($lin['sexo']) ? strtoupper(trim((string)$lin['sexo'])) : '';
+        $key = $etqNorm . '|' . $sexoCod;
+        // Si la clave ya existe (no deberia), sumamos las cantidades para
+        // ser tolerantes con configuraciones que dupliquen la misma linea.
+        if (isset($casosPorEtiquetaSexoN[$key])) {
+            $casosPorEtiquetaSexoN[$key] += (int)$lin['cantidad'];
+        } else {
+            $casosPorEtiquetaSexoN[$key] = (int)$lin['cantidad'];
+        }
+    }
+    break; // Solo existe una seccion con ese codigo
+}
 
 // ----------------------------------------------------------------------------
 // La Seccion J (POBLACION DE 05 A 59 ANIOS: VACUNACION CONTRA LA HEPATITIS B)
@@ -508,7 +580,8 @@ foreach ($reporte['secciones'] as $sec) {
 // 4. Recuperar casos por linea y mapear a celdas de la plantilla
 // ----------------------------------------------------------------------------
 // Los mapas $cellMapA, $cellMapB, $cellMapC, $cellMapD, $cellMapE1, $cellMapE2,
-// $cellMapF, $cellMapF2, $cellMapG, $cellMapH, $cellMapJ y $cellMapK asocian cada celda
+// $cellMapF, $cellMapF2, $cellMapG, $cellMapH, $cellMapJ, $cellMapK, $cellMapL
+// y $cellMapN asocian cada celda
 // destino de la plantilla Operacional.xlsx (fila 28) con la etiqueta exacta de
 // la linea (campo ESNI_LINEA_REPORTE.etiqueta) de donde se toma el valor
 // "Casos". $cellMapA toma los casos de la Seccion A (Menores de 01 anio),
@@ -524,7 +597,10 @@ foreach ($reporte['secciones'] as $sec) {
 // OTROS GRUPOS, por grupo de edad / riesgo) y $cellMapJ los de la Seccion J
 // (HEPATITIS B EN POBLACION DE 05 A 59 ANIOS, por grupo de edad y dosis
 // D1/D2/D3; cada celda se mapea al par [etiqueta, dosis_codigo] y se
-// resuelve con esniGetCasosJDosisPlano()).
+// resuelve con esniGetCasosJDosisPlano()), $cellMapL los de la Seccion L
+// (SOLO GESTANTES (dtpa), por grupo de edad / riesgo) y $cellMapN los de la
+// Seccion N (VACUNA VPH, por grupo de edad y sexo M/F; cada celda se mapea
+// al par [etiqueta, sexo] y se resuelve con esniGetCasosNSexoPlano()).
 // ============================================================================
 $cellMapA = [
     // BCG
@@ -808,6 +884,21 @@ $cellMapK = [
     'MK28' => '60 + años',
 ];
 
+// La Seccion L (SOLO GESTANTES (dtpa), id_seccion = 18) tiene layout
+// "total_uno" (al igual que las secciones H y K): cada grupo de edad tiene
+// una unica linea en ESNI_LINEA_REPORTE cuyo valor es directamente el total
+// de dosis aplicadas para ese grupo (columna "Total" del reporte ESNI, sin
+// desglose por dosis). Por eso se indexa por etiqueta normalizada (mismo
+// patron que A/B/C/H/K) y se recupera con esniGetCasosPlano().
+$cellMapL = [
+    // GRUPO DE EDAD / RIESGO "12 a 17 años" (Total)
+    'MM28' => '12 a 17 años',
+    // GRUPO DE EDAD / RIESGO "18 a 29 años" (Total)
+    'MN28' => '18 a 29 años',
+    // GRUPO DE EDAD / RIESGO "30 a 49 años" (Total)
+    'MO28' => '30 a 49 años',
+];
+
 // La Seccion J (HEPATITIS B EN POBLACION DE 05 A 59 ANIOS) tiene layout
 // "matriz_dosis": las 3 lineas (D1/D2/D3) de cada grupo de edad comparten la
 // MISMA etiqueta en ESNI_LINEA_REPORTE, por eso cada celda se mapea al par
@@ -844,6 +935,33 @@ $cellMapJ = [
     'TM28' => ['Gestantes', 'D1'],
     'TN28' => ['Gestantes', 'D2'],
     'TO28' => ['Gestantes', 'D3'],
+];
+
+// La Seccion N (VACUNA VPH) tiene layout "matriz_sexo": por cada grupo de
+// edad existen DOS lineas con la MISMA etiqueta en ESNI_LINEA_REPORTE que se
+// distinguen unicamente por el campo sexo ('M' = Masculino, 'F' = Femenino),
+// por eso cada celda se mapea al par [etiqueta, sexo] y se resuelve con
+// esniGetCasosNSexoPlano() sobre el indice compuesto $casosPorEtiquetaSexoN
+// (clave etiqueta|sexo).
+$cellMapN = [
+    // GRUPO DE EDAD / RIESGO "9 años" (Masculino / Femenino)
+    'QF28' => ['9 años', 'M'],
+    'QG28' => ['9 años', 'F'],
+    // GRUPO DE EDAD / RIESGO "10 años" (Masculino / Femenino)
+    'QM28' => ['10 años', 'M'],
+    'QN28' => ['10 años', 'F'],
+    // GRUPO DE EDAD / RIESGO "11 años" (Masculino / Femenino)
+    'QT28' => ['11 años', 'M'],
+    'QU28' => ['11 años', 'F'],
+    // GRUPO DE EDAD / RIESGO "12 años" (Masculino / Femenino)
+    'RA28' => ['12 años', 'M'],
+    'RB28' => ['12 años', 'F'],
+    // GRUPO DE EDAD / RIESGO "13 años" (Masculino / Femenino)
+    'RH28' => ['13 años', 'M'],
+    'RI28' => ['13 años', 'F'],
+    // GRUPO DE EDAD / RIESGO "14 a mas" (Masculino / Femenino)
+    'RO28' => ['14 a mas', 'M'],
+    'RP28' => ['14 a mas', 'F'],
 ];
 
 // Construir el mapa final [celda => valor]
@@ -897,9 +1015,16 @@ foreach ($cellMapH as $cellRef => $etiqueta) {
 foreach ($cellMapK as $cellRef => $etiqueta) {
     $cellValues[$cellRef] = esniGetCasosPlano($casosPorEtiquetaK, $etiqueta);
 }
+foreach ($cellMapL as $cellRef => $etiqueta) {
+    $cellValues[$cellRef] = esniGetCasosPlano($casosPorEtiquetaL, $etiqueta);
+}
 foreach ($cellMapJ as $cellRef => $parJ) {
     [$etiquetaJ, $dosisJ] = $parJ;
     $cellValues[$cellRef] = esniGetCasosJDosisPlano($casosPorEtiquetaDosisJ, $etiquetaJ, $dosisJ);
+}
+foreach ($cellMapN as $cellRef => $parN) {
+    [$etiquetaN, $sexoN] = $parN;
+    $cellValues[$cellRef] = esniGetCasosNSexoPlano($casosPorEtiquetaSexoN, $etiquetaN, $sexoN);
 }
 
 // ============================================================================
@@ -1007,6 +1132,26 @@ function esniGetCasosJDosisPlano(array $casosPorEtiquetaDosis, string $etiqueta,
     $dosisCod = strtoupper(trim($dosisCodigo));
     $key      = $etqNorm . '|' . $dosisCod;
     return $casosPorEtiquetaDosis[$key] ?? 0;
+}
+
+/**
+ * Devuelve la cantidad de casos para una etiqueta + sexo de la seccion N
+ * (VACUNA VPH: femenino y masculino, dosis unica). Necesario porque en la
+ * seccion N las 2 lineas de cada grupo de edad (Masculino/Femenino) comparten
+ * la misma etiqueta; el indexado se hace por la clave compuesta
+ * "etiqueta_normalizada|sexo".
+ *
+ * @param array  $casosPorEtiquetaSexo Mapa [etqNorm . '|' . sexo => int].
+ * @param string $etiqueta             Etiqueta de la linea en ESNI_LINEA_REPORTE.
+ * @param string $sexo                 Sexo de la linea ('M' = Masculino, 'F' = Femenino).
+ * @return int Cantidad de casos (0 si no hay linea con esa etiqueta+sexo).
+ */
+function esniGetCasosNSexoPlano(array $casosPorEtiquetaSexo, string $etiqueta, string $sexo): int
+{
+    $etqNorm = esniNormalizarEtiquetaPlano($etiqueta);
+    $sexoCod = strtoupper(trim($sexo));
+    $key     = $etqNorm . '|' . $sexoCod;
+    return $casosPorEtiquetaSexo[$key] ?? 0;
 }
 
 /**
