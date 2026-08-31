@@ -16,7 +16,8 @@
  * (ANTIAMARILICA EN POBLACION NO VACUNADA Y VIAJEROS A ZONAS ENDEMICAS),
  * Seccion L (SOLO GESTANTES (dtpa)), Seccion N (VACUNA VPH:
  * femenino y masculino, dosis unica), Seccion O (NEUMOCOCO EN POBLACION
- * EN RIESGO) y Seccion P (DT-DOSIS ADICIONALES) del reporte ESNI.
+ * EN RIESGO), Seccion P (DT-DOSIS ADICIONALES) y Seccion Q (VARICELA
+ * POR GRUPO DE EDAD / RIESGO) del reporte ESNI.
  *
  * Mapeo de celdas (plantilla Operacional.xlsx):
  *
@@ -385,6 +386,22 @@
  *     OX28 = SUM(OS28:OW28) es formula propia de la plantilla (total de
  *     la Seccion P).
  *
+ *   Seccion Q - fila 28 (VARICELA, por grupo de edad / riesgo). Layout
+ *   "total_uno" (al igual que las secciones H, K, L, O y P): cada grupo
+ *   de edad / riesgo tiene una unica linea en ESNI_LINEA_REPORTE cuyo
+ *   valor es directamente el TOTAL de dosis aplicadas para ese grupo (no
+ *   hay desglose por dosis; la varicela es dosis unica).
+ *
+ *     PG28 = 3 años            - Total                 (Casos)
+ *     PK28 = 4 años            - Total                 (Casos)
+ *     PO28 = 5 años            - Total                 (Casos)
+ *     PS28 = 6 años a mas      - Total                 (Casos)
+ *     PW28 = Personal de Salud - Total                 (Casos)
+ *
+ *     Las celdas siguen el layout horizontal de la fila 28 de la
+ *     plantilla Operacional.xlsx (paso de 4 columnas entre cada celda
+ *     de datos: PG, PK, PO, PS, PW).
+ *
  * Funcionamiento:
  *   1) Recibe por GET los filtros: anio, mes, establecimiento (los mismos
  *      que reporte_esni.php).
@@ -504,7 +521,7 @@ if (!empty($reporte['error'])) {
 }
 
 // ============================================================================
-// 3. Indexar lineas de las SECCIONES A, B, C, D, E1, E2, F, F2, G, H, J, K, L, N, O y P
+// 3. Indexar lineas de las SECCIONES A, B, C, D, E1, E2, F, F2, G, H, J, K, L, N, O, P y Q
 // ----------------------------------------------------------------------------
 // El motor de reglas devuelve $reporte['secciones'] con todas las secciones
 // (A, B, C, D, E1, E2, F, F2, G, H, J, K, L, ...). Aqui nos interesan la
@@ -574,6 +591,15 @@ $casosPorEtiquetaO  = esniIndexarCasosSeccionPlano($reporte, 'O');
 // esniGetCasosPlano().
 // ----------------------------------------------------------------------------
 $casosPorEtiquetaP  = esniIndexarCasosSeccionPlano($reporte, 'P');
+
+// ----------------------------------------------------------------------------
+// La Seccion Q (VARICELA) tiene layout "total_uno" (al igual que las
+// secciones H, K, L, O y P): cada grupo de edad / riesgo tiene una unica
+// linea cuyo valor es directamente el total de dosis aplicadas (columna
+// "Total" del reporte ESNI). Por eso se indexa por etiqueta normalizada
+// (mismo patron que A/B/C/H/K/L/O/P) y se recupera con esniGetCasosPlano().
+// ----------------------------------------------------------------------------
+$casosPorEtiquetaQ  = esniIndexarCasosSeccionPlano($reporte, 'Q');
 
 // ----------------------------------------------------------------------------
 // La Seccion N (VACUNA VPH, id_seccion = 14) tiene layout "matriz_sexo": por
@@ -661,7 +687,8 @@ foreach ($reporte['secciones'] as $sec) {
 // resuelve con esniGetCasosJDosisPlano()), $cellMapL los de la Seccion L
 // (SOLO GESTANTES (dtpa), por grupo de edad / riesgo), $cellMapO los de la
 // Seccion O (NEUMOCOCO EN POBLACION EN RIESGO, por grupo de edad / riesgo),
-// $cellMapP los de la Seccion P (DT-DOSIS ADICIONALES, por grupo de edad)
+// $cellMapP los de la Seccion P (DT-DOSIS ADICIONALES, por grupo de edad),
+// $cellMapQ los de la Seccion Q (VARICELA, por grupo de edad / riesgo)
 // y $cellMapN los de la
 // Seccion N (VACUNA VPH, por grupo de edad y sexo M/F; cada celda se mapea
 // al par [etiqueta, sexo] y se resuelve con esniGetCasosNSexoPlano()).
@@ -1012,6 +1039,29 @@ $cellMapP = [
     'OW28' => '60 a mas años',
 ];
 
+// La Seccion Q (VARICELA) tiene layout "total_uno" (al igual que las
+// secciones H, K, L, O y P): cada grupo de edad / riesgo tiene una unica
+// linea en ESNI_LINEA_REPORTE cuyo valor es directamente el total de dosis
+// aplicadas para ese grupo (columna "Total" del reporte ESNI, sin desglose
+// por dosis; la varicela es dosis unica). Por eso se indexa por etiqueta
+// normalizada (mismo patron que A/B/C/H/K/L/O/P) y se recupera con
+// esniGetCasosPlano(). Las celdas siguen el layout horizontal de la fila 28
+// de la plantilla Operacional.xlsx (paso de 4 columnas entre cada celda de
+// datos: PG, PK, PO, PS, PW); las columnas intermedias corresponden al
+// formato propio de la plantilla.
+$cellMapQ = [
+    // GRUPO DE EDAD / RIESGO "3 años" (Total)
+    'PG28' => '3 años',
+    // GRUPO DE EDAD / RIESGO "4 años" (Total)
+    'PK28' => '4 años',
+    // GRUPO DE EDAD / RIESGO "5 años" (Total)
+    'PO28' => '5 años',
+    // GRUPO DE EDAD / RIESGO "6 años a mas" (Total)
+    'PS28' => '6 años a mas',
+    // GRUPO "Personal de Salud" (Total)
+    'PW28' => 'Personal de Salud',
+];
+
 // La Seccion J (HEPATITIS B EN POBLACION DE 05 A 59 ANIOS) tiene layout
 // "matriz_dosis": las 3 lineas (D1/D2/D3) de cada grupo de edad comparten la
 // MISMA etiqueta en ESNI_LINEA_REPORTE, por eso cada celda se mapea al par
@@ -1136,6 +1186,9 @@ foreach ($cellMapO as $cellRef => $etiqueta) {
 }
 foreach ($cellMapP as $cellRef => $etiqueta) {
     $cellValues[$cellRef] = esniGetCasosPlano($casosPorEtiquetaP, $etiqueta);
+}
+foreach ($cellMapQ as $cellRef => $etiqueta) {
+    $cellValues[$cellRef] = esniGetCasosPlano($casosPorEtiquetaQ, $etiqueta);
 }
 foreach ($cellMapJ as $cellRef => $parJ) {
     [$etiquetaJ, $dosisJ] = $parJ;
