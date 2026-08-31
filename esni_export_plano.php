@@ -134,7 +134,7 @@
  *     GC28 = SPR 1RA Dosis                                  (Casos)
  *     GD28 = SPR 2DA Dosis                                  (Casos)
  *     GI28 = REFUERZO ANTIPOLIO(IPV)                        (Casos)
- *     GG28 = REFUERZO DPT                                   (Casos)
+ *     GH28 = REFUERZO DPT                                   (Casos)
  *     GJ28 = REFUERZO ANTIPOLIO(APO)                         (Casos)
  *     FC28 = Neumococo con Comorbilidad                     (Casos)
  *     FO28 = Pentavalente D1 -No vacunado                   (Casos)
@@ -861,7 +861,7 @@ $cellMapE1 = [
     'GD28' => 'SPR 2DA Dosis',
     // REFUERZOS ANTIPOLIO
     'GI28' => 'REFUERZO ANTIPOLIO(IPV)',
-    'GG28' => 'REFUERZO DPT',
+    'GH28' => 'REFUERZO DPT',
     'GJ28' => 'REFUERZO ANTIPOLIO(APO)',
     // NEUMOCOCO CON COMORBILIDAD
     'FC28' => 'Neumococo con Comorbilidad',
