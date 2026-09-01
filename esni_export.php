@@ -55,6 +55,10 @@
  *     H22 = INFLUENZA - 06 Y 07 MESES - 2DA DOSIS
  *     J22 = G22 + H22
  *
+ *   ANTICUERPO MONOCLONAL (dosis unica -> G=Casos, J=Total=Casos):
+ *     G18 = ANTICUERPO MONOCLONAL (Casos)
+ *     J18 = ANTICUERPO MONOCLONAL (Total = G18)
+ *
  *   SECCION B - MENORES DE 01 ANIO (celdas I28..J41):
  *     I28/J28 = 1A 11M 29D - NEUMOCOCO - 01 ANIO - 3RA DOSIS  (I=Casos, J=I)
  *     G29/J29 = 1A 11M 29D - SPR - 01 ANIO - 1RA DOSIS        (G=Casos, J=G)
@@ -336,6 +340,19 @@
  *   S126 = 11 a 59 años         - Total
  *   S127 = Trabajador de Salud  - Total
  *   S128 = SUMA de S125..S127 (todas las celdas anteriores)
+ *
+ * Seccion U - ANTICUERPO MONOCLONAL EN POBLACION DE 12 A MAS AÑOS
+ * (celdas O en filas 118-121, layout total_uno: una sola linea por grupo
+ * de edad con un unico valor = total de dosis aplicadas para ese grupo).
+ * Mismo patron que las secciones H/K/L/O/P/Q/R/T: mapa
+ * [etiqueta_normalizada => cantidad] recuperado con esniGetCasos().
+ * Alimenta las celdas O118..O121 de la plantilla oficial (columna O = TOTAL
+ * del grupo de edad, ya que el Anticuerpo Monoclonal es dosis unica y la
+ * linea de la seccion U es directamente el total del grupo).
+ *   O118 = 12 a 17 años - Total
+ *   O119 = 18 a 29 años - Total
+ *   O120 = 30 a 49 años - Total
+ *   O121 = 50 + años    - Total
  */
 
 require_once 'includes/auth.php';
@@ -973,6 +990,37 @@ if ($seccionT !== null) {
     }
 }
 
+// -----------------------------------------------------------------------------
+// 3.19 Indexar lineas de la SECCION U (ANTICUERPO MONOCLONAL EN POBLACION
+// DE 12 A MAS AÑOS) por etiqueta normalizada. Esta seccion tiene layout
+// "total_uno" (igual que H, K, L, O, P, Q, R y T): una sola linea por grupo
+// de edad con un unico valor = total de dosis aplicadas para ese grupo
+// (no hay desglose por dosis). Por eso se indexa por etiqueta normalizada
+// y se recupera con el helper esniGetCasos().
+// Alimenta las celdas O118..O121 de la plantilla oficial:
+//   O118 = 12 a 17 años, O119 = 18 a 29 años,
+//   O120 = 30 a 49 años, O121 = 50 + años.
+// -----------------------------------------------------------------------------
+$seccionU = null;
+foreach ($reporte['secciones'] as $sec) {
+    if (strcasecmp($sec['codigo'], 'U') === 0) {
+        $seccionU = $sec;
+        break;
+    }
+}
+
+$casosPorEtiquetaU = []; // [etiqueta_normalizada => int]
+if ($seccionU !== null) {
+    foreach ($seccionU['lineas'] as $lin) {
+        $etqNorm = esniNormalizarEtiqueta($lin['etiqueta']);
+        if (isset($casosPorEtiquetaU[$etqNorm])) {
+            $casosPorEtiquetaU[$etqNorm] += (int)$lin['cantidad'];
+        } else {
+            $casosPorEtiquetaU[$etqNorm] = (int)$lin['cantidad'];
+        }
+    }
+}
+
 /**
  * Helper: obtiene la cantidad de casos para una etiqueta de linea.
  * Devuelve 0 si la etiqueta no existe en la seccion indicada (no se
@@ -1091,6 +1139,8 @@ $neumo_d2   = esniGetCasos($casosPorEtiqueta, 'NEUMOCOCO - 02 Y 04 MESES - 2DA D
 
 $inf_d1     = esniGetCasos($casosPorEtiqueta, 'INFLUENZA - 06 Y 07 MESES - 1RA DOSIS');
 $inf_d2     = esniGetCasos($casosPorEtiqueta, 'INFLUENZA - 06 Y 07 MESES - 2DA DOSIS');
+
+$anticuerpo_monoclonal = esniGetCasos($casosPorEtiqueta, 'ANTICUERPO MONOCLONAL');
 
 // 4.3 Calcular totales por vacuna (celdas J) - Seccion A
 $ipv_total     = $ipv_d1   + $ipv_d2   + $ipv_d3;
@@ -1634,6 +1684,25 @@ $t_trabajador_salud = esniGetCasos($casosPorEtiquetaT, 'Trabajador de Salud');
 // S125..S127)
 $t_total = $t_5a10 + $t_11a59 + $t_trabajador_salud;
 
+//----------------------------------------------------------------------------
+// 4.2U Casos por linea (Seccion U - ANTICUERPO MONOCLONAL EN POBLACION
+// DE 12 A MAS AÑOS)
+//----------------------------------------------------------------------------
+// Etiquetas tomadas literalmente de la configuracion ESNI_LINEA_REPORTE para
+// la seccion con codigo 'U'. Alimentan las celdas O de las filas 118-121 de
+// la plantilla oficial. Cada grupo de edad tiene una unica linea cuyo valor
+// es directamente el total de dosis aplicadas (no hay desglose por dosis),
+// por eso se recupera con el helper esniGetCasos() (mismo patron que las
+// secciones H/K/L/O/P/Q/R/T).
+// --- Grupo de edad 12 a 17 años (fila 118) ---
+$u_anticuerpo_12a17 = esniGetCasos($casosPorEtiquetaU, '12 a 17 años');
+// --- Grupo de edad 18 a 29 años (fila 119) ---
+$u_anticuerpo_18a29 = esniGetCasos($casosPorEtiquetaU, '18 a 29 años');
+// --- Grupo de edad 30 a 49 años (fila 120) ---
+$u_anticuerpo_30a49 = esniGetCasos($casosPorEtiquetaU, '30 a 49 años');
+// --- Grupo de edad 50 + años (fila 121) ---
+$u_anticuerpo_50mas = esniGetCasos($casosPorEtiquetaU, '50 + años');
+
 // 4.4 Construir el mapa final celda => valor
 $cellValues = [
     // Encabezado (texto)
@@ -1664,6 +1733,9 @@ $cellValues = [
 
     // Influenza (2 dosis + total)
     'G22' => $inf_d1, 'H22' => $inf_d2, 'J22' => $inf_total,
+
+    // Anticuerpo Monoclonal (dosis unica -> G = J = Casos)
+    'G18' => $anticuerpo_monoclonal, 'J18' => $anticuerpo_monoclonal,
 
     // --- Seccion B: MENORES DE 01 ANIO (celdas I28..J41) ---
     // NEUMOCOCO 3ra dosis (celda I=Casos, total J=I)
@@ -2088,6 +2160,20 @@ $cellValues = [
     'S127' => $t_trabajador_salud,
     // Total General (fila 128): suma de S125+S126+S127
     'S128' => $t_total,
+
+    // --- Seccion U: ANTICUERPO MONOCLONAL EN POBLACION DE 12 A MAS AÑOS ---
+    // (celdas O en filas 118-121, layout total_uno: una sola linea por grupo
+    //  de edad con un unico valor = total de dosis aplicadas para ese grupo).
+    //  Columna O = TOTAL del grupo de edad (dosis unica: la linea de la
+    //  seccion U ya es el total del grupo).
+    // 12 a 17 años (fila 118)
+    'O118' => $u_anticuerpo_12a17,
+    // 18 a 29 años (fila 119)
+    'O119' => $u_anticuerpo_18a29,
+    // 30 a 49 años (fila 120)
+    'O120' => $u_anticuerpo_30a49,
+    // 50 + años (fila 121)
+    'O121' => $u_anticuerpo_50mas,
 ];
 
 // ============================================================================
