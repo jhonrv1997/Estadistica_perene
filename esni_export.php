@@ -102,7 +102,7 @@
  *     J65/M65 = REFUERZO ANTIPOLIO IPV                   (J=Casos, M=J)
  *     J66/M66 = REFUERZO PENTAVALENTE                     (J=Casos, M=J)
  *
- * Seccion E1 - GRUPO ESPECIAL / RIESGO (celdas F/G/H/I en filas 71-86):
+ * Seccion E1 - GRUPO ESPECIAL / RIESGO (celdas F/G/H/I en filas 71-87):
  *     F71/I71 = INFLUENZA CON COMORBILIDAD - 1RA DOSIS    (F=Casos, I=F)
  *     F72/I72 = INFLUENZA SIN COMORBILIDAD - 1RA DOSIS    (F=Casos, I=F)
  *     F73/I73 = Neumococo con Comorbilidad                 (F=Casos, I=F)
@@ -117,6 +117,7 @@
  *     F84/I84 = REFUERZO ANTIPOLIO(IPV)                    (F=Casos, I=F)
  *     G85/I85 = REFUERZO DPT                               (G=Casos, I=G)
  *     G86/I86 = REFUERZO ANTIPOLIO(APO)                    (G=Casos, I=G)
+ *     F87/I87 = Refuerzo Pentavalente                      (F=Casos, I=F)
  *
  * Seccion E2 - GRUPO ESPECIAL / RIESGO (celdas J/K/L/M en filas 71-86):
  *     J78     = Pentavalente D1 -No vacunado               (J=Casos)
@@ -529,7 +530,7 @@ if ($seccionD !== null) {
 
 // -----------------------------------------------------------------------------
 // 3.4 Indexar lineas de la SECCION E1 (GRUPO ESPECIAL / RIESGO) por etiqueta
-// normalizada. Esta seccion alimenta las celdas F/G/H/I de las filas 71-86
+// normalizada. Esta seccion alimenta las celdas F/G/H/I de las filas 71-87
 // de la plantilla oficial.
 // -----------------------------------------------------------------------------
 $seccionE1 = null;
@@ -1167,7 +1168,7 @@ $d_spr_total         = $d_spr_1ra + $d_spr_2da;
 //-----------------------------------------------------------------------------
 // Etiquetas tomadas literalmente de la configuracion ESNI_LINEA_REPORTE para
 // la seccion con codigo 'E1'. Alimentan las celdas F/G/H/I de las filas
-// 71-86 de la plantilla oficial.
+// 71-87 de la plantilla oficial.
 $e1_inf_comorb_d1   = esniGetCasos($casosPorEtiquetaE1, 'INFLUENZA CON COMORBILIDAD - 1RA DOSIS');
 $e1_inf_sincom_d1   = esniGetCasos($casosPorEtiquetaE1, 'INFLUENZA SIN COMORBILIDAD - 1RA DOSIS');
 $e1_neumo_com       = esniGetCasos($casosPorEtiquetaE1, 'Neumococo con Comorbilidad');
@@ -1180,6 +1181,7 @@ $e1_spr_2da         = esniGetCasos($casosPorEtiquetaE1, 'SPR 2DA Dosis');
 $e1_ref_ipv         = esniGetCasos($casosPorEtiquetaE1, 'REFUERZO ANTIPOLIO(IPV)');
 $e1_ref_dpt         = esniGetCasos($casosPorEtiquetaE1, 'REFUERZO DPT');
 $e1_ref_apo         = esniGetCasos($casosPorEtiquetaE1, 'REFUERZO ANTIPOLIO(APO)');
+$e1_ref_penta       = esniGetCasos($casosPorEtiquetaE1, 'Refuerzo Pentavalente');
 
 // 4.3E1 Totales Seccion E1 (celdas que son suma de otras)
 $e1_penta_nv_total  = $e1_penta_nv_d1 + $e1_penta_nv_d2 + $e1_penta_nv_d3;
@@ -1739,7 +1741,7 @@ $cellValues = [
     // REFUERZO PENTAVALENTE (J=M=Casos)
     'J66' => $d_ref_penta,        'M66' => $d_ref_penta,
 
-    // --- Seccion E1: GRUPO ESPECIAL / RIESGO (celdas F/G/H/I en filas 71-86) ---
+    // --- Seccion E1: GRUPO ESPECIAL / RIESGO (celdas F/G/H/I en filas 71-87) ---
     // INFLUENZA CON COMORBILIDAD - 1RA DOSIS (F=I=Casos)
     'F71' => $e1_inf_comorb_d1,    'I71' => $e1_inf_comorb_d1,
     // INFLUENZA SIN COMORBILIDAD - 1RA DOSIS (F=I=Casos)
@@ -1763,6 +1765,8 @@ $cellValues = [
     'G85' => $e1_ref_dpt,          'I85' => $e1_ref_dpt,
     // REFUERZO ANTIPOLIO(APO) (G=I=Casos)
     'G86' => $e1_ref_apo,          'I86' => $e1_ref_apo,
+    // Refuerzo Pentavalente (F=I=Casos)
+    'F87' => $e1_ref_penta,        'I87' => $e1_ref_penta,
 
     // --- Seccion E2: GRUPO ESPECIAL / RIESGO (celdas J/K/L/M en filas 71-86) ---
     // Pentavalente D1/D2/D3 -No vacunado y total M = J+K+L
