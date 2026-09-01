@@ -214,6 +214,8 @@
  *   R95         = O95 + P95 + Q95
  *   O97/P97/Q97 = Personal de Salud - D1/D2/D3
  *   R97         = O97 + P97 + Q97
+ *   O99/P99/Q99 = Persona viviendo con VIH - D1/D2/D3
+ *   R99         = O99 + P99 + Q99
  *   O100/P100/Q100 = Gestantes - D1/D2/D3
  *   R100           = O100 + P100 + Q100
  *
@@ -1382,6 +1384,10 @@ $j_hvb30a59_d3  = esniGetCasosJDosis($casosPorEtiquetaDosisJ, '30 a 59 años', '
 $j_hvbps_d1     = esniGetCasosJDosis($casosPorEtiquetaDosisJ, 'Personal de Salud', 'D1');
 $j_hvbps_d2     = esniGetCasosJDosis($casosPorEtiquetaDosisJ, 'Personal de Salud', 'D2');
 $j_hvbps_d3     = esniGetCasosJDosis($casosPorEtiquetaDosisJ, 'Personal de Salud', 'D3');
+// --- Persona viviendo con VIH (fila 99) ---
+$j_hvbvih_d1    = esniGetCasosJDosis($casosPorEtiquetaDosisJ, 'Persona viviendo con VIH', 'D1');
+$j_hvbvih_d2    = esniGetCasosJDosis($casosPorEtiquetaDosisJ, 'Persona viviendo con VIH', 'D2');
+$j_hvbvih_d3    = esniGetCasosJDosis($casosPorEtiquetaDosisJ, 'Persona viviendo con VIH', 'D3');
 // --- Gestantes (fila 100) ---
 $j_hvbgest_d1   = esniGetCasosJDosis($casosPorEtiquetaDosisJ, 'Gestantes', 'D1');
 $j_hvbgest_d2   = esniGetCasosJDosis($casosPorEtiquetaDosisJ, 'Gestantes', 'D2');
@@ -1393,6 +1399,7 @@ $j_hvb12a17_total  = $j_hvb12a17_d1 + $j_hvb12a17_d2 + $j_hvb12a17_d3;
 $j_hvb18a29_total  = $j_hvb18a29_d1 + $j_hvb18a29_d2 + $j_hvb18a29_d3;
 $j_hvb30a59_total  = $j_hvb30a59_d1 + $j_hvb30a59_d2 + $j_hvb30a59_d3;
 $j_hvbps_total     = $j_hvbps_d1    + $j_hvbps_d2    + $j_hvbps_d3;
+$j_hvbvih_total    = $j_hvbvih_d1   + $j_hvbvih_d2   + $j_hvbvih_d3;
 $j_hvbgest_total   = $j_hvbgest_d1  + $j_hvbgest_d2  + $j_hvbgest_d3;
 
 //-----------------------------------------------------------------------------
@@ -1919,6 +1926,11 @@ $cellValues = [
     'P97'  => $j_hvbps_d2,
     'Q97'  => $j_hvbps_d3,
     'R97'  => $j_hvbps_total,
+    // Persona viviendo con VIH (fila 99)
+    'O99'  => $j_hvbvih_d1,
+    'P99'  => $j_hvbvih_d2,
+    'Q99'  => $j_hvbvih_d3,
+    'R99'  => $j_hvbvih_total,
     // Gestantes (fila 100)
     'O100' => $j_hvbgest_d1,
     'P100' => $j_hvbgest_d2,

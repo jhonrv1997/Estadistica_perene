@@ -302,6 +302,11 @@
  *     LR28 = Hepatitis B - Personal de Salud - D2 (Casos)
  *     LS28 = Hepatitis B - Personal de Salud - D3 (Casos)
  *
+ *   GRUPO "Persona viviendo con VIH":
+ *     LU28 = Hepatitis B - Persona viviendo con VIH - D1 (Casos)
+ *     LV28 = Hepatitis B - Persona viviendo con VIH - D2 (Casos)
+ *     LW28 = Hepatitis B - Persona viviendo con VIH - D3 (Casos)
+ *
  *   GRUPO "Gestantes" (sub-zona J.1 HEPATITIS / PERSONAS DE RIESGO):
  *     TM28 = Hepatitis B - Gestantes - D1 (Casos)
  *     TN28 = Hepatitis B - Gestantes - D2 (Casos)
@@ -1184,6 +1189,11 @@ $cellMapJ = [
     'LQ28' => ['Personal de Salud', 'D1'],
     'LR28' => ['Personal de Salud', 'D2'],
     'LS28' => ['Personal de Salud', 'D3'],
+    // GRUPO "Persona viviendo con VIH"
+    // D1 / D2 / D3
+    'LU28' => ['Persona viviendo con VIH', 'D1'],
+    'LV28' => ['Persona viviendo con VIH', 'D2'],
+    'LW28' => ['Persona viviendo con VIH', 'D3'],
     // GRUPO "Gestantes" (sub-zona J.1 HEPATITIS / PERSONAS DE RIESGO)
     // D1 / D2 / D3
     'TM28' => ['Gestantes', 'D1'],
