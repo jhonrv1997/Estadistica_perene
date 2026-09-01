@@ -18,8 +18,9 @@
  * femenino y masculino, dosis unica), Seccion O (NEUMOCOCO EN POBLACION
  * EN RIESGO), Seccion P (DT-DOSIS ADICIONALES), Seccion Q (VARICELA
  * POR GRUPO DE EDAD / RIESGO), Seccion R (HEPATITIS A POR GRUPO DE
- * EDAD / RIESGO) y Seccion T (SPR-SARAMPION POR GRUPO DE EDAD /
- * RIESGO) del reporte ESNI.
+ * EDAD / RIESGO), Seccion T (SPR-SARAMPION POR GRUPO DE EDAD /
+ * RIESGO) y Seccion U (ANTICUERPO MONOCLONAL / VSR - VIRUS SINCITIAL
+ * RESPIRATORIO EN POBLACION DE 12 A MAS AÑOS) del reporte ESNI.
  *
  * Mapeo de celdas (plantilla Operacional.xlsx):
  *
@@ -59,6 +60,9 @@
  *   INFLUENZA:
  *     AN28 = INFLUENZA - 06 Y 07 MESES - 1RA DOSIS         (Casos)
  *     AO28 = INFLUENZA - 06 Y 07 MESES - 2RA DOSIS         (Casos)
+ *
+ *   ANTICUERPO MONOCLONAL (VSR - dosis unica):
+ *     UD28 = ANTICUERPO MONOCLONAL                         (Casos)
  *
  *   Seccion B - fila 28 (Casos por vacuna/dosis, de 01 anio):
  *
@@ -436,6 +440,22 @@
  *     Las celdas siguen el layout horizontal de la fila 28 de la
  *     plantilla Operacional.xlsx (columnas consecutivas UA, UB, UC).
  *
+ *   Seccion U - fila 28 (ANTICUERPO MONOCLONAL / VSR - VIRUS SINCITIAL
+ *   RESPIRATORIO EN POBLACION DE 12 A MAS AÑOS, por grupo de edad).
+ *   Layout "total_uno" (al igual que las secciones H, K, L, O, P, Q, R
+ *   y T): cada grupo de edad tiene una unica linea en ESNI_LINEA_REPORTE
+ *   cuyo valor es directamente el TOTAL de dosis aplicadas para ese
+ *   grupo (no hay desglose por dosis; el Anticuerpo Monoclonal contra el
+ *   VSR es dosis unica).
+ *
+ *     UE28 = 12 a 17 años - Total                     (Casos)
+ *     UF28 = 18 a 29 años - Total                     (Casos)
+ *     UG28 = 30 a 49 años - Total                     (Casos)
+ *     UH28 = 50 + años    - Total                     (Casos)
+ *
+ *     Las celdas siguen el layout horizontal de la fila 28 de la
+ *     plantilla Operacional.xlsx (columnas consecutivas UE, UF, UG, UH).
+ *
  * Funcionamiento:
  *   1) Recibe por GET los filtros: anio, mes, establecimiento (los mismos
  *      que reporte_esni.php).
@@ -443,8 +463,8 @@
  *      con Id_Ups = 301204 (estrategia Inmunizaciones).
  *   3) Indexa las lineas de la Seccion A, Seccion B, Seccion C, Seccion D,
  *      Seccion E1, Seccion E2, Seccion F, Seccion F2, Seccion G, Seccion H,
- *      Seccion K, Seccion L, Seccion O, Seccion P, Seccion Q, Seccion R y
- *      Seccion T por etiqueta normalizada; las de la
+ *      Seccion K, Seccion L, Seccion O, Seccion P, Seccion Q, Seccion R,
+ *      Seccion T y Seccion U por etiqueta normalizada; las de la
  *      Seccion J
  *      por la clave compuesta etiqueta normalizada + dosis_codigo (D1/D2/D3);
  *      y las de la Seccion N por la clave compuesta etiqueta normalizada +
@@ -555,7 +575,7 @@ if (!empty($reporte['error'])) {
 }
 
 // ============================================================================
-// 3. Indexar lineas de las SECCIONES A, B, C, D, E1, E2, F, F2, G, H, J, K, L, N, O, P, Q, R y T
+// 3. Indexar lineas de las SECCIONES A, B, C, D, E1, E2, F, F2, G, H, J, K, L, N, O, P, Q, R, T y U
 // ----------------------------------------------------------------------------
 // El motor de reglas devuelve $reporte['secciones'] con todas las secciones
 // (A, B, C, D, E1, E2, F, F2, G, H, J, K, L, ...). Aqui nos interesan la
@@ -656,6 +676,18 @@ $casosPorEtiquetaR  = esniIndexarCasosSeccionPlano($reporte, 'R');
 $casosPorEtiquetaT  = esniIndexarCasosSeccionPlano($reporte, 'T');
 
 // ----------------------------------------------------------------------------
+// La Seccion U (ANTICUERPO MONOCLONAL / VSR - VIRUS SINCITIAL RESPIRATORIO
+// EN POBLACION DE 12 A MAS AÑOS, id_seccion = 22) tiene layout "total_uno"
+// (al igual que las secciones H, K, L, O, P, Q, R y T): cada grupo de edad
+// tiene una unica linea en ESNI_LINEA_REPORTE cuyo valor es directamente el
+// total de dosis aplicadas para ese grupo (columna "Total" del reporte ESNI,
+// sin desglose por dosis; el Anticuerpo Monoclonal contra el VSR es dosis
+// unica). Por eso se indexa por etiqueta normalizada (mismo patron que
+// A/B/C/H/K/L/O/P/Q/R/T) y se recupera con esniGetCasosPlano().
+// ----------------------------------------------------------------------------
+$casosPorEtiquetaU  = esniIndexarCasosSeccionPlano($reporte, 'U');
+
+// ----------------------------------------------------------------------------
 // La Seccion N (VACUNA VPH, id_seccion = 14) tiene layout "matriz_sexo": por
 // cada grupo de edad existen DOS lineas en ESNI_LINEA_REPORTE con la MISMA
 // etiqueta ("9 años", "10 años", ...) que se distinguen unicamente por el
@@ -744,7 +776,9 @@ foreach ($reporte['secciones'] as $sec) {
 // $cellMapP los de la Seccion P (DT-DOSIS ADICIONALES, por grupo de edad),
 // $cellMapQ los de la Seccion Q (VARICELA, por grupo de edad / riesgo),
 // $cellMapR los de la Seccion R (HEPATITIS A, por grupo de edad / riesgo),
-// $cellMapT los de la Seccion T (SPR-SARAMPION, por grupo de edad / riesgo)
+// $cellMapT los de la Seccion T (SPR-SARAMPION, por grupo de edad / riesgo),
+// $cellMapU los de la Seccion U (ANTICUERPO MONOCLONAL / VSR - VIRUS
+// SINCITIAL RESPIRATORIO EN POBLACION DE 12 A MAS AÑOS, por grupo de edad)
 // y $cellMapN los de la
 // Seccion N (VACUNA VPH, por grupo de edad y sexo M/F; cada celda se mapea
 // al par [etiqueta, sexo] y se resuelve con esniGetCasosNSexoPlano()).
@@ -774,6 +808,8 @@ $cellMapA = [
     // INFLUENZA
     'AN28' => 'INFLUENZA - 06 Y 07 MESES - 1RA DOSIS',
     'AO28' => 'INFLUENZA - 06 Y 07 MESES - 2DA DOSIS',
+    // ANTICUERPO MONOCLONAL (VSR - dosis unica)
+    'UD28' => 'Anticuerpo Monoclonal',
 ];
 
 $cellMapB = [
@@ -1158,6 +1194,30 @@ $cellMapT = [
     'UC28' => 'Trabajador de Salud',
 ];
 
+// La Seccion U (ANTICUERPO MONOCLONAL / VSR - VIRUS SINCITIAL RESPIRATORIO
+// EN POBLACION DE 12 A MAS AÑOS, id_seccion = 22) tiene layout "total_uno"
+// (al igual que las secciones H, K, L, O, P, Q, R y T): cada grupo de edad
+// tiene una unica linea en ESNI_LINEA_REPORTE cuyo valor es directamente el
+// total de dosis aplicadas para ese grupo (columna "Total" del reporte ESNI,
+// sin desglose por dosis; el Anticuerpo Monoclonal contra el VSR es dosis
+// unica). Por eso se indexa por etiqueta normalizada (mismo patron que
+// A/B/C/H/K/L/O/P/Q/R/T) y se recupera con esniGetCasosPlano(). Las
+// etiquetas "12 a 17 años", "18 a 29 años", "30 a 49 años" y "50 + años"
+// corresponden a las lineas de ESNI_LINEA_REPORTE de la seccion U
+// (id_linea 255, 256, 257 y 258). Las celdas siguen el layout horizontal
+// de la fila 28 de la plantilla Operacional.xlsx (columnas consecutivas
+// UE, UF, UG, UH).
+$cellMapU = [
+    // GRUPO DE EDAD "12 a 17 años" (Casos)
+    'UE28' => '12 a 17 años',
+    // GRUPO DE EDAD "18 a 29 años" (Casos)
+    'UF28' => '18 a 29 años',
+    // GRUPO DE EDAD "30 a 49 años" (Casos)
+    'UG28' => '30 a 49 años',
+    // GRUPO DE EDAD "50 + años" (Casos)
+    'UH28' => '50 + años',
+];
+
 // La Seccion J (HEPATITIS B EN POBLACION DE 05 A 59 ANIOS) tiene layout
 // "matriz_dosis": las 3 lineas (D1/D2/D3) de cada grupo de edad comparten la
 // MISMA etiqueta en ESNI_LINEA_REPORTE, por eso cada celda se mapea al par
@@ -1296,6 +1356,9 @@ foreach ($cellMapR as $cellRef => $etiqueta) {
 }
 foreach ($cellMapT as $cellRef => $etiqueta) {
     $cellValues[$cellRef] = esniGetCasosPlano($casosPorEtiquetaT, $etiqueta);
+}
+foreach ($cellMapU as $cellRef => $etiqueta) {
+    $cellValues[$cellRef] = esniGetCasosPlano($casosPorEtiquetaU, $etiqueta);
 }
 foreach ($cellMapJ as $cellRef => $parJ) {
     [$etiquetaJ, $dosisJ] = $parJ;
