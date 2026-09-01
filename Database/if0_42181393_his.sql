@@ -293,8 +293,8 @@ INSERT INTO `ESNI_LINEA_REPORTE` (`id_linea`, `id_seccion`, `orden`, `etiqueta`,
 (88, 16, 6, 'REFUERZO ANTIPOLIO(IPV)', 3, 1, 15, 'A', 1),
 (89, 16, 7, 'REFUERZO DPT', 17, 2, 15, 'A', 1),
 (90, 16, 8, 'REFUERZO ANTIPOLIO(APO)', 4, 2, 15, 'A', 1),
-(91, 17, 1, 'SPR 1RA Dosis', 12, 1, 28, 'A', 1),
-(92, 17, 2, ' SPR 2DA Dosis', 12, 2, 28, 'A', 1),
+(91, 17, 1, 'SPR 1RA Dosis', 12, 1, 28, 'A', 0),
+(92, 17, 2, ' SPR 2DA Dosis', 12, 2, 28, 'A', 0),
 (93, 17, 3, 'REFUERZO DPT', 17, 2, 28, 'A', 1),
 (94, 4, 4, 'dT 1ra - Mujeres 10 a 11 anos', 18, 1, 30, 'F', 1),
 (95, 4, 5, 'dT 2da - Mujeres 10 a 11 anos', 18, 2, 30, 'F', 1),
@@ -449,7 +449,18 @@ INSERT INTO `ESNI_LINEA_REPORTE` (`id_linea`, `id_seccion`, `orden`, `etiqueta`,
 (245, 16, 10, 'Pentavalente D1 -No vacunado', 5, 1, 15, 'A', 1),
 (246, 16, 11, 'Pentavalente D2 -No vacunado', 5, 2, 15, 'A', 1),
 (247, 16, 12, 'Pentavalente D3 -No vacunado', 5, 3, 15, 'A', 1),
-(248, 16, 13, 'Refuerzo Pentavalente', 22, 6, 15, 'A', 1);
+(248, 16, 13, 'Refuerzo Pentavalente', 22, 6, 15, 'A', 1),
+(249, 17, 4, 'Pentavalente D1 -No vacunado', 5, 1, 28, 'A', 1),
+(250, 17, 5, 'Pentavalente D2 -No vacunado', 5, 2, 28, 'A', 1),
+(251, 17, 6, 'Pentavalente D3 -No vacunado', 5, 3, 28, 'A', 1),
+(252, 9, 19, 'Persona viviendo con VIH', 2, 1, NULL, 'A', 1),
+(253, 9, 20, 'Persona viviendo con VIH', 2, 2, NULL, 'A', 1),
+(254, 9, 20, 'Persona viviendo con VIH', 2, 3, NULL, 'A', 1),
+(255, 22, 1, '12 a 17 años', 24, 5, 31, 'F', 1),
+(256, 22, 2, '18 a 29 años', 24, 5, 32, 'F', 1),
+(257, 22, 3, '30 a 49 años', 24, 5, 33, 'F', 1),
+(258, 22, 4, '50 + años', 24, 5, 34, 'F', 1),
+(259, 1, 27, 'Anticuerpo Monoclonal', 25, 5, 3, 'A', 1);
 -- --------------------------------------------------------
 
 --
@@ -722,7 +733,7 @@ INSERT INTO `ESNI_REGLA` (`id_regla`, `id_linea`, `cod_item`, `valor_lab`, `id_g
 (259, 76, '90713', 'DDA', 9, 'A', NULL, NULL, 0, 0, 0, 0, 1, NULL, NULL, NULL),
 (260, 107, '90714', '1', 29, 'M', NULL, NULL, 0, 0, 0, 0, 1, NULL, NULL, NULL),
 (261, 108, '90714', '2', 29, 'M', NULL, NULL, 0, 0, 0, 0, 1, NULL, NULL, NULL),
-(262, 109, '90714', '3', 29, 'A', NULL, NULL, 0, 0, 0, 0, 1, NULL, NULL, NULL),
+(262, 109, '90714', '3', 29, 'M', NULL, NULL, 0, 0, 0, 0, 1, NULL, NULL, NULL),
 (263, 110, '90714', '1', 30, 'M', NULL, NULL, 0, 0, 0, 0, 1, NULL, NULL, NULL),
 (264, 111, '90714', '2', 30, 'M', NULL, NULL, 0, 0, 0, 0, 1, NULL, NULL, NULL),
 (265, 112, '90714', '3', 30, 'M', NULL, NULL, 0, 0, 0, 0, 1, NULL, NULL, NULL),
@@ -938,7 +949,52 @@ INSERT INTO `ESNI_REGLA` (`id_regla`, `id_linea`, `cod_item`, `valor_lab`, `id_g
 (477, 247, '90722', '3', 15, 'A', NULL, NULL, 0, 0, 0, 0, 1, NULL, NULL, NULL),
 (478, 247, '90722', 'D3', 15, 'A', NULL, NULL, 0, 0, 0, 0, 1, NULL, NULL, NULL),
 (479, 248, '90722', 'DA', 15, 'A', NULL, NULL, 0, 0, 0, 0, 1, NULL, NULL, NULL),
-(480, 248, '90722', 'DDA', 15, 'A', NULL, NULL, 0, 0, 0, 0, 1, NULL, NULL, NULL);
+(480, 248, '90722', 'DDA', 15, 'A', NULL, NULL, 0, 0, 0, 0, 1, NULL, NULL, NULL),
+(481, 249, '90722', '1', 28, 'A', NULL, NULL, 0, 0, 0, 0, 1, NULL, NULL, NULL),
+(482, 249, '90722', 'D1', 28, 'A', NULL, NULL, 0, 0, 0, 0, 1, NULL, NULL, NULL),
+(483, 250, '90722', '2', 28, 'A', NULL, NULL, 0, 0, 0, 0, 1, NULL, NULL, NULL),
+(484, 250, '90722', 'D2', 28, 'A', NULL, NULL, 0, 0, 0, 0, 1, NULL, NULL, NULL),
+(485, 251, '90722', '3', 28, 'A', NULL, NULL, 0, 0, 0, 0, 1, NULL, NULL, NULL),
+(486, 251, '90722', 'D3', 28, 'A', NULL, NULL, 0, 0, 0, 0, 1, NULL, NULL, NULL),
+(487, 122, '90714', 'D1', 27, 'M', NULL, NULL, 0, 0, 0, 0, 1, NULL, NULL, NULL),
+(488, 107, '90714', 'D1', 29, 'M', NULL, NULL, 0, 0, 0, 0, 1, NULL, NULL, NULL),
+(489, 108, '90714', 'D2', 29, 'M', NULL, NULL, 0, 0, 0, 0, 1, NULL, NULL, NULL),
+(490, 109, '90714', 'D3', 29, 'M', NULL, NULL, 0, 0, 0, 0, 1, NULL, NULL, NULL),
+(491, 110, '90714', 'D1', 30, 'M', NULL, NULL, 0, 0, 0, 0, 1, NULL, NULL, NULL),
+(492, 111, '90714', 'D2', 30, 'M', NULL, NULL, 0, 0, 0, 0, 1, NULL, NULL, NULL),
+(493, 112, '90714', 'D3', 30, 'M', NULL, NULL, 0, 0, 0, 0, 1, NULL, NULL, NULL),
+(494, 113, '90714', 'D1', 31, 'M', NULL, NULL, 0, 0, 0, 0, 1, NULL, NULL, NULL),
+(495, 114, '90714', 'D2', 31, 'M', NULL, NULL, 0, 0, 0, 0, 1, NULL, NULL, NULL),
+(496, 115, '90714', 'D3', 31, 'M', NULL, NULL, 0, 0, 0, 0, 1, NULL, NULL, NULL),
+(497, 116, '90714', 'D1', 32, 'M', NULL, NULL, 0, 0, 0, 0, 1, NULL, NULL, NULL),
+(498, 117, '90714', 'D2', 32, 'M', NULL, NULL, 0, 0, 0, 0, 1, NULL, NULL, NULL),
+(499, 118, '90714', 'D3', 32, 'M', NULL, NULL, 0, 0, 0, 0, 1, NULL, NULL, NULL),
+(500, 119, '90714', 'D1', 35, 'M', NULL, NULL, 0, 0, 0, 0, 1, NULL, NULL, NULL),
+(501, 120, '90714', 'D2', 35, 'M', NULL, NULL, 0, 0, 0, 0, 1, NULL, NULL, NULL),
+(502, 121, '90714', 'D3', 35, 'M', NULL, NULL, 0, 0, 0, 0, 1, NULL, NULL, NULL),
+(503, 123, '90714', 'D2', 27, 'M', NULL, NULL, 0, 0, 0, 0, 1, NULL, NULL, NULL),
+(504, 124, '90714', 'D3', 27, 'M', NULL, NULL, 0, 0, 0, 0, 1, NULL, NULL, NULL),
+(505, 227, '90714', 'D1', 34, 'F', NULL, NULL, 0, 0, 0, 0, 1, 'G', NULL, NULL),
+(506, 228, '90714', 'D2', 34, 'F', NULL, NULL, 0, 0, 0, 0, 1, 'G', NULL, NULL),
+(507, 229, '90714', 'D3', 34, 'F', NULL, NULL, 0, 0, 0, 0, 1, 'G', NULL, NULL),
+(508, 147, '90744', '1', 32, 'A', NULL, NULL, 0, 0, 0, 0, 1, NULL, 'G', NULL),
+(509, 147, '90744', 'D1', 32, 'A', NULL, NULL, 0, 0, 0, 0, 1, NULL, 'G', NULL),
+(510, 148, '90744', '2', 32, 'A', NULL, NULL, 0, 0, 0, 0, 1, NULL, 'G', NULL),
+(511, 148, '90744', 'D2', 32, 'A', NULL, NULL, 0, 0, 0, 0, 1, NULL, 'G', NULL),
+(512, 149, '90744', '3', 32, 'A', NULL, NULL, 0, 0, 0, 0, 1, NULL, 'G', NULL),
+(513, 149, '90744', 'D3', 32, 'A', NULL, NULL, 0, 0, 0, 0, 1, NULL, 'G', NULL),
+(514, 252, '90746', '1', NULL, 'A', NULL, NULL, 0, 0, 0, 0, 1, 'VIH', NULL, NULL),
+(515, 252, '90746', 'D1', NULL, 'A', NULL, NULL, 0, 0, 0, 0, 1, 'VIH', NULL, NULL),
+(516, 253, '90746', '2', NULL, 'A', NULL, NULL, 0, 0, 0, 0, 1, 'VIH', NULL, NULL),
+(517, 253, '90746', 'D2', NULL, 'A', NULL, NULL, 0, 0, 0, 0, 1, 'VIH', NULL, NULL),
+(518, 254, '90746', '3', NULL, 'A', NULL, NULL, 0, 0, 0, 0, 1, 'VIH', NULL, NULL),
+(519, 254, '90746', 'D3', NULL, 'A', NULL, NULL, 0, 0, 0, 0, 1, 'VIH', NULL, NULL),
+(520, 75, '90722', 'DDA', 9, 'A', NULL, NULL, 0, 0, 0, 0, 1, NULL, NULL, NULL),
+(521, 255, '90678', 'DU', 31, 'F', NULL, NULL, 0, 0, 0, 0, 1, 'G', NULL, NULL),
+(522, 256, '90678', 'DU', 32, 'F', NULL, NULL, 0, 0, 0, 0, 1, 'G', NULL, NULL),
+(523, 257, '90678', 'DU', 33, 'F', NULL, NULL, 0, 0, 0, 0, 1, 'G', NULL, NULL),
+(524, 258, '90678', 'DU', 34, 'F', NULL, NULL, 0, 0, 0, 0, 1, 'G', NULL, NULL),
+(526, 259, '90380', 'DU', NULL, 'A', NULL, NULL, 0, 0, 0, 0, 1, NULL, NULL, NULL);
 -- --------------------------------------------------------
 
 --
@@ -978,7 +1034,8 @@ INSERT INTO `ESNI_SECCION_REPORTE` (`id_seccion`, `codigo`, `titulo`, `descripci
 (18, 'L', 'L.- SOLO GESTANTES (dtpa)', 'Vacuna combinada dtpa', 'total_uno', 11, 1),
 (19, 'R', 'R.-HEPATITIS A', 'Vacuna de 1 a 5', 'total_uno', 16, 1),
 (20, 'T', 'T.-SPR-SARAMPION', 'vacuna de 5 a 59 y Trabajador de Salud', 'total_uno', 17, 1),
-(21, 'P', 'P.-DT-DOSIS ADICIONALES', 'vacuna DT solo dosis adicional', 'total_uno', 14, 1);
+(21, 'P', 'P.-DT-DOSIS ADICIONALES', 'vacuna DT solo dosis adicional', 'total_uno', 14, 1),
+(22, 'U', 'U.-VSR-VIRUS SINCITIAL RESPIRATORIO', 'Vacuna para gestantes', 'lista', 18, 1);
 -- --------------------------------------------------------
 
 --
@@ -998,7 +1055,6 @@ CREATE TABLE `ESNI_VACUNA` (
 --
 -- Volcado de datos para la tabla `ESNI_VACUNA`
 --
-
 INSERT INTO `ESNI_VACUNA` (`id_vacuna`, `codigo`, `nombre`, `descripcion`, `color`, `activo`, `fecha_creacion`) VALUES
 (1, 'BCG', 'BCG', 'Vacuna BCG contra tuberculosis', '#fd7e14', 1, '2026-07-21 18:59:02'),
 (2, 'HVB', 'Hepatitis Viral B', 'Vacuna Hepatitis B', '#dc3545', 1, '2026-07-21 18:59:02'),
@@ -1022,7 +1078,9 @@ INSERT INTO `ESNI_VACUNA` (`id_vacuna`, `codigo`, `nombre`, `descripcion`, `colo
 (20, 'VPH', 'VPH (Virus Papiloma Humano)', 'Vacuna contra Virus del Papiloma Humano', '#7b2ff7', 1, '2026-07-21 18:59:02'),
 (21, 'BCG_TB', 'BCG Contacto TB', 'BCG en contactos de Tuberculosis', '#fd7e14', 1, '2026-07-21 18:59:02'),
 (22, 'PENTA_RE', 'PENTAVALENTE (Refuerzo)', 'Vacuna Refuerzo Pentavalente (DTP-Hib-HepB)', '#0d6efd', 1, '2026-07-25 19:50:41'),
-(23, 'IPV_RE', 'IPV (Refuerzo)', 'Vacuna Refuerzo IPV', '#0d6efd', 1, '2026-07-25 20:10:34');
+(23, 'IPV_RE', 'IPV (Refuerzo)', 'Vacuna Refuerzo IPV', '#0d6efd', 1, '2026-07-25 20:10:34'),
+(24, 'VSR', 'VIRUS SINCITIAL RESPIRATORIO', 'Vacuna para gestantes', '#17ff0b', 1, '2026-09-01 10:22:23'),
+(25, 'MON', 'Anticuerpo Monoclonal', 'dosis 0,5 ML', '#5aafa5', 1, '2026-09-01 10:37:56');
 
 -- --------------------------------------------------------
 
