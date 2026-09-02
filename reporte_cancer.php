@@ -23,6 +23,44 @@ verificarAutenticacion();
 require_once 'includes/functions.php';
 require_once 'includes/cancer_data.php';
 
+// ====== PROTECCION ANTI HTTP 500 (errores fatales de PHP) ======
+// La generacion del reporte es pesada: en hostings compartidos puede
+// agotar el memory_limit o el max_execution_time. Esos errores FATALES no
+// se capturan con try/catch; sin este handler el navegador muestra la
+// pagina en blanco "HTTP ERROR 500". Aqui se capturan y se muestra un
+// panel de diagnostico con la causa y las acciones recomendadas.
+ob_start();
+register_shutdown_function(function () {
+    $e = error_get_last();
+    if (!$e || !in_array($e['type'], [E_ERROR, E_PARSE, E_CORE_ERROR, E_COMPILE_ERROR], true)) return;
+    while (ob_get_level() > 0) { @ob_end_clean(); }
+    if (!headers_sent()) {
+        http_response_code(200);
+        header('Content-Type: text/html; charset=utf-8');
+    }
+    $msg     = $e['message'];
+    $esMem   = (stripos($msg, 'memory') !== false);
+    $esTiempo= (stripos($msg, 'execution time') !== false || stripos($msg, 'time limit') !== false);
+    $causa   = $esMem ? 'Se agoto la memoria disponible de PHP (memory_limit) al procesar los datos del reporte.'
+              : ($esTiempo ? 'Se agoto el tiempo de ejecucion permitido por el hosting (max_execution_time).' : 'Ocurrio un error fatal de PHP durante la generacion del reporte.');
+    $ml      = (string)ini_get('memory_limit');
+    $met     = (string)ini_get('max_execution_time');
+    echo '<!DOCTYPE html><html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">'
+       . '<title>Reporte CANCER - Diagnostico de error</title><link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet"></head>'
+       . '<body class="bg-light"><div class="container py-5"><div class="row justify-content-center"><div class="col-lg-8">'
+       . '<div class="card shadow"><div class="card-header bg-danger text-white"><h5 class="mb-0">El reporte CANCER no se pudo completar</h5></div>'
+       . '<div class="card-body"><div class="alert alert-warning mb-3"><strong>Causa probable:</strong> ' . htmlspecialchars($causa) . '</div>'
+       . '<p class="mb-2"><strong>Detalle tecnico:</strong></p><pre class="bg-dark text-warning p-2 rounded small" style="white-space:pre-wrap;">' . htmlspecialchars($msg) . '</pre>'
+       . '<p class="mb-1"><strong>Que puedo hacer:</strong></p><ol class="mb-3">'
+       . '<li>Ejecute una vez <a href="install_cancer.php"><strong>install_cancer.php</strong></a> para crear los indices de la tabla consolidada (acelera la consulta de minutos a segundos).</li>'
+       . '<li>Genere el reporte con filtros mas acotados: seleccione <strong>un mes</strong> y/o <strong>un establecimiento</strong> en lugar de "Todos".</li>'
+       . '<li>Si el problema persiste, el hosting gratuito (InfinityFree) tiene limites fijos; considere migrar a un plan de pago o descargar el Excel por partes.</li>'
+       . '</ol>'
+       . '<p class="small text-muted mb-0">Limites actuales de PHP en este servidor &mdash; memory_limit: <code>' . htmlspecialchars($ml) . '</code> &nbsp;|&nbsp; max_execution_time: <code>' . htmlspecialchars($met) . 's</code> &nbsp;|&nbsp; PHP: <code>' . htmlspecialchars(PHP_VERSION) . '</code></p>'
+       . '</div><div class="card-footer bg-white"><a href="reporte_cancer.php" class="btn btn-sm btn-his">Volver al reporte</a></div></div>'
+       . '</div></div></div></body></html>';
+});
+
 $pdo = getDBConnection();
 
 // ==================== FILTROS ====================
@@ -54,7 +92,7 @@ if ($ejecutar) {
     $t0 = microtime(true);
     $reporte = cancerEjecutarReporte($pdo, $filtros);
     $reporte['tiempo_ejecucion'] = round(microtime(true) - $t0 + ($reporte['tiempo_ejecucion'] ?? 0), 2);
-    if (!empty($reporte['error']) && strpos($reporte['error'], 'Error SQL') === 0) {
+    if (!empty($reporte['error']) && !empty($reporte['sql_debug'])) {
         $debugSQL = ['sql' => $reporte['sql_debug'] ?? '', 'params' => $reporte['params_debug'] ?? []];
     }
 }
@@ -170,6 +208,28 @@ include 'includes/header.php';
         <div class="cnr-debug mt-2" style="background:#f8f9fa;border:1px solid #dee2e6;padding:.8rem;font-family:monospace;font-size:.75rem;white-space:pre-wrap;word-break:break-all;"><?= "SQL: " . htmlspecialchars($debugSQL['sql']) . "\n\nPARAMS: " . htmlspecialchars(json_encode($debugSQL['params'], JSON_PRETTY_PRINT)) ?></div>
     </details>
     <?php endif; ?>
+    <?php $diag = cancerDiagnosticoEntorno($pdo); ?>
+    <hr>
+    <h6 class="small fw-bold mb-2"><i class="fas fa-stethoscope me-1"></i>Diagnostico del entorno</h6>
+    <ul class="small mb-2 ps-3">
+        <li>PHP: <code><?= htmlspecialchars($diag['php']) ?></code> &nbsp;|&nbsp; memory_limit: <code><?= htmlspecialchars($diag['memory_limit']) ?></code> &nbsp;|&nbsp; max_execution_time: <code><?= htmlspecialchars($diag['max_exec_time']) ?>s</code></li>
+        <li>Filas aprox. en la tabla consolidada: <code><?= $diag['filas_tabla'] !== null ? number_format((int)$diag['filas_tabla']) : 'n/d' ?></code></li>
+        <li>
+            Indices en la tabla consolidada:
+            <?php if (empty($diag['indices'])): ?>
+                <span class="badge bg-danger">NINGUNO</span>
+                &rarr; la consulta hace un barrido completo de la tabla. Ejecute una vez
+                <a href="install_cancer.php" class="fw-bold">install_cancer.php</a> para crearlos.
+            <?php else: ?>
+                <span class="badge bg-success"><?= count($diag['indices']) ?></span>
+                <code class="small"><?= htmlspecialchars(implode(', ', $diag['indices'])) ?></code>
+            <?php endif; ?>
+        </li>
+    </ul>
+    <div class="small text-muted">
+        <i class="fas fa-lightbulb me-1"></i>Recomendaciones: ejecute <strong>install_cancer.php</strong> (una sola vez), y genere el reporte con filtros mas acotados
+        (seleccione un mes y/o un establecimiento en lugar de "-- Todos --").
+    </div>
 </div>
 <?php else: ?>
 

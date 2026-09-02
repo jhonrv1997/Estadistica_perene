@@ -18,9 +18,10 @@ Ahora (flujo nuevo, 1 click):
 
 | Archivo | Descripcion |
 |---------|-------------|
-| `reporte_cancer.php` | Pagina del reporte: filtros (anio, mes, establecimiento), boton **Generar Reporte**, 9 secciones con el layout del Excel y boton **Exportar Excel**. |
+| `reporte_cancer.php` | Pagina del reporte: filtros (anio, mes, establecimiento), boton **Generar Reporte**, 9 secciones con el layout del Excel y boton **Exportar Excel**. Incluye captura de errores fatales (memoria/tiempo) con panel de diagnostico en lugar de HTTP 500. |
 | `includes/cancer_data.php` | Motor data-driven: adapta los 9 Stored Procedures del archivo `03 Creacion de Procedimientos.txt` y los ejecuta contra la tabla MySQL `T_CONSOLIDADO_NUEVA_TRAMA_HISMINSA_DETALLADO` (mismo patron que el modulo ESNI). No requiere crear tablas ni procedimientos en SQL Server. |
 | `cancer_export.php` | Exportacion a Excel: llena la plantilla oficial `uploads/Reporte_Actividades_Cancer.xlsx` celda por celda (mismo mapa de celdas que llenaba la conexion ODBC). |
+| `install_cancer.php` | Instalador 1-click de los indices de la tabla consolidada (ejecutar UNA vez como admin; ver seccion de solucion de problemas). |
 | `uploads/Reporte_Actividades_Cancer.xlsx` | Plantilla oficial (la que ustedes usaban con ODBC). Copiela a la carpeta `uploads/` de su servidor. |
 
 ## Archivos modificados (2 lineas de integracion)
@@ -45,6 +46,48 @@ Ahora (flujo nuevo, 1 click):
 No se necesita ejecutar ningun script SQL: el motor consulta directamente la tabla
 consolidada `T_CONSOLIDADO_NUEVA_TRAMA_HISMINSA_DETALLADO` que ya carga su sistema
 (mismo origen de datos del modulo ESNI).
+
+## Solucion de problemas: HTTP ERROR 500 al pulsar "Generar Reporte"
+
+### Causas (por que ocurria)
+
+1. **La tabla consolidada no tiene indices.** `T_CONSOLIDADO_NUEVA_TRAMA_HISMINSA_DETALLADO`
+   se crea sin ninguna clave/index. El reporte consulta con
+   `Codigo_Item IN (~80 codigos) OR Codigo_Item LIKE 'C%'` + Anio/Mes/Establecimiento;
+   sin indices MySQL recorre TODA la tabla (~100 columnas) en cada clic.
+2. **Consulta buffered + doble almacenamiento en PHP.** Todo el resultado se
+   cargaba de golpe en memoria y las filas se guardaban 2 veces (`$filas` y
+   `$porCita`). Con un anio completo de datos se agotaba el `memory_limit` del
+   hosting -> `Fatal error: Allowed memory size exhausted` -> HTTP 500.
+3. **Tiempo de ejecucion excedido.** El matching evaluaba cada una de las ~150
+   lineas del reporte contra TODAS las filas leidas (millones de iteraciones).
+   Al superar el `max_execution_time` del hosting -> `Fatal error` -> HTTP 500.
+4. **Excepcion no capturada durante la lectura.** El `try/catch` solo cubria
+   `prepare/execute`; si MySQL mataba la consulta lenta a mitad del `fetch()`,
+   la `PDOException` salia sin capturar -> HTTP 500.
+
+### Solucion aplicada
+
+| Archivo | Cambio |
+|---------|--------|
+| `includes/cancer_data.php` | Lectura en **streaming** (conexion unbuffered dedicada) con `try/catch` en TODO el proceso; tope de seguridad de 2M filas; uso de la columna generada `Mes_Int`; matching por **buckets pre-indexados** (codigo exacto y letra inicial) en lugar de recorrer todas las filas por cada linea; filas almacenadas 1 vez con indices enteros; `set_time_limit(0)` + `memory_limit 512M` (si el hosting lo permite). |
+| `reporte_cancer.php` | `register_shutdown_function` que captura errores fatales (memoria/tiempo) y muestra un **panel de diagnostico** con la causa y acciones recomendadas en lugar de la pagina HTTP 500; el alert de error ahora incluye diagnostico del entorno (PHP, memory_limit, execution_time, indices presentes, tamano de tabla). |
+| `install_cancer.php` (nuevo) | Instalador 1-click que crea los indices `idx_cnd_anio`, `idx_cnd_codigo_item`, `idx_cnd_anio_mesint`, `idx_cnd_codigo_unico` sobre la tabla consolidada (solo los que falten). |
+
+### Pasos para aplicar la correccion
+
+1. Suba los archivos actualizados (`includes/cancer_data.php`, `reporte_cancer.php`, `install_cancer.php`).
+2. Ingrese como administrador y abra **`install_cancer.php`** una sola vez.
+   - Sobre tablas grandes puede tardar 1-3 minutos; no cierre la pagina.
+   - Debe terminar con el panel verde y el listado de indices finales.
+3. Vuelva a **Reportes Operacionales -> CANCER -> Generar Reporte**.
+4. Por seguridad, **elimine `install_cancer.php`** del servidor.
+
+> Consejo: si su tabla tiene millones de filas y el hosting gratuito sigue
+> quedandose corto, genere primero el reporte de un **mes** especifico
+> (en lugar de "-- Todos --") y/o de un **establecimiento**; luego exporte
+> el Excel. Para cargas anuales completas sin filtros se recomienda un plan
+> de hosting con mas recursos.
 
 ## Como funciona
 
