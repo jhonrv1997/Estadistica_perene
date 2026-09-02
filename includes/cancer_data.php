@@ -679,10 +679,29 @@ function cancerSecciones(): array {
     /* ------------------------------------------------------------
      * SECCION 17 - RPT06_03_CANCER_ADULTOS (us usp_TRAMA_BASE_CANCER_2026_RPT06_03_CANCER_ADULTOS)
      * ATENCIONES DE TODO TIPO DE CANCER ADULTO
-     * Rangos CIE originales: C000-C218, C23X-C809, C860-C900, C960-C962, C964-C97X,
-     * C80X/C900/C902/C903 (18+) | C901/C910-C959 con vl='1' | C963/C810-C859 con vl='1'
-     * | C22 (referido). Adaptacion: fg_tipo='CX' del DTSG no se replica (el catalogo
-     * local puede variar); se mantiene el resto de condiciones.
+     *
+     * SQL VALIDADO contra la BD (devuelve los datos correctos):
+     *   SELECT * FROM T_CONSOLIDADO_NUEVA_TRAMA_HISMINSA_DETALLADO
+     *   WHERE fg_tipo='CX'
+     *     AND ( ( ((codigo_item BETWEEN 'C000' AND 'C218')
+     *              OR (codigo_item BETWEEN 'C23X' AND 'C809')
+     *              OR (codigo_item BETWEEN 'C860' AND 'C900')
+     *              OR (codigo_item BETWEEN 'C960' AND 'C962')
+     *              OR (codigo_item BETWEEN 'C964' AND 'C97X')
+     *              OR codigo_item IN ('C80X','C900','C902','C903'))
+     *            AND edad_reg>=18 AND tipo_edad='A' )
+     *       OR  ( (codigo_item='C901' OR codigo_item BETWEEN 'C910' AND 'C959')
+     *             AND valor_lab='1' )
+     *       OR  ( (codigo_item='C963' OR codigo_item BETWEEN 'C810' AND 'C859')
+     *             AND valor_lab='1' ) )
+     *     AND Id_correlativo_Lab=1
+     *
+     * Correcciones aplicadas (la version anterior mostraba datos incorrectos):
+     *   1) SE APLICA fg_tipo='CX': antes se omitia ("el catalogo local puede
+     *      variar") y se contaban filas de otros Fg_Tipo (DX, PX, ...).
+     *   2) SE ELIMINA la rama ['codPref' => 'C22'] ("cancer de higado referido"):
+     *      NO existe en el SQL validado e inflaba el total contando C22* sin
+     *      importar valor_lab ni edad.
      * ---------------------------------------------------------- */
     [
         'codigo'   => 'RPT06_03',
@@ -705,21 +724,20 @@ function cancerSecciones(): array {
         ],
         'filas' => [
             ['clave' => 1, 'c1' => 'Todo tipo de cancer',
-             'cond' => ['rownum' => 1, 'cualquieraDe' => [
-                 // Rama 1: CIE de cancer en adulto (18+)
+             'cond' => ['rownum' => 1, 'fgTipo' => 'CX', 'cualquieraDe' => [
+                 // Rama 1: CIE de cancer en adulto (edad_reg>=18 y tipo_edad='A')
                  ['codEntre' => ['C000', 'C218'], 'edadA' => [18, null]],
                  ['codEntre' => ['C23X', 'C809'], 'edadA' => [18, null]],
                  ['codEntre' => ['C860', 'C900'], 'edadA' => [18, null]],
                  ['codEntre' => ['C960', 'C962'], 'edadA' => [18, null]],
                  ['codEntre' => ['C964', 'C97X'], 'edadA' => [18, null]],
                  ['cod' => ['C80X', 'C900', 'C902', 'C903'], 'edadA' => [18, null]],
-                 // Rama 2/3: leucemias/linfomas marcados con valor_lab='1'
+                 // Rama 2: leucemias C901 / C910-C959 confirmadas (valor_lab='1')
                  ['cod' => 'C901', 'vl' => '1'],
                  ['codEntre' => ['C910', 'C959'], 'vl' => '1'],
+                 // Rama 3: linfomas C963 / C810-C859 confirmados (valor_lab='1')
                  ['cod' => 'C963', 'vl' => '1'],
                  ['codEntre' => ['C810', 'C859'], 'vl' => '1'],
-                 // Rama 4: cancer de higado referido
-                 ['codPref' => 'C22'],
              ]]],
         ],
     ],
