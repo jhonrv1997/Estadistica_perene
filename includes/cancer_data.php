@@ -11,7 +11,7 @@
  *
  * Ahora TODO se hace desde la web (reporte_cancer.php):
  *   1) El usuario pulsa "Generar Reporte" (1 click).
- *   2) Este motor adapta la logica de los 9 Stored Procedures del archivo
+ *   2) Este motor adapta la logica de los 8 Stored Procedures del archivo
  *      "03 Creacion de Procedimientos.txt" y la ejecuta directamente contra
  *      la tabla consolidada MySQL T_CONSOLIDADO_NUEVA_TRAMA_HISMINSA_DETALLADO
  *      (la misma que usa el modulo ESNI), aplicando los filtros seleccionados.
@@ -46,7 +46,6 @@
  *   RPT01_01_CUTERINO   -> seccion 1  MUJERES TAMIZADAS EN CANCER DE CUELLO UTERINO
  *   RPT01_02_CMAMA      -> seccion 2  MUJERES TAMIZADAS EN CANCER DE MAMA
  *   RPT01_04_OTROS      -> seccion 4  PERSONAS TAMIZADAS PARA LA DETECCION DE OTROS CANCER
- *   RPT02_01_PROCEDIMIENTOS -> seccion 5  PROCEDIMIENTO PARA EL DIAGNOSTICO DE CANCER
  *   RPT02_02_LESIONES   -> seccion 6  PERSONAS ATENDIDAS CON LESIONES PRE MALIGNAS
  *   RPT04_01_CONSEJERIAS-> seccion 10 PERSONA CON CONSEJERIA PARA LA PREVENCION Y CONTROL
  *   RPT06_01_ATENCION   -> seccion 15 ATENDIDOS SEGUN TIPO DE CANCER
@@ -518,80 +517,6 @@ function cancerSecciones(): array {
     ],
 
     /* ------------------------------------------------------------
-     * SECCION 5 - RPT02_01_PROCEDIMIENTOS
-     * (us usp_TRAMA_BASE_CANCER_2026_RPT02_01_PROCEDIMIENTOS)
-     * PROCEDIMIENTO PARA EL DIAGNOSTICO DE CANCER (Dim Procedimiento02_01 / Gedad03)
-     * 12 tipos de cancer x [Positivo referidos, Indicacion, Positivo, Negativo TM,
-     * Negativo] + bloque especial de cuello uterino. Orden de filas segun Excel.
-     * ---------------------------------------------------------- */
-    [
-        'codigo'   => 'RPT02_01',
-        'procedimiento' => 'usp_TRAMA_BASE_CANCER_2026_RPT02_01_PROCEDIMIENTOS',
-        'titulo'   => 'PROCEDIMIENTO PARA EL DIAGNOSTICO DE CANCER',
-        'cabe1'    => 'TIPO DE CANCER', 'cabe2' => 'ACTIVIDAD', 'cabe3' => null,
-        'con_sexo' => true,
-        'medidas'  => ['casos', 'personas'],
-        'tot_label'=> 'TOTAL DE DIAGNOSTICOS',
-        'tot2_label' => 'TOTAL DE PERSONAS DIAGNOSTICADAS',
-        'gedades'  => [
-            ['key' => 1, 'label' => '<18a',    'menor18' => true],
-            ['key' => 2, 'label' => '18a-24a', 'min' => 18, 'max' => 24],
-            ['key' => 3, 'label' => '25a-29a', 'min' => 25, 'max' => 29],
-            ['key' => 4, 'label' => '30a-39a', 'min' => 30, 'max' => 39],
-            ['key' => 5, 'label' => '40a-49a', 'min' => 40, 'max' => 49],
-            ['key' => 6, 'label' => '50a-59a', 'min' => 50, 'max' => 59],
-            ['key' => 7, 'label' => '60a-64a', 'min' => 60, 'max' => 64],
-            ['key' => 8, 'label' => '65a+',    'min' => 65, 'max' => null],
-        ],
-        'filas' => [
-            // CUELLO UTERINO (57500/58100) - bloque especial del Excel (8 filas)
-            ['clave' => 2,  'c1' => 'CUELLO UTERINO', 'c2' => 'Entrega de Resultado Negativo',
-             'cond' => ['tip' => 'D', 'cod' => ['57500', '58100'], 'vl' => 'N', 'sexo' => 'F', 'edadA' => [18, null]]],
-            ['clave' => 3,  'c1' => 'CUELLO UTERINO', 'c2' => 'Entrega de Resultado Negativo por Telemedicina',
-             'cond' => ['tip' => 'D', 'cod' => ['57500', '58100'], 'vl' => 'N', 'sexo' => 'F', 'edadA' => [18, null],
-                        'citaTiene' => ['cod' => '99499.10', 'tip' => 'D', 'vl' => 'NULL', 'rownum' => 1]]],
-            ['clave' => 4,  'c1' => 'CUELLO UTERINO', 'c2' => 'Entrega de Resultado Positivo para cancer',
-             'cond' => ['tip' => 'D', 'cod' => ['57500', '58100'], 'vl' => 'A', 'sexo' => 'F', 'edadA' => [18, null],
-                        'citaTiene' => ['codPref' => 'C53', 'tip' => 'D', 'vl' => 'NULL']]],
-            ['clave' => 5,  'c1' => 'CUELLO UTERINO', 'c2' => 'Entrega de Resultado NIC I',
-             'cond' => ['tip' => 'D', 'cod' => ['57500', '58100'], 'vl' => 'A', 'sexo' => 'F', 'edadA' => [18, null],
-                        'citaTiene' => ['cod' => 'N870', 'tip' => 'D', 'vl' => 'NULL', 'rownum' => 1]]],
-            ['clave' => 6,  'c1' => 'CUELLO UTERINO', 'c2' => 'Entrega de Resultado NIC II',
-             'cond' => ['tip' => 'D', 'cod' => ['57500', '58100'], 'vl' => 'A', 'sexo' => 'F', 'edadA' => [18, null],
-                        'citaTiene' => ['cod' => 'N871', 'tip' => 'D', 'vl' => 'NULL', 'rownum' => 1]]],
-            ['clave' => 7,  'c1' => 'CUELLO UTERINO', 'c2' => 'Entrega de Resultado NIC III/Carcinoma in situ',
-             'cond' => ['tip' => 'D', 'cod' => ['57500', '58100'], 'vl' => 'A', 'sexo' => 'F', 'edadA' => [18, null],
-                        'citaTiene' => ['cod' => ['N872', 'D069', 'B977'], 'tip' => 'D', 'vl' => 'NULL', 'rownum' => 1]]],
-            ['clave' => 9,  'c1' => 'CUELLO UTERINO', 'c2' => 'Resultado Positivo de cancer referidos',
-             'cond' => ['tip' => 'D', 'cod' => ['57500', '58100'], 'vl' => 'A', 'sexo' => 'F', 'edadA' => [18, null],
-                        'citaTieneTodo' => [
-                            ['codPref' => 'C53', 'tip' => 'D', 'vl' => 'NULL'],
-                            CNR_REF_PROC(),
-                        ]]],
-            ['clave' => 0,  'c1' => 'CUELLO UTERINO', 'c2' => 'Lesiones premalignas referidos', 'cero' => true],
-            // CANCER DE MAMA (19100/19101/19102/38500/38505)
-            ['clave' => 14, 'c1' => 'CANCER DE MAMA', 'c2' => 'Resultado Positivo referidos',
-             'cond' => ['tip' => 'D', 'cod' => ['19100', '19101', '19102', '38500', '38505'], 'vl' => 'A', 'sexo' => 'F', 'edadA' => [18, null],
-                        'citaTieneTodo' => [
-                            ['codPref' => 'C50', 'tip' => 'D', 'vl' => 'NULL'],
-                            CNR_REF_PROC(),
-                        ]]],
-            ['clave' => 10, 'c1' => 'CANCER DE MAMA', 'c2' => 'Indicacion de Procedimiento',
-             'cond' => ['tip' => 'D', 'cod' => ['19100', '19101', '19102', '38500', '38505'], 'vl' => 'NULL', 'sexo' => 'F', 'edadA' => [18, null],
-                        'citaTiene' => ['codPref' => 'C50', 'tip' => 'P', 'vl' => 'NULL']]],
-            ['clave' => 13, 'c1' => 'CANCER DE MAMA', 'c2' => 'Entrega de Resultado Positivo',
-             'cond' => ['tip' => 'D', 'cod' => ['19100', '19101', '19102', '38500', '38505'], 'vl' => 'A', 'sexo' => 'F', 'edadA' => [18, null],
-                        'citaTiene' => ['codPref' => 'C50', 'tip' => 'D', 'vl' => 'NULL']]],
-            ['clave' => 12, 'c1' => 'CANCER DE MAMA', 'c2' => 'Entrega de Resultado Negativo por Telemedicina',
-             'cond' => ['tip' => 'D', 'cod' => ['19100', '19101', '19102', '38500', '38505'], 'vl' => 'N', 'sexo' => 'F', 'edadA' => [18, null],
-                        'citaTiene' => ['cod' => '99499.10', 'tip' => 'D', 'vl' => 'NULL', 'rownum' => 1]]],
-            ['clave' => 11, 'c1' => 'CANCER DE MAMA', 'c2' => 'Entrega de Resultado Negativo',
-             'cond' => ['tip' => 'D', 'cod' => ['19100', '19101', '19102', '38500', '38505'], 'vl' => 'N', 'sexo' => 'F', 'edadA' => [18, null]]],
-            // Generadas para los 10 tipos restantes (ver bloque al final)
-        ],
-    ],
-
-    /* ------------------------------------------------------------
      * SECCION 6 - RPT02_02_LESIONES (us usp_TRAMA_BASE_CANCER_2026_RPT02_02_LESIONES)
      * PERSONAS ATENDIDAS CON LESIONES PRE MALIGNAS DE CANCER DE CUELLO UTERINO
      * (Dim Lesiones02_02 / Gedad04)
@@ -739,7 +664,7 @@ function cancerSecciones(): array {
             ['clave' => 5, 'c1' => 'Cancer de pulmon',
              'cond' => ['codPref' => 'C34', 'rownum' => 1, 'edadA' => [18, null]]],
             ['clave' => 6, 'c1' => 'Cancer de colon y recto',
-             'cond' => ['codPref' => ['C18', 'C19', 'C20'], 'rownum' => 1, 'edadA' => [18, null]]],
+             'cond' => ['codPref' => ['C18'], 'rownum' => 1, 'edadA' => [18, null]]],
             ['clave' => 7, 'c1' => 'Cancer de higado',
              'cond' => ['codPref' => 'C22', 'rownum' => 1]],
             ['clave' => 8, 'c1' => 'Leucemia',
@@ -829,80 +754,7 @@ function cancerSecciones(): array {
 
     ]; // fin $secciones
 
-    /* ------------------------------------------------------------
-     * SECCION 5 (continuacion): filas generadas de RPT02_01_PROCEDIMIENTOS
-     * para los 10 tipos de cancer restantes. Adaptacion del T-SQL:
-     *   - Positivo referidos = valor_lab 'A' + dx CIE definitivo (tip D) + #REFERENCIA
-     *   - Indicacion         = valor_lab NULL + dx CIE presuntivo (tip P)
-     *   - Positivo           = valor_lab 'A' + dx CIE definitivo (tip D)
-     *   - Negativo TM        = valor_lab 'N' + telemedicina (99499.10)
-     *   - Negativo           = valor_lab 'N'
-     * ---------------------------------------------------------- */
-    $tiposProc = [
-        ['c1' => 'CANCER DE PROSTATA', 'base' => 15, 'cods' => ['55700', '55705', '55706'],
-         'cie' => ['C61'], 'restr' => ['sexo' => 'M', 'edadA' => [18, null]]],
-        ['c1' => 'CANCER DE COLON Y RECTO', 'base' => 20, 'cods' => ['44388', '44389', '45359', '45358'],
-         'cie' => ['C18', 'C19', 'C20'], 'restr' => ['edadA' => [18, null]]],
-        ['c1' => 'CANCER DE ESTOMAGO', 'base' => 25, 'cods' => ['43234', '43600'],
-         'cie' => ['C16'], 'restr' => ['edadA' => [18, null]]],
-        ['c1' => 'CANCER DE PIEL', 'base' => 30, 'cods' => ['11100', '11101'],
-         'cie' => ['C43', 'C44'], 'restr' => ['edadA' => [18, null]]],
-        ['c1' => 'CANCER DE PULMON', 'base' => 35, 'cods' => ['32405', '32400'],
-         'cie' => ['C34'], 'restr' => ['edadA' => [18, null]]],
-        ['c1' => 'CANCER DE HIGADO', 'base' => 40, 'cods' => ['47000', '47001', '47100'],
-         'cie' => ['C22'], 'restr' => []],
-        ['c1' => 'LINFOMA', 'base' => 45, 'cods' => ['38500', '88206', '38510'],
-         'cie' => ['C81', 'C82', 'C83', 'C84', 'C85', 'C963'], 'restr' => []],
-        ['c1' => 'ASPIRADO DE MEDULA OSEA/MIELOGRAMA', 'base' => 50, 'cods' => ['85095', '38220'],
-         'cie' => ['C901', 'C91', 'C92', 'C93', 'C94', 'C95'], 'restr' => []],
-        ['c1' => 'MEDULA OSEA', 'base' => 55, 'cods' => ['85102', '38221'],
-         'cie' => ['C901', 'C91', 'C92', 'C93', 'C94', 'C95'], 'restr' => []],
-        ['c1' => 'CITROMETRIA DE FLUJO/EXTENDIDO DE SANGRE PERIFERICA', 'base' => 60,
-         'cods' => ['88185.02', '88185.03', '88205.04', '85060', '88204', '88204.01'],
-         'cie' => ['C901', 'C91', 'C92', 'C93', 'C94', 'C95'], 'restr' => []],
-    ];
-    foreach ($secciones as &$secGen) {
-        if ($secGen['codigo'] !== 'RPT02_01') continue;
-        foreach ($tiposProc as $tp) {
-            $b = $tp['base'];
-            $secGen['filas'][] = ['clave' => $b + 4, 'c1' => $tp['c1'], 'c2' => 'Resultado Positivo referidos',
-                'cond' => array_merge(['tip' => 'D', 'cod' => $tp['cods'], 'vl' => 'A'], $tp['restr'],
-                    ['citaTieneTodo' => [
-                        ['codPref' => $tp['cie'], 'tip' => 'D', 'vl' => 'NULL'],
-                        CNR_REF_PROC(),
-                    ]])];
-            $secGen['filas'][] = ['clave' => $b, 'c1' => $tp['c1'], 'c2' => 'Indicacion de Procedimiento',
-                'cond' => array_merge(['tip' => 'D', 'cod' => $tp['cods'], 'vl' => 'NULL'], $tp['restr'],
-                    ['citaTiene' => ['codPref' => $tp['cie'], 'tip' => 'P', 'vl' => 'NULL']])];
-            $secGen['filas'][] = ['clave' => $b + 3, 'c1' => $tp['c1'], 'c2' => 'Entrega de Resultado Positivo',
-                'cond' => array_merge(['tip' => 'D', 'cod' => $tp['cods'], 'vl' => 'A'], $tp['restr'],
-                    ['citaTiene' => ['codPref' => $tp['cie'], 'tip' => 'D', 'vl' => 'NULL']])];
-            $secGen['filas'][] = ['clave' => $b + 2, 'c1' => $tp['c1'], 'c2' => 'Entrega de Resultado Negativo por Telemedicina',
-                'cond' => array_merge(['tip' => 'D', 'cod' => $tp['cods'], 'vl' => 'N'], $tp['restr'],
-                    ['citaTiene' => ['cod' => '99499.10', 'tip' => 'D', 'vl' => 'NULL', 'rownum' => 1]])];
-            $secGen['filas'][] = ['clave' => $b + 1, 'c1' => $tp['c1'], 'c2' => 'Entrega de Resultado Negativo',
-                'cond' => array_merge(['tip' => 'D', 'cod' => $tp['cods'], 'vl' => 'N'], $tp['restr'])];
-        }
-    }
-    unset($secGen);
-
     return $secciones;
-}
-
-/**
- * Predicado #REFERENCIA de RPT02_01: la cita tiene una fila de procedimiento
- * con valor_lab 'RF' en I_ROWNUM_LAB=2 (las citas de procedimientos con
- * referencia contrarreferida).
- */
-function CNR_REF_PROC(): array {
-    return ['cod' => [
-        '57500', '58100', '19100', '19101', '19102', '38500', '38505',
-        '55700', '55705', '55706', '44388', '44389', '45359', '45358',
-        '43234', '43600', '11100', '11101', '32405', '32400',
-        '47000', '47001', '47100', '88206', '38510', '85095', '38220',
-        '85102', '38221', '88185.02', '88185.03', '88205.04', '85060',
-        '88204', '88204.01',
-    ], 'tip' => 'D', 'vl' => 'RF', 'rownum' => 2];
 }
 
 /* ============================================================
@@ -944,7 +796,7 @@ function cancerGetEstablecimientosZS(PDO $pdo): array {
 
 /**
  * Lista de codigos de item exactos que intervienen en el reporte
- * (lineas + condiciones auxiliares de los 9 procedimientos).
+ * (lineas + condiciones auxiliares de los 8 procedimientos).
  */
 function cancerCodigosInteres(): array {
     return [
@@ -955,14 +807,8 @@ function cancerCodigosInteres(): array {
         // RPT01_04 Otros
         '82270', '82274', '84152', 'Z128', '99499.01', '99499.03', '99499.11', '99499.12', '99402.08',
         '96904.01', '96904.02',
-        // RPT02_01 Procedimientos
-        '57500', '58100', '55700', '55705', '55706', '44388', '44389', '45359', '45358',
-        '19100', '19101', '19102', '38500', '38505', '43234', '43600', '11100', '11101',
-        '32405', '32400', '47000', '47001', '47100', '88206', '38510', '85095', '38220',
-        '85102', '38221', '88185.02', '88185.03', '88205.04', '85060', '88204', '88204.01',
-        'D060', 'D061', 'D067',
-        // RPT02_02 Lesiones
-        '57452', '57510', '57511', '57522', '57520',
+        // RPT02_02 Lesiones (57500/58100: biopsias usadas como condicion auxiliar)
+        '57500', '58100', '57452', '57510', '57511', '57522', '57520',
         // RPT04_01 Consejerias
         '99401.19', '99401.26', '99499.08', '99499.09',
         // RPT07_01 Deteccion infantil
@@ -1038,7 +884,7 @@ function cancerDiagnosticoEntorno(PDO $pdo): array {
 }
 
 /**
- * Ejecuta el reporte de Cancer completo (adaptacion de los 9 USP).
+ * Ejecuta el reporte de Cancer completo (adaptacion de los 8 USP).
  *
  * Estrategia (igual que el modulo ESNI): UNA sola consulta que trae todas las
  * filas HIS de los codigos de interes (exactos + todos los CIE 'C%') con los
