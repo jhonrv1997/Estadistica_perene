@@ -1237,7 +1237,13 @@ function cancerEjecutarReporte(PDO $pdo, array $filtros): array {
 
         foreach ($sec['filas'] as $fila) {
             $valores = []; // [sexo][gedad] => ['casos'=>n,'personas'=>set] o ['atenciones'=>,'atendidos'=>set]
-            $total = ['casos' => 0, 'personas' => 0, 'atenciones' => 0, 'atendidos' => 0];
+            // FIX "Cannot use a scalar value as an array": 'personas' y 'atendidos'
+            // se llenan como SETS (array) en el bucle (ver lineas siguientes) y solo
+            // al final se convierten a conteos con count(). Inicializarlos a 0
+            // (escalar) hacia fallar $total['personas'][$f['pac']] = true con
+            // "Uncaught Error" fatal en PHP 8 -> HTTP 500 en "Generar Reporte".
+            // Debe espejar la inicializacion de $valores[$sexo][$g] mas abajo.
+            $total = ['casos' => 0, 'personas' => [], 'atenciones' => 0, 'atendidos' => []];
 
             if (empty($fila['cero'])) {
                 $cond = $fila['cond'];
@@ -1340,4 +1346,3 @@ function cancerEjecutarReporte(PDO $pdo, array $filtros): array {
         'tiempo_ejecucion' => round(microtime(true) - $t0, 2),
     ];
 }
-
