@@ -104,8 +104,15 @@ function cnrFila(array $r): array {
  *   'citaTiene' => <predicado>           otra fila de la misma cita lo cumple
  *   'citaTieneTodo' => [<pred>, ...]     todas existen en la cita (AND de EXISTS)
  *   'cualquieraDe' => [<pred>, ...]      OR de predicados sobre la misma fila
+ *
+ * $ctx es el contexto de ejecucion compartido por los predicados:
+ *   'filas'   => lista de filas normalizadas (almacenadas UNA sola vez)
+ *   'porCita' => [cita => [idx, ...]] indices enteros que apuntan a 'filas'
+ * Se guardan indices (int) en lugar de copias de las filas para reducir a la
+ * mitad el consumo de memoria (critico en hostings compartidos con
+ * memory_limit bajo, donde antes se agotaba la RAM y salia HTTP 500).
  */
-function cnrCumple(array $f, array $cond, array $porCita): bool {
+function cnrCumple(array $f, array $cond, array $ctx): bool {
     if (isset($cond['cod'])) {
         $cods = is_array($cond['cod']) ? $cond['cod'] : [$cond['cod']];
         if (!in_array($f['cod'], $cods, true)) return false;
@@ -153,18 +160,18 @@ function cnrCumple(array $f, array $cond, array $porCita): bool {
         if ($f['fg'] !== $cond['fgTipo']) return false;
     }
     if (isset($cond['citaTiene'])) {
-        if (!cnrCitaTiene($porCita, $f['cita'], $cond['citaTiene'])) return false;
+        if (!cnrCitaTiene($ctx, $f['cita'], $cond['citaTiene'])) return false;
     }
     if (isset($cond['citaTieneTodo'])) {
         foreach ($cond['citaTieneTodo'] as $sub) {
-            if (!cnrCitaTiene($porCita, $f['cita'], $sub)) return false;
+            if (!cnrCitaTiene($ctx, $f['cita'], $sub)) return false;
         }
     }
     if (isset($cond['cualquieraDe'])) {
         // OR de sub-predicados sobre la MISMA fila (ramas del WHERE T-SQL)
         $ok = false;
         foreach ($cond['cualquieraDe'] as $sub) {
-            if (cnrCumple($f, $sub, $porCita)) { $ok = true; break; }
+            if (cnrCumple($f, $sub, $ctx)) { $ok = true; break; }
         }
         if (!$ok) return false;
     }
@@ -178,13 +185,59 @@ function cnrEsMenor18(array $f): bool {
     return false;
 }
 
-/** EXISTS: alguna fila de la cita cumple el predicado. */
-function cnrCitaTiene(array $porCita, string $cita, array $cond): bool {
-    if ($cita === '' || !isset($porCita[$cita])) return false;
-    foreach ($porCita[$cita] as $f2) {
-        if (cnrCumple($f2, $cond, $porCita)) return true;
+/** EXISTS: alguna fila de la cita cumple el predicado (resuelve por indice). */
+function cnrCitaTiene(array $ctx, string $cita, array $cond): bool {
+    if ($cita === '' || !isset($ctx['porCita'][$cita])) return false;
+    foreach ($ctx['porCita'][$cita] as $idx) {
+        if (cnrCumple($ctx['filas'][$idx], $cond, $ctx)) return true;
     }
     return false;
+}
+
+/**
+ * Devuelve la lista de indices candidatos para una condicion de nivel
+ * superior usando buckets pre-indexados (codigo exacto y letra inicial).
+ * Es una SOBRE-aproximacion: la verificacion exacta la hace cnrCumple().
+ * Evita recorrer TODAS las filas por cada linea del reporte (antes:
+ * ~150 lineas x N filas = millones de iteraciones que agotaban el tiempo
+ * de ejecucion del hosting y provocaban el HTTP 500).
+ */
+function cnrCandidatos(array $cond, array $porCod, array $porIni, int $total): array {
+    if ($total <= 0) return [];
+    $sinCodigo = !isset($cond['cod']) && !isset($cond['codPref'])
+              && !isset($cond['codEntre']) && !isset($cond['cualquieraDe']);
+    if ($sinCodigo) {
+        return range(0, $total - 1);
+    }
+    $out = [];
+    if (isset($cond['cod'])) {
+        foreach ((array)$cond['cod'] as $c) {
+            foreach ($porCod[$c] ?? [] as $idx) $out[$idx] = true;
+        }
+        return array_keys($out);
+    }
+    if (isset($cond['codPref'])) {
+        foreach ((array)$cond['codPref'] as $p) {
+            if ($p === '') return range(0, $total - 1);
+            $ini = strtoupper((string)$p[0]);
+            foreach ($porIni[$ini] ?? [] as $idx) $out[$idx] = true;
+        }
+        return array_keys($out);
+    }
+    if (isset($cond['codEntre'])) {
+        [$min, $max] = $cond['codEntre'];
+        $iniMin = $min !== '' ? strtoupper((string)$min[0]) : '';
+        $iniMax = $max !== '' ? strtoupper((string)$max[0]) : '';
+        if ($iniMin !== '' && $iniMin === $iniMax && isset($porIni[$iniMin])) {
+            return array_keys($porIni[$iniMin]);
+        }
+        return range(0, $total - 1);
+    }
+    // cualquieraDe: union de los candidatos de cada rama
+    foreach ($cond['cualquieraDe'] as $sub) {
+        foreach (cnrCandidatos($sub, $porCod, $porIni, $total) as $idx) $out[$idx] = true;
+    }
+    return array_keys($out);
 }
 
 /** Resuelve el grupo de edad (gedad) de una fila segun la definicion de la seccion. */
@@ -994,6 +1047,71 @@ function cancerCodigosInteres(): array {
 }
 
 /**
+ * Abre una conexion PDO dedicada en modo UNBUFFERED para leer el resultado
+ * del reporte en streaming (sin volcar todo el resultado a memoria de golpe).
+ * Devuelve null si no se puede abrir; en ese caso se usa la conexion principal.
+ */
+function cancerAbrirConexionStreaming(): ?PDO {
+    try {
+        $dsn = "mysql:host=" . DB_HOST . ";dbname=" . DB_NAME . ";charset=" . DB_CHARSET;
+        return new PDO($dsn, DB_USER, DB_PASS, [
+            PDO::ATTR_ERRMODE            => PDO::ERRMODE_EXCEPTION,
+            PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
+            PDO::ATTR_EMULATE_PREPARES   => false,
+            PDO::MYSQL_ATTR_USE_BUFFERED_QUERY => false,
+            PDO::MYSQL_ATTR_INIT_COMMAND => "SET NAMES utf8mb4 COLLATE utf8mb4_general_ci",
+        ]);
+    } catch (Throwable $e) {
+        return null;
+    }
+}
+
+/** Indica si la tabla consolidada tiene la columna generada Mes_Int (cacheada). */
+function cancerTieneColumnaMesInt(PDO $pdo): bool {
+    static $cache = null;
+    if ($cache !== null) return $cache;
+    try {
+        $st = $pdo->query("SHOW COLUMNS FROM T_CONSOLIDADO_NUEVA_TRAMA_HISMINSA_DETALLADO LIKE 'Mes_Int'");
+        $cache = ($st->fetch() !== false);
+    } catch (Throwable $e) {
+        $cache = false;
+    }
+    return $cache;
+}
+
+/**
+ * Diagnostico del entorno para el panel de errores del reporte Cancer:
+ * limites de PHP, indices presentes en la tabla consolidada y tamano aprox.
+ * Permite que el usuario VEA por que fallo (memoria/tiempo/faltan indices)
+ * en lugar de un HTTP 500 en blanco.
+ */
+function cancerDiagnosticoEntorno(PDO $pdo): array {
+    $out = [
+        'php'           => PHP_VERSION,
+        'memory_limit'  => (string)ini_get('memory_limit'),
+        'max_exec_time' => (string)ini_get('max_execution_time'),
+        'indices'       => [],
+        'filas_tabla'   => null,
+    ];
+    try {
+        $st = $pdo->query("SHOW INDEX FROM T_CONSOLIDADO_NUEVA_TRAMA_HISMINSA_DETALLADO");
+        $idx = [];
+        foreach ($st->fetchAll(PDO::FETCH_ASSOC) as $row) {
+            $idx[] = $row['Key_name'];
+        }
+        $out['indices'] = array_values(array_unique($idx));
+    } catch (Throwable $e) { /* ignorar */ }
+    try {
+        $st = $pdo->query("SELECT TABLE_ROWS FROM information_schema.TABLES
+                           WHERE TABLE_SCHEMA = DATABASE()
+                             AND TABLE_NAME = 'T_CONSOLIDADO_NUEVA_TRAMA_HISMINSA_DETALLADO'");
+        $v = $st->fetchColumn();
+        $out['filas_tabla'] = $v ? (int)$v : null;
+    } catch (Throwable $e) { /* ignorar */ }
+    return $out;
+}
+
+/**
  * Ejecuta el reporte de Cancer completo (adaptacion de los 9 USP).
  *
  * Estrategia (igual que el modulo ESNI): UNA sola consulta que trae todas las
@@ -1008,6 +1126,14 @@ function cancerEjecutarReporte(PDO $pdo, array $filtros): array {
     $t0 = microtime(true);
     $tabla = 'T_CONSOLIDADO_NUEVA_TRAMA_HISMINSA_DETALLADO';
 
+    // ---- 0) Proteccion contra HTTP 500 en hostings compartidos ----
+    // Los fatales "Allowed memory size exhausted" / "Maximum execution time
+    // exceeded" NO se capturan con try/catch. Se intenta elevar los limites
+    // (si el hosting lo permite) y se fija un tope de filas de seguridad.
+    if (function_exists('set_time_limit')) @set_time_limit(0);
+    @ini_set('memory_limit', '512M');
+    $MAX_FILAS = 2000000;
+
     // ---- 1) Clausula WHERE comun (filtros del usuario) ----
     $where = ["1=1"];
     $params = [];
@@ -1016,7 +1142,13 @@ function cancerEjecutarReporte(PDO $pdo, array $filtros): array {
         $params[':anio'] = (string)$filtros['anio'];
     }
     if (!empty($filtros['mes'])) {
-        $where[] = "CAST(TRIM(Mes) AS UNSIGNED) = :mes";
+        // Usar la columna generada Mes_Int (sargable, ya existe en la tabla)
+        // permite que MySQL use indice; el CAST(TRIM(...)) lo impedia.
+        if (cancerTieneColumnaMesInt($pdo)) {
+            $where[] = "Mes_Int = :mes";
+        } else {
+            $where[] = "CAST(TRIM(Mes) AS UNSIGNED) = :mes";
+        }
         $params[':mes'] = intval($filtros['mes']);
     }
     if (!empty($filtros['establecimiento'])) {
@@ -1039,24 +1171,57 @@ function cancerEjecutarReporte(PDO $pdo, array $filtros): array {
                    Codigo_Item, Tipo_Diagnostico, Valor_Lab, Id_Correlativo_Lab, Fg_Tipo
             FROM {$tabla}
             WHERE {$whereCod} AND (" . implode(' AND ', $where) . ")";
-    try {
-        $stmt = $pdo->prepare($sql);
-        $stmt->execute($params);
-    } catch (Throwable $e) {
-        return ['secciones' => [], 'totales' => [], 'error' => 'Error SQL: ' . $e->getMessage(),
-                'sql_debug' => $sql, 'params_debug' => $params];
-    }
 
-    // ---- 3) Normalizar filas e indice por cita (para EXISTS) ----
+    // ---- 3) Consulta en streaming (unbuffered) + fetch protegido ----
+    // La conexion principal es buffered: MySQL entrega TODO el resultado de
+    // golpe en memoria PHP antes del primer fetch (con "C%" + un anio completo
+    // eso agotaba el memory_limit del hosting -> Fatal error -> HTTP 500).
+    // Se abre una conexion dedicada unbuffered: las filas llegan en flujo y se
+    // normalizan/indexan una a una, con uso de RAM estable. Si no se puede
+    // abrir, se cae a la conexion principal (comportamiento anterior).
+    //
+    // ADEMAS: el bucle de fetch antes NO estaba dentro del try/catch; si MySQL
+    // mataba la consulta lenta a mitad de lectura (server has gone away),
+    // la PDOException no capturada producía el HTTP 500. Ahora todo queda
+    // protegido y el error se muestra de forma controlada.
+    $pdoStream = cancerAbrirConexionStreaming();
+    $pdoQ = $pdoStream !== null ? $pdoStream : $pdo;
+
     $filas = [];
     $porCita = [];
-    while ($r = $stmt->fetch(PDO::FETCH_ASSOC)) {
-        $f = cnrFila($r);
-        if ($f['cod'] === '') continue;
-        $filas[] = $f;
-        $porCita[$f['cita']][] = $f;
+    try {
+        $stmt = $pdoQ->prepare($sql);
+        $stmt->execute($params);
+        while ($r = $stmt->fetch(PDO::FETCH_ASSOC)) {
+            $f = cnrFila($r);
+            if ($f['cod'] === '') continue;
+            $idx = count($filas);
+            $filas[] = $f;
+            if ($f['cita'] !== '') $porCita[$f['cita']][] = $idx;
+            if ($idx >= $MAX_FILAS) {
+                $stmt = null;
+                return ['secciones' => [], 'totales' => [], 'error' =>
+                        'La consulta devolvio mas de ' . number_format($MAX_FILAS) . ' filas. Aplique filtros (anio / mes / establecimiento) para acotar el reporte.',
+                        'error_tipo' => 'datos'];
+            }
+        }
+        $stmt = null;
+    } catch (Throwable $e) {
+        $pdoStream = null;
+        return ['secciones' => [], 'totales' => [], 'error' => 'Error SQL: ' . $e->getMessage(),
+                'sql_debug' => $sql, 'params_debug' => $params, 'error_tipo' => 'sql'];
     }
-    $stmt = null;
+    $pdoStream = null; // cerrar la conexion de streaming
+
+    // Buckets para matching rapido (codigo exacto y letra inicial)
+    $porCod = [];
+    $porIni = [];
+    $totalFilas = count($filas);
+    foreach ($filas as $idx => $f) {
+        $porCod[$f['cod']][] = $idx;
+        $porIni[$f['cod'] !== '' ? strtoupper($f['cod'][0]) : '#'][] = $idx;
+    }
+    $ctx = ['filas' => $filas, 'porCita' => $porCita];
 
     // ---- 4) Matching por seccion / fila ----
     $seccionesOut = [];
@@ -1076,16 +1241,12 @@ function cancerEjecutarReporte(PDO $pdo, array $filtros): array {
 
             if (empty($fila['cero'])) {
                 $cond = $fila['cond'];
-                foreach ($filas as $f) {
-                    // Pre-filtro rapido por codigo de la propia fila (evita evaluar todo)
-                    if (isset($cond['cod']) && !in_array($f['cod'], (array)$cond['cod'], true)) continue;
-                    if (isset($cond['codPref'])) {
-                        $prefs = (array)$cond['codPref'];
-                        $ok = false;
-                        foreach ($prefs as $p) { if ($p !== '' && strpos($f['cod'], $p) === 0) { $ok = true; break; } }
-                        if (!$ok) continue;
-                    }
-                    if (!cnrCumple($f, $cond, $porCita)) continue;
+                // Matching sobre los candidatos pre-indexados (misma semantica:
+                // la verificacion exacta la hace cnrCumple). Antes se recorrian
+                // TODAS las filas por cada linea (~150 x N iteraciones).
+                foreach (cnrCandidatos($cond, $porCod, $porIni, $totalFilas) as $idx) {
+                    $f = $filas[$idx];
+                    if (!cnrCumple($f, $cond, $ctx)) continue;
 
                     $g = cnrGedad($f, $gedades);
                     if ($g === null) continue; // edad fuera de los grupos de la seccion
