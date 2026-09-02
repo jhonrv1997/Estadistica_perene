@@ -144,14 +144,24 @@ include 'includes/header.php';
 <!-- Pagina indice: 17 tarjetas -->
 <div class="row g-3">
     <?php foreach ($estrategias as $key => $est):
-        // ESNI ahora tiene su propio reporte completo data-driven (reporte_esni.php)
-        $esEsniAvanzado = $key === 'esni';
-        $href = $esEsniAvanzado ? 'reporte_esni.php' : 'reporte_operacionales.php?sub=' . $key;
-        $desc = $esEsniAvanzado ? 'Reporte Operacional completo (14 secciones A-VPH, data-driven)' : 'Atenciones y atendidos por establecimiento';
-        $badge = $esEsniAvanzado ? ' <span class="badge bg-success">NUEVO</span>' : '';
+        // ESNI y Cancer ahora tienen su propio reporte completo data-driven
+        // (reporte_esni.php / reporte_cancer.php) - reemplazan el flujo manual
+        // SQL Server + Excel ODBC de sus respectivos modulos.
+        $esAvanzado = in_array($key, ['esni', 'cancer']);
+        if ($key === 'esni') {
+            $href = 'reporte_esni.php';
+            $desc = 'Reporte Operacional completo (14 secciones A-VPH, data-driven)';
+        } elseif ($key === 'cancer') {
+            $href = 'reporte_cancer.php';
+            $desc = 'Reporte de Actividades de Prevencion y Control del Cancer (9 secciones, 1 click + Excel)';
+        } else {
+            $href = 'reporte_operacionales.php?sub=' . $key;
+            $desc = 'Atenciones y atendidos por establecimiento';
+        }
+        $badge = $esAvanzado ? ' <span class="badge bg-success">NUEVO</span>' : '';
     ?>
     <div class="col-lg-3 col-md-4 col-sm-6">
-        <a href="<?= $href ?>" class="subpage-card <?= $esEsniAvanzado ? 'subpage-card-featured' : '' ?>">
+        <a href="<?= $href ?>" class="subpage-card <?= $esAvanzado ? 'subpage-card-featured' : '' ?>">
             <div class="sub-icon"><i class="fas <?= $est['icon'] ?>"></i></div>
             <h6><?= $est['nombre'] ?><?= $badge ?></h6>
             <small><?= $desc ?></small>
@@ -163,6 +173,12 @@ include 'includes/header.php';
 <?php elseif ($sub === 'esni'):
     // Redirigir a la pagina de reporte ESNI completo (data-driven)
     header('Location: reporte_esni.php');
+    exit;
+?>
+
+<?php elseif ($sub === 'cancer'):
+    // Redirigir al reporte completo de Cancer (data-driven, 1 click)
+    header('Location: reporte_cancer.php');
     exit;
 ?>
 
