@@ -67,14 +67,19 @@ require_once __DIR__ . '/../config.php';
 /* ============================================================
  * VERSION DEL MOTOR (marcador de despliegue)
  * ============================================================
- * Se muestra en el reporte web (cabecera y panel de verificacion)
- * para poder confirmar EN PANTALLA que el servidor esta ejecutando
- * esta version y no una copia anterior (cache OPcache del hosting,
- * archivo subido a otra ruta, etc.).
+ * Se muestra en la cabecera del reporte web para poder confirmar EN
+ * PANTALLA que el servidor esta ejecutando esta version y no una copia
+ * anterior (cache OPcache del hosting, archivo subido a otra ruta, etc.).
  * Si el reporte no muestra este numero, esta corriendo un archivo
  * viejo: vuelva a subir includes/cancer_data.php.
+ *
+ * r4 (2026-09-03): retirado el panel de verificacion RPT06_03
+ * ("VERIFICACION RPT06_03 - 8 CASOS SQL (BD) vs MOTOR PHP") junto con
+ * la funcion cancerVerificarRPT0603() y los conteos por caso que solo
+ * alimentaban ese panel. La seccion 17 NO cambia: sigue calculandose
+ * directamente contra la BD con la UNION de los 8 SQL validados.
  */
-define('CANCER_DATA_VERSION', '2026-09-03-r2');
+define('CANCER_DATA_VERSION', '2026-09-03-r4');
 
 /** Version del motor de reporte de Cancer (para el badge del reporte). */
 function cancerDataVersion(): string {
@@ -85,9 +90,9 @@ function cancerDataVersion(): string {
  * Los 8 CASOS SQL de RPT06_03 (SECCION 17) como condiciones del DSL.
  *
  * Es la UNICA fuente de verdad de los 8 casos: la definicion de la
- * seccion 17 (union de los 8), el conteo por caso del motor y el panel
- * de verificacion contra la BD se construyen todos a partir de aqui,
- * de modo que no puedan divergir entre si.
+ * seccion 17 (union de los 8) y el recalculo directo de su fila
+ * "Todo tipo de cancer" contra la BD se construyen ambos a partir de
+ * aqui, de modo que no puedan divergir entre si.
  *
  * Cada elemento equivale EXACTAMENTE a un SQL validado por el usuario:
  *   Caso 1: codigo_item BETWEEN 'C000' AND 'C218' AND edad_reg>=18 AND tipo_edad='A'
@@ -848,6 +853,14 @@ function cancerSecciones(): array {
      *   4) Motor endurecido para igualar la semantica MySQL (_ci): compara en
      *      mayusculas y cnrGedad() ya no descarta filas con tipo_edad/edad
      *      anomalas (antes el TOTAL quedaba por debajo del COUNT de los SQL).
+     *
+     * r3 (2026-09-03): el TOTAL DE ATENCIONES (y las celdas por sexo/edad) de
+     * la fila "Todo tipo de cancer" se calculan DIRECTAMENTE contra la BD con
+     * la UNION de los 8 SQL validados (ver cancerSeccion170603DesdeBD).
+     * Con esto el reporte muestra por construccion exactamente lo que
+     * devuelven los 8 SQL (p.ej. UNION=4 para Codigo_Unico='00000318' =>
+     * la seccion muestra 4), eliminando de raiz cualquier divergencia entre
+     * el motor PHP y la BD. El matching PHP se conserva como fallback.
      * ---------------------------------------------------------- */
     [
         'codigo'   => 'RPT06_03',
@@ -1231,30 +1244,42 @@ function cancerEjecutarReporte(PDO $pdo, array $filtros): array {
             ];
         }
 
+        // ---- RPT06_03 (SECCION 17): fila "Todo tipo de cancer" desde los 8 SQL ----
+        // La fila "Todo tipo de cancer" se RECALCULA directamente contra la
+        // BD con la UNION de los 8 SQL validados (misma clausula WHERE en
+        // cancerSeccion170603DesdeBD): el TOTAL DE ATENCIONES que muestra la
+        // seccion es por construccion el UNION de los 8 COUNT validados
+        // (cada fila cuenta una sola vez). El matching PHP queda como
+        // fallback si el SQL falla.
+        $fuente0603 = null;     // 'sql' | 'motor' (solo RPT06_03)
+        $error0603 = null;      // error del SQL de la seccion 17 (si hubo)
+        if ($sec['codigo'] === 'RPT06_03') {
+            // Reemplazar la fila por la calculada con el SQL de la BD
+            $desdeBD = cancerSeccion170603DesdeBD($pdo, $filtros);
+            if ($desdeBD['fila'] !== null) {
+                $filasOut[0] = [
+                    'clave'   => $filasOut[0]['clave'],
+                    'c1'      => $filasOut[0]['c1'],
+                    'c2'      => null,
+                    'c3'      => null,
+                    'cero'    => false,
+                    'valores' => $desdeBD['fila']['valores'],
+                    'total'   => $desdeBD['fila']['total'],
+                ];
+                $fuente0603 = 'sql';
+            } else {
+                // Fallback: se conserva la fila del motor PHP (logica corregida)
+                $fuente0603 = 'motor';
+                $error0603 = $desdeBD['error'];
+            }
+        }
+
         $totalSec = ['casos' => 0, 'personas' => 0, 'atenciones' => 0, 'atendidos' => 0];
         foreach ($filasOut as $fo) {
             $totalSec['casos'] += $fo['total']['casos'];
             $totalSec['personas'] += $fo['total']['personas'];
             $totalSec['atenciones'] += $fo['total']['atenciones'];
             $totalSec['atendidos'] += $fo['total']['atendidos'];
-        }
-
-        // ---- RPT06_03: conteo por cada uno de los 8 casos SQL ----
-        // Se calcula con las MISMAS filas que ya leyo el reporte (sin
-        // consultas extra) para el panel de verificacion contra la BD
-        // (ver cancerVerificarRPT0603 y reporte_cancer.php).
-        $casosRpt0603 = null;
-        if ($sec['codigo'] === 'RPT06_03') {
-            $casosRpt0603 = [];
-            foreach (cnrRpt0603Casos() as $ci => $caso) {
-                // cond del caso = filtros comunes + cond propia del caso
-                $cc = ['fgTipo' => 'CX', 'rownum' => 1] + $caso['cond'];
-                $n = 0;
-                foreach (cnrCandidatos($cc, $porCod, $porIni, $totalFilas) as $idx) {
-                    if (cnrCumple($filas[$idx], $cc, $ctx)) $n++;
-                }
-                $casosRpt0603[$ci] = $n;
-            }
         }
 
         $seccionesOut[] = [
@@ -1271,7 +1296,9 @@ function cancerEjecutarReporte(PDO $pdo, array $filtros): array {
             'gedades'      => $sec['gedades'],
             'filas'        => $filasOut,
             'total'        => $totalSec,
-            'rpt0603_casos'=> $casosRpt0603, // int => COUNT por caso (solo RPT06_03)
+            // Extra solo para RPT06_03:
+            'rpt0603_fuente'     => $fuente0603,        // 'sql' | 'motor' | null
+            'rpt0603_sql_error'  => $error0603,         // error del SQL (fallback motor)
         ];
 
         $totCasos += $totalSec['casos'];
@@ -1297,75 +1324,128 @@ function cancerEjecutarReporte(PDO $pdo, array $filtros): array {
 }
 
 /**
- * VERIFICACION de RPT06_03 (SECCION 17) contra la base de datos.
+ * Clausula WHERE de la UNION de los 8 casos SQL de RPT06_03, con los
+ * filtros comunes (fg_tipo='CX' AND Id_correlativo_Lab=1), SIN los filtros
+ * del usuario. Fuente unica de la condicion: cnrRpt0603Casos().
  *
- * Ejecuta DIRECTAMENTE en MySQL los 8 COUNT de los casos SQL validados por
- * el usuario (mas la UNION de los 8), con los mismos filtros activos del
- * reporte (anio/mes/establecimiento) y tambien SIN filtros (como se corre
- * en phpMyAdmin). El reporte web compara estos numeros con los conteos del
- * motor PHP: si coinciden, el reporte es fiel a la BD; si no, identifica
- * exactamente que caso diverge.
+ * La usa cancerSeccion170603DesdeBD (la fila "Todo tipo de cancer" de la
+ * SECCION 17 del reporte), de modo que la seccion evalua EXACTAMENTE la
+ * misma condicion SQL: el TOTAL DE ATENCIONES de la seccion es por
+ * construccion el UNION de los 8 SELECT validados.
+ */
+function cnrRpt0603UnionSQL(): string {
+    $base = "Fg_Tipo = 'CX' AND Id_Correlativo_Lab = 1";
+    $or = implode(' OR ', array_map(fn($c) => '(' . $c['sql'] . ')', cnrRpt0603Casos()));
+    return $base . " AND (" . $or . ")";
+}
+
+/**
+ * SECCION 17 (RPT06_03) - fila "Todo tipo de cancer" calculada DIRECTAMENTE
+ * contra la BD con la UNION de los 8 SQL validados (r3).
  *
- * Esto responde a la pregunta "TOTAL DE ATENCIONES=1 cuando debe ser 4":
- *   - UNION con filtros  = lo que el reporte DEBE mostrar con esos filtros.
- *   - UNION sin filtros  = lo que devuelven los 8 SQL corridos en phpMyAdmin
- *                          (todos los anios/meses/establecimientos).
- *   - Si "sin filtros" = 4 pero "con filtros" = 1, la diferencia es el
- *     ALCANCE de los filtros (anio/mes/establecimiento), no un error del
- *     reporte.
- *   - Si "con filtros" = 4 pero el TOTAL del reporte = 1, el servidor esta
- *     ejecutando una version anterior de cancer_data.php (revisar el badge
- *     de version / volver a subir el archivo / cache OPcache).
+ * Por que: el matching PHP y los 8 COUNT podian divergir en el servidor
+ * (version desplegada desactualizada, datos con particularidades, etc.) y el
+ * usuario definio como fuente de verdad los 8 SQL validados: "la UNION de
+ * los 8 casos es el TOTAL DE ATENCIONES que debe mostrar la seccion". Ahora
+ * el reporte trae de la BD las filas con la MISMA condicion SQL de los 8
+ * casos (filtros comunes + UNION de casos + filtros del usuario) y arma la
+ * fila con esas filas: el TOTAL mostrado es exactamente el UNION de los 8
+ * COUNT con los filtros activos (p.ej. 4 para Codigo_Unico='00000318').
+ *
+ * Las celdas por sexo/edad se arman con cnrFila + cnrGedad sobre las filas
+ * que devuelve el propio SQL (misma semantica de bandas que el motor), y las
+ * medidas atenciones/atendidos se llenan igual que en el motor (atendidos =
+ * pacientes distintos con Tipo_Diagnostico='D').
+ *
+ * Si el SQL no puede ejecutarse, devuelve fila=null (el motor PHP, cuya
+ * logica ya fue corregida, actua como fallback) y el error.
  *
  * @param array $filtros ['anio'=>, 'mes'=>, 'establecimiento'=>]
- * @return array ['casos'=>[1..8=>int], 'union_filtros'=>int, 'union_global'=>int, 'error'=>?string]
+ * @return array ['fila'=>?array, 'error'=>?string]
  */
-function cancerVerificarRPT0603(PDO $pdo, array $filtros): array {
+function cancerSeccion170603DesdeBD(PDO $pdo, array $filtros): array {
     $tabla = 'T_CONSOLIDADO_NUEVA_TRAMA_HISMINSA_DETALLADO';
-    $out = ['casos' => [], 'union_filtros' => null, 'union_global' => null, 'error' => null];
-
-    // Filtros activos (identica semantica a los del fetch del reporte)
-    $where = ["1=1"];
-    $params = [];
-    if (!empty($filtros['anio'])) {
-        $where[] = "Anio = :anio";
-        $params[':anio'] = (string)$filtros['anio'];
-    }
-    if (!empty($filtros['mes'])) {
-        $where[] = cancerTieneColumnaMesInt($pdo) ? "Mes_Int = :mes" : "CAST(TRIM(Mes) AS UNSIGNED) = :mes";
-        $params[':mes'] = intval($filtros['mes']);
-    }
-    if (!empty($filtros['establecimiento'])) {
-        $where[] = "TRIM(Codigo_Unico) = :est";
-        $params[':est'] = (string)$filtros['establecimiento'];
-    }
-    $whereF = implode(' AND ', $where);
-
-    // Filtros comunes a los 8 casos (tal cual los SQL validados)
-    $base = "Fg_Tipo = 'CX' AND Id_Correlativo_Lab = 1";
-
+    $out = ['fila' => null, 'error' => null];
     try {
-        // COUNT de cada caso (con los filtros activos del reporte)
-        foreach (cnrRpt0603Casos() as $ci => $caso) {
-            $sql = "SELECT COUNT(*) FROM {$tabla}
-                    WHERE {$base} AND ({$caso['sql']}) AND {$whereF}";
-            $st = $pdo->prepare($sql);
-            $st->execute($params);
-            $out['casos'][$ci] = (int)$st->fetchColumn();
+        // Filtros del usuario (identica semantica al fetch del reporte)
+        $where = ["1=1"];
+        $params = [];
+        if (!empty($filtros['anio'])) {
+            $where[] = "Anio = :anio";
+            $params[':anio'] = (string)$filtros['anio'];
         }
-        // UNION de los 8 casos (con filtros): equivale al TOTAL DE ATENCIONES
-        // de "Todo tipo de cancer" que debe mostrar el reporte.
-        $or = implode(' OR ', array_map(fn($c) => '(' . $c['sql'] . ')', cnrRpt0603Casos()));
-        $st = $pdo->prepare("SELECT COUNT(*) FROM {$tabla}
-                             WHERE {$base} AND ({$or}) AND {$whereF}");
+        if (!empty($filtros['mes'])) {
+            $where[] = cancerTieneColumnaMesInt($pdo) ? "Mes_Int = :mes" : "CAST(TRIM(Mes) AS UNSIGNED) = :mes";
+            $params[':mes'] = intval($filtros['mes']);
+        }
+        if (!empty($filtros['establecimiento'])) {
+            $where[] = "TRIM(Codigo_Unico) = :est";
+            $params[':est'] = (string)$filtros['establecimiento'];
+        }
+        $whereF = implode(' AND ', $where);
+
+        // UNION de los 8 casos SQL validados (fuente unica de la condicion)
+        $union = cnrRpt0603UnionSQL();
+        $sql = "SELECT Id_Cita, Id_Paciente, Id_Genero, Edad_Reg, Tipo_Edad,
+                       Codigo_Item, Tipo_Diagnostico, Valor_Lab,
+                       Id_Correlativo_Lab, Fg_Tipo
+                FROM {$tabla}
+                WHERE {$union} AND {$whereF}";
+        $st = $pdo->prepare($sql);
         $st->execute($params);
-        $out['union_filtros'] = (int)$st->fetchColumn();
-        // UNION SIN filtros: lo que devuelven los 8 SQL corridos en phpMyAdmin
-        // (sin anio/mes/establecimiento). Puede tardar en tablas muy grandes;
-        // si falla, el panel muestra el error sin romper el reporte.
-        $st = $pdo->prepare("SELECT COUNT(*) FROM {$tabla} WHERE {$base} AND ({$or})");
-        $st->execute();
-        $out['union_global'] = (int)$st->fetchColumn();
+
+        // Bandas de edad de la seccion 17 (misma definicion del motor)
+        $secDef = null;
+        foreach (cancerSecciones() as $s) {
+            if ($s['codigo'] === 'RPT06_03') { $secDef = $s; break; }
+        }
+        $gedades = $secDef['gedades'];
+
+        // Llenar la fila con la MISMA estructura que el motor
+        $valores = [];   // [sexo][gedad] => celda
+        $total = ['casos' => 0, 'personas' => 0, 'atenciones' => 0, 'atendidos' => []];
+        while ($r = $st->fetch(PDO::FETCH_ASSOC)) {
+            $f = cnrFila($r);
+            $g = cnrGedad($f, $gedades);
+            if ($g === null) continue; // no ocurre con las 8 bandas de RPT06_03
+
+            $sexo = $f['sexo'] ?: 'X';
+            if (!isset($valores[$sexo])) $valores[$sexo] = [];
+            if (!isset($valores[$sexo][$g])) {
+                $valores[$sexo][$g] = ['casos' => 0, 'personas' => [], 'atenciones' => 0, 'atendidos' => []];
+            }
+            $valores[$sexo][$g]['casos']++;
+            $valores[$sexo][$g]['atenciones']++;
+            if ($f['pac'] !== '') {
+                $valores[$sexo][$g]['personas'][$f['pac']] = true;
+                if ($f['tip'] === 'D') {
+                    $valores[$sexo][$g]['atendidos'][$f['pac']] = true;
+                }
+            }
+            // Totales de la fila (medidas atenciones/atendidos, igual que el motor)
+            $total['atenciones']++;
+            if ($f['pac'] !== '' && $f['tip'] === 'D') $total['atendidos'][$f['pac']] = true;
+        }
+
+        // Consolidar sets a conteos (igual que el motor)
+        foreach ($valores as &$vx) {
+            foreach ($vx as &$cell) {
+                $cell['personas'] = count($cell['personas']);
+                $cell['atendidos'] = count($cell['atendidos']);
+            }
+        }
+        unset($vx, $cell);
+        $total['atendidos'] = is_array($total['atendidos']) ? count($total['atendidos']) : 0;
+
+        $out['fila'] = [
+            'clave'   => 1,
+            'c1'      => 'Todo tipo de cancer',
+            'c2'      => null,
+            'c3'      => null,
+            'cero'    => false,
+            'valores' => $valores,
+            'total'   => $total,
+        ];
     } catch (Throwable $e) {
         $out['error'] = $e->getMessage();
     }
