@@ -90,8 +90,20 @@ require_once __DIR__ . '/../config.php';
  *   a variantes registradas como 'GESTANTE 1', 'GESTANTE-2DO', etc.),
  *   usado tanto por el filtro 'otraCond' => 'GESTANTE' (cnrCumple) como
  *   por el ruteo a la columna 'Gestantes' (cnrGedad).
+ *
+ * r6 (2026-09-04): FIX orden de filas de RPT01_04 vs la plantilla oficial
+ *   en los bloques del Test Inmunoquimico Fecal (82274, filas Excel
+ *   100-102) y del Test de Sangre Oculta en Heces (82270, filas Excel
+ *   107-109). La fila "entrega de resultado referido / Positivo Referido"
+ *   estaba listada ANTES de las filas "con Telemedicina", pero la
+ *   plantilla la ubica AL FINAL: al ser el export posicional, los datos
+ *   caian una fila arriba (la fila 108 del Excel mostraba el dato de "una
+ *   consejeria" y la 109 el de "dos consejerias"). Se reordena: una
+ *   consejeria, dos consejerias, referido. No cambia ninguna condicion SQL,
+ *   solo el orden de presentacion (web y Excel), que ahora calza 1:1 con
+ *   la plantilla oficial.
  */
-define('CANCER_DATA_VERSION', '2026-09-03-r5');
+define('CANCER_DATA_VERSION', '2026-09-04-r6');
 
 /** Version del motor de reporte de Cancer (para el badge del reporte). */
 function cancerDataVersion(): string {
@@ -718,21 +730,30 @@ function cancerSecciones(): array {
              'cond' => ['tip' => 'D', 'cod' => '82274', 'vl' => 'N', 'edadA' => [50, 70]]],
             ['clave' => 4,  'c1' => 'TAMIZAJE DE CANCER DE COLORRECTAL', 'c2' => 'Entrega de resultado del Test Inmunoquimico Fecal', 'c3' => 'Positivo',
              'cond' => ['tip' => 'D', 'cod' => '82274', 'vl' => 'A', 'edadA' => [50, 70]]],
-            ['clave' => 5,  'c1' => 'TAMIZAJE DE CANCER DE COLORRECTAL', 'c2' => 'Entrega de resultado del Test Inmunoquimico Fecal referido', 'c3' => 'Positivo Referido',
-             'cond' => ['tip' => 'D', 'cod' => '82274', 'vl' => 'A', 'rownum' => 1, 'edadA' => [50, 70],
-                        'citaTiene' => ['cod' => '82274', 'tip' => 'D', 'vl' => 'RF', 'rownum' => 2]]],
-            ['clave' => 6,  'c1' => 'TAMIZAJE DE CANCER DE COLORRECTAL', 'c2' => 'Entrega de resultado del Test Inmunoquimico Fecal con Telemedicina', 'c3' => 'Negativo con Telemedicina, Personas con una consejeria',
+            // FIX r6 (orden de filas vs plantilla oficial): en los bloques 82274 y
+            // 82270 la fila "... referido / Positivo Referido" estaba ANTES de las
+            // filas "... con Telemedicina", pero en la plantilla oficial (filas
+            // 100-102 y 107-109 de la hoja "Plantilla") el orden es: primero las
+            // entregas de resultado con Telemedicina (una y dos consejerias) y AL
+            // FINAL la entrega referida. El export es posicional, asi que los datos
+            // caian una fila arriba de la etiqueta correcta (p.ej. la fila 108 del
+            // Excel mostraba el dato de "una consejeria" y la 109 el de "dos
+            // consejerias"). Se reordena para calzar 1:1 con la plantilla.
+            ['clave' => 5,  'c1' => 'TAMIZAJE DE CANCER DE COLORRECTAL', 'c2' => 'Entrega de resultado del Test Inmunoquimico Fecal con Telemedicina', 'c3' => 'Negativo con Telemedicina, Personas con una consejeria',
              'cond' => ['tip' => 'D', 'cod' => '82274', 'vl' => 'N', 'edadA' => [50, 70],
                         'citaTieneTodo' => [
                             ['cod' => '99402.08', 'tip' => 'D', 'vl' => '1', 'rownum' => 1],
                             ['cod' => '99499.10', 'tip' => 'D', 'vl' => 'NULL', 'rownum' => 1],
                         ]]],
-            ['clave' => 7,  'c1' => 'TAMIZAJE DE CANCER DE COLORRECTAL', 'c2' => 'Entrega de resultado del Test Inmunoquimico Fecal con Telemedicina', 'c3' => 'Negativo con Telemedicina, Personas con dos consejerias',
+            ['clave' => 6,  'c1' => 'TAMIZAJE DE CANCER DE COLORRECTAL', 'c2' => 'Entrega de resultado del Test Inmunoquimico Fecal con Telemedicina', 'c3' => 'Negativo con Telemedicina, Personas con dos consejerias',
              'cond' => ['tip' => 'D', 'cod' => '82274', 'vl' => 'N', 'edadA' => [50, 70],
                         'citaTieneTodo' => [
                             ['cod' => '99402.08', 'tip' => 'D', 'vl' => '2', 'rownum' => 1],
                             ['cod' => '99499.10', 'tip' => 'D', 'vl' => 'NULL', 'rownum' => 1],
                         ]]],
+            ['clave' => 7,  'c1' => 'TAMIZAJE DE CANCER DE COLORRECTAL', 'c2' => 'Entrega de resultado del Test Inmunoquimico Fecal referido', 'c3' => 'Positivo Referido',
+             'cond' => ['tip' => 'D', 'cod' => '82274', 'vl' => 'A', 'rownum' => 1, 'edadA' => [50, 70],
+                        'citaTiene' => ['cod' => '82274', 'tip' => 'D', 'vl' => 'RF', 'rownum' => 2]]],
             // Test de Sangre Oculta en Heces (82270)
             ['clave' => 8,  'c1' => 'TAMIZAJE DE CANCER DE COLORRECTAL', 'c2' => 'Indicacion del Test de Sangre Oculta en Heces', 'c3' => '--------------',
              'cond' => ['tip' => 'D', 'cod' => '82270', 'vl' => 'NULL', 'edadA' => [50, 70]]],
@@ -743,21 +764,21 @@ function cancerSecciones(): array {
              'cond' => ['tip' => 'D', 'cod' => '82270', 'vl' => 'N', 'edadA' => [50, 70]]],
             ['clave' => 11, 'c1' => 'TAMIZAJE DE CANCER DE COLORRECTAL', 'c2' => 'Entrega de resultado del Test de Sangre Oculta en Heces', 'c3' => 'Positivo',
              'cond' => ['tip' => 'D', 'cod' => '82270', 'vl' => 'A', 'edadA' => [50, 70]]],
-            ['clave' => 12, 'c1' => 'TAMIZAJE DE CANCER DE COLORRECTAL', 'c2' => 'Entrega de resultado del Test de Sangre Oculta en Heces referido', 'c3' => 'Positivo Referido',
-             'cond' => ['tip' => 'D', 'cod' => '82270', 'vl' => 'A', 'rownum' => 1, 'edadA' => [50, 70],
-                        'citaTiene' => ['cod' => '82270', 'tip' => 'D', 'vl' => 'RF', 'rownum' => 2]]],
-            ['clave' => 13, 'c1' => 'TAMIZAJE DE CANCER DE COLORRECTAL', 'c2' => 'Entrega de resultado del Test de Sangre Oculta en Heces con Telemedicina', 'c3' => 'Negativo con Telemedicina, Personas con una consejeria',
+            ['clave' => 12, 'c1' => 'TAMIZAJE DE CANCER DE COLORRECTAL', 'c2' => 'Entrega de resultado del Test de Sangre Oculta en Heces con Telemedicina', 'c3' => 'Negativo con Telemedicina, Personas con una consejeria',
              'cond' => ['tip' => 'D', 'cod' => '82270', 'vl' => 'N', 'edadA' => [50, 70],
                         'citaTieneTodo' => [
                             ['cod' => '99402.08', 'tip' => 'D', 'vl' => '1', 'rownum' => 1],
                             ['cod' => '99499.10', 'tip' => 'D', 'vl' => 'NULL', 'rownum' => 1],
                         ]]],
-            ['clave' => 14, 'c1' => 'TAMIZAJE DE CANCER DE COLORRECTAL', 'c2' => 'Entrega de resultado del Test de Sangre Oculta en Heces con Telemedicina', 'c3' => 'Negativo con Telemedicina, Personas con dos consejerias',
+            ['clave' => 13, 'c1' => 'TAMIZAJE DE CANCER DE COLORRECTAL', 'c2' => 'Entrega de resultado del Test de Sangre Oculta en Heces con Telemedicina', 'c3' => 'Negativo con Telemedicina, Personas con dos consejerias',
              'cond' => ['tip' => 'D', 'cod' => '82270', 'vl' => 'N', 'edadA' => [50, 70],
                         'citaTieneTodo' => [
                             ['cod' => '99402.08', 'tip' => 'D', 'vl' => '2', 'rownum' => 1],
                             ['cod' => '99499.10', 'tip' => 'D', 'vl' => 'NULL', 'rownum' => 1],
                         ]]],
+            ['clave' => 14, 'c1' => 'TAMIZAJE DE CANCER DE COLORRECTAL', 'c2' => 'Entrega de resultado del Test de Sangre Oculta en Heces referido', 'c3' => 'Positivo Referido',
+             'cond' => ['tip' => 'D', 'cod' => '82270', 'vl' => 'A', 'rownum' => 1, 'edadA' => [50, 70],
+                        'citaTiene' => ['cod' => '82270', 'tip' => 'D', 'vl' => 'RF', 'rownum' => 2]]],
             ['clave' => 15, 'c1' => 'TAMIZAJE DE CANCER DE COLORRECTAL', 'c2' => 'Evaluacion del riesgo de desarrollar cancer de colorrectal', 'c3' => '--------------',
              'cond' => ['tip' => 'D', 'cod' => '99214.08', 'vl' => 'NULL', 'rownum' => 1, 'edadA' => [50, 70]]],
             ['clave' => 16, 'c1' => 'TAMIZAJE DE CANCER DE COLORRECTAL', 'c2' => 'Evaluacion del riesgo de desarrollar cancer de colorrectal referida', 'c3' => '--------------',
