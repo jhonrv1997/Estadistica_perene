@@ -82,7 +82,6 @@ $renaes = $fEstablecimiento !== '' ? $fEstablecimiento : '';
 $ejecutar = isset($_GET['generar']);
 $reporte = null;
 $debugSQL = null;
-$verifRpt0603 = null;
 
 if ($ejecutar) {
     $filtros = [
@@ -95,12 +94,6 @@ if ($ejecutar) {
     $reporte['tiempo_ejecucion'] = round(microtime(true) - $t0 + ($reporte['tiempo_ejecucion'] ?? 0), 2);
     if (!empty($reporte['error']) && !empty($reporte['sql_debug'])) {
         $debugSQL = ['sql' => $reporte['sql_debug'] ?? '', 'params' => $reporte['params_debug'] ?? []];
-    }
-    // Verificacion de RPT06_03: corre los 8 COUNT SQL directamente en la BD
-    // (con y sin filtros) para compararlos en pantalla con los conteos del motor.
-    $verifRpt0603 = null;
-    if (empty($reporte['error'])) {
-        $verifRpt0603 = cancerVerificarRPT0603($pdo, $filtros);
     }
 }
 
@@ -306,6 +299,9 @@ include 'includes/header.php';
         <small>
             <span class="cnr-secflag badge bg-light text-dark me-1"><?= htmlspecialchars($sec['codigo']) ?></span>
             <?= count($sec['filas']) ?> filas
+            <?php if (($sec['rpt0603_fuente'] ?? null) === 'sql'): ?>
+                | <span class="badge bg-success" title="El TOTAL de esta seccion se calcula directamente con la UNION de los 8 SQL validados contra la BD">TOTAL desde los 8 SQL validados (BD)</span>
+            <?php endif; ?>
             <?php if ($sec['medidas'][0] === 'atenciones'): ?>
                 | Atenciones: <strong><?= number_format($sec['total']['atenciones']) ?></strong> / Atendidos: <strong><?= number_format($sec['total']['atendidos']) ?></strong>
             <?php else: ?>
@@ -318,91 +314,6 @@ include 'includes/header.php';
     </div>
 </div>
 <?php endforeach; ?>
-
-<?php if ($verifRpt0603 !== null): ?>
-<?php
-// ---- Panel de verificacion RPT06_03 (8 casos SQL vs motor PHP) ----
-$secRpt0603 = null;
-foreach ($reporte['secciones'] as $s) { if ($s['codigo'] === 'RPT06_03') { $secRpt0603 = $s; break; } }
-$motorCasos = $secRpt0603['rpt0603_casos'] ?? [];
-$motorTotal = $secRpt0603 ? $secRpt0603['filas'][0]['total']['atenciones'] : 0;
-$sqlCasos   = $verifRpt0603['casos'] ?? [];
-$unionF     = $verifRpt0603['union_filtros'] ?? null;
-$unionG     = $verifRpt0603['union_global'] ?? null;
-$okTotal    = ($unionF !== null && (int)$unionF === (int)$motorTotal);
-?>
-<div class="cnr-section-card">
-    <div class="cnr-section-header" style="background:linear-gradient(90deg,#155a4a 0%,#27ae60 100%);">
-        <span><i class="fas fa-clipboard-check me-2"></i>VERIFICACION RPT06_03 &mdash; 8 CASOS SQL (BD) vs MOTOR PHP</span>
-        <small>Motor v<?= htmlspecialchars($reporte['version'] ?? cancerDataVersion()) ?> &nbsp;|&nbsp;
-            UNION <?= $unionF !== null ? number_format($unionF) : '---' ?> = TOTAL DE ATENCIONES esperado
-            <?= $okTotal ? '<span class="badge bg-success">COINCIDE</span>' : '<span class="badge bg-danger">NO COINCIDE</span>' ?>
-        </small>
-    </div>
-    <div class="card-body p-0">
-        <?php if (!empty($verifRpt0603['error'])): ?>
-            <div class="alert alert-warning mb-0 rounded-0">
-                <i class="fas fa-exclamation-triangle me-2"></i>
-                La verificacion SQL no pudo ejecutarse: <code><?= htmlspecialchars($verifRpt0603['error']) ?></code>
-            </div>
-        <?php else: ?>
-        <div class="table-responsive">
-            <table class="table table-sm cnr-table mb-0">
-                <thead>
-                    <tr>
-                        <th class="text-start">Caso</th>
-                        <th class="text-start">Condicion SQL (fg_tipo='CX' AND Id_correlativo_Lab=1 + ...)</th>
-                        <th class="num">COUNT BD</th>
-                        <th class="num">Motor PHP</th>
-                        <th class="num">Estado</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    <?php foreach (cnrRpt0603Casos() as $ci => $caso): ?>
-                        <?php
-                            $bd  = $sqlCasos[$ci] ?? null;
-                            $mot = $motorCasos[$ci] ?? null;
-                            $okc = ($bd !== null && $mot !== null && (int)$bd === (int)$mot);
-                        ?>
-                        <tr>
-                            <td class="text-start fw-semibold"><?= htmlspecialchars($caso['titulo']) ?></td>
-                            <td class="text-start"><code class="small"><?= htmlspecialchars($caso['sql']) ?></code></td>
-                            <td class="num fw-bold"><?= $bd !== null ? number_format($bd) : '---' ?></td>
-                            <td class="num"><?= $mot !== null ? number_format($mot) : '---' ?></td>
-                            <td class="num"><?= $okc ? '<i class="fas fa-check text-success"></i>' : '<i class="fas fa-times text-danger"></i>' ?></td>
-                        </tr>
-                    <?php endforeach; ?>
-                    <tr class="cnr-total-row">
-                        <td colspan="2" class="text-end">UNION de los 8 casos (= TOTAL DE ATENCIONES de "Todo tipo de cancer")</td>
-                        <td class="num"><?= $unionF !== null ? number_format($unionF) : '---' ?></td>
-                        <td class="num"><?= number_format($motorTotal) ?></td>
-                        <td class="num"><?= $okTotal ? '<i class="fas fa-check text-success"></i>' : '<i class="fas fa-times text-danger"></i>' ?></td>
-                    </tr>
-                    <tr>
-                        <td colspan="2" class="text-end text-muted">UNION <strong>sin filtros</strong> (como correr los 8 SQL en phpMyAdmin: todos los anios/meses/establecimientos)</td>
-                        <td class="num text-muted"><?= $unionG !== null ? number_format($unionG) : '---' ?></td>
-                        <td colspan="2" class="text-muted small">referencia</td>
-                    </tr>
-                </tbody>
-            </table>
-        </div>
-        <div class="small text-muted px-2 py-2 border-top">
-            <i class="fas fa-info-circle me-1"></i>
-            <strong>Como leer este panel:</strong> la columna "COUNT BD" ejecuta los 8 SQL directamente en MySQL
-            <em>con los filtros actuales</em> (anio/mes/establecimiento) y debe ser identica a "Motor PHP" (los mismos
-            casos calculados por el reporte). La UNION con filtros es el valor exacto que la fila
-            "Todo tipo de cancer" debe mostrar en <strong>TOTAL DE ATENCIONES</strong>. Si la UNION sin filtros
-            difiere de la UNION con filtros, la diferencia viene del <strong>alcance de los filtros</strong>
-            (anio/mes/establecimiento seleccionados), no de un error del reporte. Si "COUNT BD" difiere de
-            "Motor PHP", revise que el servidor ejecute la version indicada en el badge
-            (re-subir <code>includes/cancer_data.php</code> y limpiar cache del hosting).
-            Nota: un registro puede cumplir varios casos a la vez (p.ej. C900 adulto cuenta en los Casos 3 y 6),
-            por eso el TOTAL es la UNION y no la suma de los COUNT.
-        </div>
-        <?php endif; ?>
-    </div>
-</div>
-<?php endif; ?>
 
 <!-- Nota sobre secciones de la plantilla oficial sin SP asociado -->
 <div class="alert alert-info">
