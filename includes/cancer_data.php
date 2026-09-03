@@ -78,8 +78,20 @@ require_once __DIR__ . '/../config.php';
  * la funcion cancerVerificarRPT0603() y los conteos por caso que solo
  * alimentaban ese panel. La seccion 17 NO cambia: sigue calculandose
  * directamente contra la BD con la UNION de los 8 SQL validados.
+ *
+ * r5 (2026-09-03): FIX columna "Gestantes" de RPT01_01 (cancer de cuello
+ *   uterino) que mostraba 0 en Casos/Personas. La columna se define con
+ *   'key' => 'G' (string), pero cnrGedad() hacia return (int)$g['key'] y
+ *   en PHP (int)'G' vale 0: las filas gestantes se almacenaban bajo
+ *   $valores[sexo][0] mientras el render (cnrCell) las buscaba bajo la
+ *   clave 'G', por lo que la columna quedaba en 0. Ahora cnrGedad()
+ *   devuelve la clave ORIGINAL (sin cast a int) y la deteccion de
+ *   gestantes se centraliza en cnrEsGestante() (criterio unico, tolerante
+ *   a variantes registradas como 'GESTANTE 1', 'GESTANTE-2DO', etc.),
+ *   usado tanto por el filtro 'otraCond' => 'GESTANTE' (cnrCumple) como
+ *   por el ruteo a la columna 'Gestantes' (cnrGedad).
  */
-define('CANCER_DATA_VERSION', '2026-09-03-r4');
+define('CANCER_DATA_VERSION', '2026-09-03-r5');
 
 /** Version del motor de reporte de Cancer (para el badge del reporte). */
 function cancerDataVersion(): string {
@@ -164,6 +176,14 @@ function cnrRpt0603Casos(): array {
  * en minusculas el reporte ahora cuenta igual que la BD.
  */
 function cnrFila(array $r): array {
+    // Nota: 'otraCond' se normaliza desde Descripcion_Otra_Condicion (tabla
+    // consolidada T_CONSOLIDADO_NUEVA_TRAMA_HISMINSA_DETALLADO). Se usa para
+    // separar GESTANTES del resto de mujeres en SECCION 1 (RPT01_01_CUTERINO):
+    //   - otraCond = null/''  -> mujer NO gestante (va a columnas 25a-29a ... 50a-64a)
+    //   - otraCond = 'GESTANTE' -> mujer gestante (va a columna 'Gestantes', todas las edades)
+    // El campo puede no estar presente en algunos SELECT (p.ej. RPT06_03); se
+    // usa isset() para no emitir warnings en PHP 8+ al leer un indice inexistente.
+    $otraCondRaw = isset($r['Descripcion_Otra_Condicion']) ? $r['Descripcion_Otra_Condicion'] : null;
     return [
         'cita'    => $r['Id_Cita'] !== null ? trim((string)$r['Id_Cita']) : '',
         'pac'     => $r['Id_Paciente'] !== null ? trim((string)$r['Id_Paciente']) : '',
@@ -175,6 +195,9 @@ function cnrFila(array $r): array {
         'edad'    => $r['Edad_Reg'] !== null ? (int)$r['Edad_Reg'] : null,
         'tipEdad' => $r['Tipo_Edad'] !== null ? strtoupper(trim((string)$r['Tipo_Edad'])) : '',
         'fg'      => $r['Fg_Tipo'] !== null ? strtoupper(trim((string)$r['Fg_Tipo'])) : '',
+        'otraCond'=> $otraCondRaw !== null && $otraCondRaw !== ''
+                        ? strtoupper(trim((string)$otraCondRaw))
+                        : null,
     ];
 }
 
@@ -192,6 +215,9 @@ function cnrFila(array $r): array {
  *   'edadA'     => [25, 64] | [65, null] Tipo_Edad='A' y Edad_Reg en rango
  *   'menor18'   => true                  Tipo_Edad in ('D','M') o (A y <18)
  *   'fgTipo'    => 'CX'                  Fg_Tipo
+ *   'otraCond'  => 'NULL' | 'GESTANTE'   Descripcion_Otra_Condicion:
+ *                                       'NULL' = IS NULL o cadena vacia
+ *                                       'GESTANTE' (o cualquier texto) = igualdad exacta (case-insensitive)
  *   'citaTiene' => <predicado>           otra fila de la misma cita lo cumple
  *   'citaTieneTodo' => [<pred>, ...]     todas existen en la cita (AND de EXISTS)
  *   'cualquieraDe' => [<pred>, ...]      OR de predicados sobre la misma fila
@@ -258,6 +284,29 @@ function cnrCumple(array $f, array $cond, array $ctx): bool {
     if (isset($cond['fgTipo'])) {
         if ($f['fg'] !== strtoupper((string)$cond['fgTipo'])) return false;
     }
+    // 'otraCond': filtra por Descripcion_Otra_Condicion. 'NULL' significa
+    // IS NULL o cadena vacia (la mayoria de filas HIS no gestantes). Cualquier
+    // otro valor (p.ej. 'GESTANTE') se compara como igualdad exacta case-
+    // insensitive. Como cnrFila() ya normalizo a MAYUSCULAS y trim, basta
+    // comparar en MAYUSCULAS el valor de la condicion.
+    if (isset($cond['otraCond'])) {
+        if ($cond['otraCond'] === 'NULL') {
+            // Descripcion_Otra_Condicion IS NULL o vacio
+            if ($f['otraCond'] !== null && $f['otraCond'] !== '') return false;
+        } else {
+            // Igualdad exacta (case-insensitive). Para 'GESTANTE' se usa el
+            // MISMO criterio de cnrEsGestante() que aplica cnrGedad() al
+            // rutear la fila a la columna 'Gestantes' (evita divergencias
+            // entre el filtro de la linea y el ruteo de la columna).
+            $esperado = strtoupper(trim((string)$cond['otraCond']));
+            if ($f['otraCond'] === null || $f['otraCond'] === '') return false;
+            if ($esperado === 'GESTANTE') {
+                if (!cnrEsGestante($f)) return false;
+            } elseif ($f['otraCond'] !== $esperado) {
+                return false;
+            }
+        }
+    }
     if (isset($cond['citaTiene'])) {
         if (!cnrCitaTiene($ctx, $f['cita'], $cond['citaTiene'])) return false;
     }
@@ -282,6 +331,28 @@ function cnrEsMenor18(array $f): bool {
     if ($f['tipEdad'] === 'D' || $f['tipEdad'] === 'M') return true;
     if ($f['tipEdad'] === 'A' && $f['edad'] !== null && $f['edad'] < 18) return true;
     return false;
+}
+
+/**
+ * Detecta si la fila corresponde a una mujer GESTANTE segun
+ * Descripcion_Otra_Condicion (campo 'otraCond' de cnrFila()).
+ *
+ * CRITERIO UNICO compartido por:
+ *   - cnrCumple(): predicado 'otraCond' => 'GESTANTE' (ramas gestantes de
+ *     las lineas de RPT01_01), y
+ *   - cnrGedad(): ruteo de la fila a la columna 'Gestantes' (key='G').
+ * Asi ninguna fila gestante puede pasar el filtro de la linea y quedar
+ * clasificada en una banda de edad (o viceversa).
+ *
+ * Coincidencia tolerante: acepta 'GESTANTE' exacto y variantes que
+ * COMIENZAN con 'GESTANTE' (p.ej. 'GESTANTE 1', 'GESTANTE-2DO TRIMESTRE').
+ * NO acepta textos que solo contienen la palabra (p.ej. 'NO GESTANTE'),
+ * para no falsear el conteo.
+ */
+function cnrEsGestante(array $f): bool {
+    if (!isset($f['otraCond']) || $f['otraCond'] === null || $f['otraCond'] === '') return false;
+    if ($f['otraCond'] === 'GESTANTE') return true;
+    return strpos($f['otraCond'], 'GESTANTE') === 0; // variantes 'GESTANTE ...'
 }
 
 /** EXISTS: alguna fila de la cita cumple el predicado (resuelve por indice). */
@@ -354,20 +425,55 @@ function cnrCandidatos(array $cond, array $porCod, array $porIni, int $total): a
  *   - sin edad: al primer grupo clasificable de la seccion (<18a)
  * Solo aplica a filas que ya pasaron el WHERE de su linea, y devuelve null
  * unicamente si la seccion no tiene ninguna banda donde ubicarlas.
+ *
+ * FIX r5 (columnas "Gestantes" en 0): la columna se define con 'key' => 'G'
+ * (string). El return DEJA de castear a int porque en PHP (int)'G' vale 0:
+ * las filas gestantes se guardaban bajo $valores[sexo][0] mientras el
+ * render (cnrCell / cnrTotalGedad) las buscaba bajo $valores[sexo]['G'],
+ * de ahi que la columna Gestantes (Casos/Personas) mostrara 0.
+ *
+ * @return int|string|null key del grupo de edad (int) o key de la columna
+ *         'Gestantes' (string 'G'); null si la seccion no tiene ningun
+ *         grupo donde ubicar la fila.
  */
-function cnrGedad(array $f, array $gedades): ?int {
+function cnrGedad(array $f, array $gedades) {
+    // 1) GESTANTES: si la fila viene marcada como GESTANTE en
+    //    Descripcion_Otra_Condicion (campo 'otraCond') Y la seccion tiene una
+    //    columna marcada con 'gestantes' => true (ej. SECCION 1 RPT01_01), la
+    //    fila se ruttea directamente a esa columna, SIN importar la edad
+    //    (requisito: "Gestantes - Edad= Todas las edades"). Esto evita que una
+    //    gestante de 22 anios termine en la banda 18-29 (que no existe en esta
+    //    seccion) o que una gestante de 30 se cuente en la columna 30a-39a.
+    if (cnrEsGestante($f)) {
+        foreach ($gedades as $g) {
+            if (!empty($g['gestantes'])) {
+                // FIX "Gestantes en 0": devolver la clave ORIGINAL ('G').
+                // Antes: return (int)$g['key'] => (int)'G' = 0; las filas
+                // gestantes se almacenaban en $valores[sexo][0] y el render
+                // las buscaba en $valores[sexo]['G'] => columna en 0.
+                return $g['key'];
+            }
+        }
+        // Si la seccion no tiene columna 'gestantes', se sigue con la logica
+        // normal de bandas (la fila podria terminar en su grupo etareo real).
+    }
+
     foreach ($gedades as $g) {
+        // Saltar columnas marcadas como 'gestantes': ya se manejaron arriba y
+        // no tienen banda de edad propia (su key es 'G', no un rango min/max).
+        if (!empty($g['gestantes'])) continue;
         if (!empty($g['menor18'])) {
-            if (cnrEsMenor18($f)) return (int)$g['key'];
+            if (cnrEsMenor18($f)) return $g['key'];
             continue;
         }
-        // Columnas solo-estructura (ej. 'Gestantes'): no clasifican filas
+        // Columnas solo-estructura (ej. 'Gestantes' sin 'gestantes' => true):
+        // no clasifican filas por edad
         if (!isset($g['min'])) continue;
         if ($f['tipEdad'] !== 'A' || $f['edad'] === null) continue;
         $min = $g['min'];
         $max = $g['max'] ?? null;
         if ($f['edad'] >= $min && ($max === null || $f['edad'] <= $max)) {
-            return (int)$g['key'];
+            return $g['key'];
         }
     }
 
@@ -376,22 +482,24 @@ function cnrGedad(array $f, array $gedades): ?int {
         // Tipo_Edad anomala (NULL/'S'/''): interpretar Edad_Reg en anios,
         // igual que hace el HIS al exportar la mayoria de tramas.
         foreach ($gedades as $g) {
+            if (!empty($g['gestantes'])) continue;
             if (!empty($g['menor18'])) {
-                if ($f['edad'] < 18) return (int)$g['key'];
+                if ($f['edad'] < 18) return $g['key'];
                 continue;
             }
             if (!isset($g['min'])) continue;
             $min = $g['min'];
             $max = $g['max'] ?? null;
             if ($f['edad'] >= $min && ($max === null || $f['edad'] <= $max)) {
-                return (int)$g['key'];
+                return $g['key'];
             }
         }
         return null; // la seccion no tiene banda para esa edad (p.ej. solo <18a)
     }
     // Sin edad utilizable: primer grupo clasificable de la seccion (<18a)
     foreach ($gedades as $g) {
-        if (!empty($g['menor18']) || isset($g['min'])) return (int)$g['key'];
+        if (!empty($g['gestantes'])) continue;
+        if (!empty($g['menor18']) || isset($g['min'])) return $g['key'];
     }
     return null;
 }
@@ -426,28 +534,76 @@ function cancerSecciones(): array {
             ['key' => 2, 'label' => '30a-39a', 'min' => 30, 'max' => 39],
             ['key' => 3, 'label' => '40a-49a', 'min' => 40, 'max' => 49],
             ['key' => 4, 'label' => '50a-64a', 'min' => 50, 'max' => 64],
-            ['key' => 'G', 'label' => 'Gestantes', 'cero' => true], // columna del Excel sin SP asociado
+            // 'Gestantes': ahora se POPULA via matching (Descripcion_Otra_Condicion='GESTANTE').
+            // La marca 'gestantes' => true le dice a cnrGedad() que rutee aqui todas
+            // las filas con otraCond='GESTANTE', sin importar la edad. Se elimino
+            // 'cero' => true para que la columna se muestre con color normal (ya
+            // tiene datos, no es solo estructura).
+            ['key' => 'G', 'label' => 'Gestantes', 'gestantes' => true],
         ],
         'filas' => [
+            // ==================================================================
+            // CITOLOGIA - PAP (claves 1-7): cada fila usa 'cualquieraDe' (OR) con
+            // DOS ramas, que espejan los dos grupos etareos pedidos:
+            //
+            //   Rama 1 (mujer NO gestante de 25 a 64 anios):
+            //     Edad_Reg entre 25 y 64 (Tipo_Edad='A') AND Descripcion_Otra_Condicion IS NULL
+            //     -> cnrGedad() la clasifica en 25a-29a / 30a-39a / 40a-49a / 50a-64a
+            //
+            //   Rama 2 (mujer GESTANTE de cualquier edad):
+            //     Descripcion_Otra_Condicion = 'GESTANTE' (sin restriccion de edad)
+            //     -> cnrGedad() la ruthea a la columna 'Gestantes' (key='G')
+            //
+            // Las claves comunes (tip, cod, vl, sexo, citaTiene) se evaluan AND
+            // con cualquieraDe, asi que aplican a las dos ramas por igual.
+            // ==================================================================
             ['clave' => 1,  'c1' => 'CITOLOGIA - PAP', 'c2' => 'Toma de muestra de Citologia', 'c3' => '----------',
-             'cond' => ['tip' => 'D', 'cod' => '88141', 'vl' => 'NULL', 'sexo' => 'F', 'edadA' => [25, 64]]],
+             'cond' => ['tip' => 'D', 'cod' => '88141', 'vl' => 'NULL', 'sexo' => 'F',
+                        'cualquieraDe' => [
+                            ['edadA' => [25, 64], 'otraCond' => 'NULL'],
+                            ['otraCond' => 'GESTANTE'],
+                        ]]],
             ['clave' => 2,  'c1' => 'CITOLOGIA - PAP', 'c2' => 'Resultados de Citologia', 'c3' => 'Negativo',
-             'cond' => ['tip' => 'D', 'cod' => '88141', 'vl' => 'N', 'sexo' => 'F', 'edadA' => [25, 64]]],
+             'cond' => ['tip' => 'D', 'cod' => '88141', 'vl' => 'N', 'sexo' => 'F',
+                        'cualquieraDe' => [
+                            ['edadA' => [25, 64], 'otraCond' => 'NULL'],
+                            ['otraCond' => 'GESTANTE'],
+                        ]]],
             ['clave' => 3,  'c1' => 'CITOLOGIA - PAP', 'c2' => 'Resultados de Citologia', 'c3' => 'Celulas escamosas y glandulares atipicas (ASCUS y AGC)',
-             'cond' => ['tip' => 'D', 'cod' => '88141', 'vl' => 'A', 'sexo' => 'F', 'edadA' => [25, 64],
-                        'citaTiene' => ['cod' => 'R876', 'tip' => 'P', 'rownum' => 1]]],
+             'cond' => ['tip' => 'D', 'cod' => '88141', 'vl' => 'A', 'sexo' => 'F',
+                        'citaTiene' => ['cod' => 'R876', 'tip' => 'P', 'rownum' => 1],
+                        'cualquieraDe' => [
+                            ['edadA' => [25, 64], 'otraCond' => 'NULL'],
+                            ['otraCond' => 'GESTANTE'],
+                        ]]],
             ['clave' => 4,  'c1' => 'CITOLOGIA - PAP', 'c2' => 'Resultados de Citologia', 'c3' => 'Lesion Intraepitelial cervical de bajo grado (NIC I)',
-             'cond' => ['tip' => 'D', 'cod' => '88141', 'vl' => 'A', 'sexo' => 'F', 'edadA' => [25, 64],
-                        'citaTiene' => ['cod' => 'N870', 'tip' => 'P', 'rownum' => 1]]],
+             'cond' => ['tip' => 'D', 'cod' => '88141', 'vl' => 'A', 'sexo' => 'F',
+                        'citaTiene' => ['cod' => 'N870', 'tip' => 'P', 'rownum' => 1],
+                        'cualquieraDe' => [
+                            ['edadA' => [25, 64], 'otraCond' => 'NULL'],
+                            ['otraCond' => 'GESTANTE'],
+                        ]]],
             ['clave' => 5,  'c1' => 'CITOLOGIA - PAP', 'c2' => 'Resultados de Citologia', 'c3' => 'Lesion Intraepitelial cervical de alto grado NIC II, NIC III y Cancer in situ',
-             'cond' => ['tip' => 'D', 'cod' => '88141', 'vl' => 'A', 'sexo' => 'F', 'edadA' => [25, 64],
-                        'citaTiene' => ['cod' => ['N871', 'N872', 'D069'], 'tip' => 'P', 'rownum' => 1]]],
+             'cond' => ['tip' => 'D', 'cod' => '88141', 'vl' => 'A', 'sexo' => 'F',
+                        'citaTiene' => ['cod' => ['N871', 'N872', 'D069'], 'tip' => 'P', 'rownum' => 1],
+                        'cualquieraDe' => [
+                            ['edadA' => [25, 64], 'otraCond' => 'NULL'],
+                            ['otraCond' => 'GESTANTE'],
+                        ]]],
             ['clave' => 6,  'c1' => 'CITOLOGIA - PAP', 'c2' => 'Resultados de Citologia', 'c3' => 'Cancer invasor del cuello uterino',
-             'cond' => ['tip' => 'D', 'cod' => '88141', 'vl' => 'A', 'sexo' => 'F', 'edadA' => [25, 64],
-                        'citaTiene' => ['cod' => 'C539', 'tip' => 'P', 'rownum' => 1]]],
+             'cond' => ['tip' => 'D', 'cod' => '88141', 'vl' => 'A', 'sexo' => 'F',
+                        'citaTiene' => ['cod' => 'C539', 'tip' => 'P', 'rownum' => 1],
+                        'cualquieraDe' => [
+                            ['edadA' => [25, 64], 'otraCond' => 'NULL'],
+                            ['otraCond' => 'GESTANTE'],
+                        ]]],
             ['clave' => 7,  'c1' => 'CITOLOGIA - PAP', 'c2' => 'Telemedicina', 'c3' => 'Entrega de PAP con telemedicina',
-             'cond' => ['tip' => 'D', 'cod' => '88141', 'vl' => 'N', 'sexo' => 'F', 'edadA' => [25, 64],
-                        'citaTiene' => ['cod' => '99499.10', 'tip' => 'D', 'vl' => 'NULL', 'rownum' => 1]]],
+             'cond' => ['tip' => 'D', 'cod' => '88141', 'vl' => 'N', 'sexo' => 'F',
+                        'citaTiene' => ['cod' => '99499.10', 'tip' => 'D', 'vl' => 'NULL', 'rownum' => 1],
+                        'cualquieraDe' => [
+                            ['edadA' => [25, 64], 'otraCond' => 'NULL'],
+                            ['otraCond' => 'GESTANTE'],
+                        ]]],
             ['clave' => 8,  'c1' => 'INSPECCION VISUAL ACIDO ACETICO - IVAA', 'c2' => 'Persona examinada con Inspeccion Visual Acido Acetico', 'c3' => 'Negativo',
              'cond' => ['tip' => 'D', 'cod' => '88141.01', 'vl' => 'N', 'sexo' => 'F', 'edadA' => [30, 49]]],
             ['clave' => 9,  'c1' => 'INSPECCION VISUAL ACIDO ACETICO - IVAA', 'c2' => 'Persona examinada con Inspeccion Visual Acido Acetico', 'c3' => 'Positivo',
@@ -1110,7 +1266,8 @@ function cancerEjecutarReporte(PDO $pdo, array $filtros): array {
     // ya restringe a la letra C (C00-C97 son los unicos codigos CIE usados por Cancer).
 
     $sql = "SELECT Id_Cita, Id_Paciente, Id_Genero, Edad_Reg, Tipo_Edad,
-                   Codigo_Item, Tipo_Diagnostico, Valor_Lab, Id_Correlativo_Lab, Fg_Tipo
+                   Codigo_Item, Tipo_Diagnostico, Valor_Lab, Id_Correlativo_Lab, Fg_Tipo,
+                   Descripcion_Otra_Condicion
             FROM {$tabla}
             WHERE {$whereCod} AND (" . implode(' AND ', $where) . ")";
 
@@ -1388,7 +1545,8 @@ function cancerSeccion170603DesdeBD(PDO $pdo, array $filtros): array {
         $union = cnrRpt0603UnionSQL();
         $sql = "SELECT Id_Cita, Id_Paciente, Id_Genero, Edad_Reg, Tipo_Edad,
                        Codigo_Item, Tipo_Diagnostico, Valor_Lab,
-                       Id_Correlativo_Lab, Fg_Tipo
+                       Id_Correlativo_Lab, Fg_Tipo,
+                       Descripcion_Otra_Condicion
                 FROM {$tabla}
                 WHERE {$union} AND {$whereF}";
         $st = $pdo->prepare($sql);
