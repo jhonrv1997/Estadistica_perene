@@ -10,7 +10,10 @@
  *
  * MAPA DE CELDAS (hoja "Plantilla", igual que el flujo ODBC original):
  *   Encabezado:
- *     C4 = PERIODO (texto), B6 = Codigo RENAES, D6 = IPRESS (nombre)
+ *     B4 = PERIODO (texto), B6 = Codigo RENAES,
+ *     D5 = Establecimiento / IPRESS seleccionado (celda combinada D5:N6:
+ *     el valor debe escribirse en D5, que es el ancla de la combinacion;
+ *     escribir en D6 no se visualiza porque no es la celda ancla)
  *   Seccion 1  MUJERES TAMIZADAS CUELLO UTERINO: filas 11-24, cols D..O
  *   Seccion 2  MUJERES TAMIZADAS CANCER MAMA:    filas 29-72, cols D..K
  *   Seccion 4  OTROS CANCERES:                   filas 96-123, cols D..AC
@@ -139,16 +142,27 @@ $mapas = [
 
 $cells = [];
 
-// Encabezado del reporte (como el Excel: PERIODO / RENAES / IPRESS)
+// ==================== ENCABEZADO DEL REPORTE ====================
+// B4 = PERIODO (texto "AAAA - MES"; igual que el flujo ODBC original, pero
+// en la celda B4 junto a la etiqueta PERIODO de A4 en lugar de la combinada C4:J4).
 $periodoTxt = [];
 if ($fAnio !== '') $periodoTxt[] = $fAnio;
 if ($fMes !== '')  $periodoTxt[] = strtoupper(getNombreMes((int)$fMes));
-$cells['C4'] = $periodoTxt ? implode(' - ', $periodoTxt) : 'TODOS LOS PERIODOS';
+$cells['B4'] = $periodoTxt ? implode(' - ', $periodoTxt) : 'TODOS LOS PERIODOS';
+
+// D5 = dato del select "establecimiento" del filtro (nombre del IPRESS).
+// D5 es el ANCLA de la celda combinada D5:N6 de la plantilla: escribiendo en
+// D5 el nombre queda visible en el recuadro junto a la etiqueta IPRESS (C6).
+// Si no se filtro por establecimiento se indica "TODOS LOS ESTABLECIMIENTOS"
+// (mismo criterio que PERIODO con "TODOS LOS PERIODOS").
+$cells['D5'] = 'TODOS LOS ESTABLECIMIENTOS';
 if ($fEstablecimiento !== '') {
     $cells['B6'] = $fEstablecimiento; // CODIGO RENAES
     $pdo = getDBConnection();
     $est = cancerGetEstablecimientosZS($pdo);
-    if (isset($est[$fEstablecimiento])) $cells['D6'] = $est[$fEstablecimiento]; // IPRESS
+    // Dato del select "establecimiento": el nombre mostrado en la opcion; si el
+    // codigo ya no esta en el catalogo ZSPERENE se usa el propio codigo como respaldo.
+    $cells['D5'] = $est[$fEstablecimiento] ?? $fEstablecimiento;
 }
 
 // Datos por seccion

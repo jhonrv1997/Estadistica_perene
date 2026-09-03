@@ -252,45 +252,7 @@ include 'includes/header.php';
     </div>
 </div>
 
-<!-- Stats -->
-<div class="row mb-4">
-    <div class="col-md-3 col-6 mb-3">
-        <div class="stat-card stat-primary">
-            <div class="stat-icon"><i class="fas fa-ribbon"></i></div>
-            <div class="stat-info">
-                <span class="stat-value"><?= number_format($reporte['totales']['total_casos']) ?></span>
-                <span class="stat-label">Casos (tamizajes/actividades)</span>
-            </div>
-        </div>
-    </div>
-    <div class="col-md-3 col-6 mb-3">
-        <div class="stat-card stat-success">
-            <div class="stat-icon"><i class="fas fa-users"></i></div>
-            <div class="stat-info">
-                <span class="stat-value"><?= number_format($reporte['totales']['total_personas']) ?></span>
-                <span class="stat-label">Personas</span>
-            </div>
-        </div>
-    </div>
-    <div class="col-md-3 col-6 mb-3">
-        <div class="stat-card stat-info">
-            <div class="stat-icon"><i class="fas fa-notes-medical"></i></div>
-            <div class="stat-info">
-                <span class="stat-value"><?= number_format($reporte['totales']['total_atenciones']) ?></span>
-                <span class="stat-label">Atenciones por cancer</span>
-            </div>
-        </div>
-    </div>
-    <div class="col-md-3 col-6 mb-3">
-        <div class="stat-card stat-warning">
-            <div class="stat-icon"><i class="fas fa-layer-group"></i></div>
-            <div class="stat-info">
-                <span class="stat-value"><?= $reporte['totales']['secciones_con_datos'] ?>/<?= count($reporte['secciones']) ?></span>
-                <span class="stat-label">Secciones con datos</span>
-            </div>
-        </div>
-    </div>
-</div>
+
 
 <?php foreach ($reporte['secciones'] as $sec): ?>
 <div class="cnr-section-card">
