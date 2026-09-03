@@ -65,24 +65,111 @@
 require_once __DIR__ . '/../config.php';
 
 /* ============================================================
+ * VERSION DEL MOTOR (marcador de despliegue)
+ * ============================================================
+ * Se muestra en el reporte web (cabecera y panel de verificacion)
+ * para poder confirmar EN PANTALLA que el servidor esta ejecutando
+ * esta version y no una copia anterior (cache OPcache del hosting,
+ * archivo subido a otra ruta, etc.).
+ * Si el reporte no muestra este numero, esta corriendo un archivo
+ * viejo: vuelva a subir includes/cancer_data.php.
+ */
+define('CANCER_DATA_VERSION', '2026-09-03-r2');
+
+/** Version del motor de reporte de Cancer (para el badge del reporte). */
+function cancerDataVersion(): string {
+    return CANCER_DATA_VERSION;
+}
+
+/**
+ * Los 8 CASOS SQL de RPT06_03 (SECCION 17) como condiciones del DSL.
+ *
+ * Es la UNICA fuente de verdad de los 8 casos: la definicion de la
+ * seccion 17 (union de los 8), el conteo por caso del motor y el panel
+ * de verificacion contra la BD se construyen todos a partir de aqui,
+ * de modo que no puedan divergir entre si.
+ *
+ * Cada elemento equivale EXACTAMENTE a un SQL validado por el usuario:
+ *   Caso 1: codigo_item BETWEEN 'C000' AND 'C218' AND edad_reg>=18 AND tipo_edad='A'
+ *   Caso 2: codigo_item BETWEEN 'C23X' AND 'C809' AND edad_reg>=18 AND tipo_edad='A'
+ *   Caso 3: codigo_item BETWEEN 'C860' AND 'C900' AND edad_reg>=18 AND tipo_edad='A'
+ *   Caso 4: codigo_item BETWEEN 'C960' AND 'C962' AND edad_reg>=18 AND tipo_edad='A'
+ *   Caso 5: codigo_item BETWEEN 'C964' AND 'C97X' AND edad_reg>=18 AND tipo_edad='A'
+ *   Caso 6: codigo_item IN ('C80X','C900','C902','C903') AND edad_reg>=18 AND tipo_edad='A'
+ *   Caso 7: (codigo_item='C901' OR codigo_item BETWEEN 'C910' AND 'C959') AND valor_lab='1'
+ *   Caso 8: (codigo_item='C963' OR codigo_item BETWEEN 'C810' AND 'C859') AND valor_lab='1'
+ *
+ * NOTA: fg_tipo='CX' e Id_correlativo_Lab=1 son comunes a los 8 casos y se
+ * agregan al nivel superior (ver la seccion 17). Un mismo registro puede
+ * cumplir MAS DE UN caso (p.ej. C900 adulto esta en el Caso 3 y en el Caso 6):
+ * por eso el TOTAL de "Todo tipo de cancer" es la UNION (cada fila cuenta
+ * una sola vez), no la suma de los COUNT por caso.
+ *
+ * @return array<int, array{titulo:string, sql:string, cond:array}>
+ */
+function cnrRpt0603Casos(): array {
+    return [
+        1 => ['titulo' => 'Caso 1',
+              'sql'    => "codigo_item BETWEEN 'C000' AND 'C218' AND edad_reg>=18 AND tipo_edad='A'",
+              'cond'   => ['codEntre' => ['C000', 'C218'], 'edadA' => [18, null]]],
+        2 => ['titulo' => 'Caso 2',
+              'sql'    => "codigo_item BETWEEN 'C23X' AND 'C809' AND edad_reg>=18 AND tipo_edad='A'",
+              'cond'   => ['codEntre' => ['C23X', 'C809'], 'edadA' => [18, null]]],
+        3 => ['titulo' => 'Caso 3',
+              'sql'    => "codigo_item BETWEEN 'C860' AND 'C900' AND edad_reg>=18 AND tipo_edad='A'",
+              'cond'   => ['codEntre' => ['C860', 'C900'], 'edadA' => [18, null]]],
+        4 => ['titulo' => 'Caso 4',
+              'sql'    => "codigo_item BETWEEN 'C960' AND 'C962' AND edad_reg>=18 AND tipo_edad='A'",
+              'cond'   => ['codEntre' => ['C960', 'C962'], 'edadA' => [18, null]]],
+        5 => ['titulo' => 'Caso 5',
+              'sql'    => "codigo_item BETWEEN 'C964' AND 'C97X' AND edad_reg>=18 AND tipo_edad='A'",
+              'cond'   => ['codEntre' => ['C964', 'C97X'], 'edadA' => [18, null]]],
+        6 => ['titulo' => 'Caso 6',
+              'sql'    => "codigo_item IN ('C80X','C900','C902','C903') AND edad_reg>=18 AND tipo_edad='A'",
+              'cond'   => ['cod' => ['C80X', 'C900', 'C902', 'C903'], 'edadA' => [18, null]]],
+        7 => ['titulo' => 'Caso 7',
+              'sql'    => "(codigo_item='C901' OR codigo_item BETWEEN 'C910' AND 'C959') AND valor_lab='1'",
+              'cond'   => ['cualquieraDe' => [
+                  ['cod' => 'C901', 'vl' => '1'],
+                  ['codEntre' => ['C910', 'C959'], 'vl' => '1'],
+              ]]],
+        8 => ['titulo' => 'Caso 8',
+              'sql'    => "(codigo_item='C963' OR codigo_item BETWEEN 'C810' AND 'C859') AND valor_lab='1'",
+              'cond'   => ['cualquieraDe' => [
+                  ['cod' => 'C963', 'vl' => '1'],
+                  ['codEntre' => ['C810', 'C859'], 'vl' => '1'],
+              ]]],
+    ];
+}
+
+/* ============================================================
  * 1) PREDICADOS (mini-DSL que espeja las condiciones del T-SQL)
  * ============================================================ */
 
 /**
  * Normaliza una fila HIS traida de la tabla consolidada.
+ *
+ * IMPORTANTE (equivalencia con MySQL): la tabla usa la colacion
+ * utf8mb4_general_ci, donde TODA comparacion de texto (=, IN, BETWEEN,
+ * LIKE) es case-insensitive. Para que el matching PHP replique exactamente
+ * lo que devuelven los SQL validados (p.ej. los 8 casos de RPT06_03), los
+ * campos de codigo/diagnostico se normalizan a MAYUSCULAS aqui; las
+ * condiciones (cond) tambien se comparan en mayusculas en cnrCumple().
+ * Con datos ya en mayusculas (lo habitual en HIS) nada cambia; con datos
+ * en minusculas el reporte ahora cuenta igual que la BD.
  */
 function cnrFila(array $r): array {
     return [
         'cita'    => $r['Id_Cita'] !== null ? trim((string)$r['Id_Cita']) : '',
         'pac'     => $r['Id_Paciente'] !== null ? trim((string)$r['Id_Paciente']) : '',
-        'cod'     => $r['Codigo_Item'] !== null ? trim((string)$r['Codigo_Item']) : '',
-        'tip'     => $r['Tipo_Diagnostico'] !== null ? trim((string)$r['Tipo_Diagnostico']) : '',
-        'vl'      => $r['Valor_Lab'] !== null ? trim((string)$r['Valor_Lab']) : null,
+        'cod'     => $r['Codigo_Item'] !== null ? strtoupper(trim((string)$r['Codigo_Item'])) : '',
+        'tip'     => $r['Tipo_Diagnostico'] !== null ? strtoupper(trim((string)$r['Tipo_Diagnostico'])) : '',
+        'vl'      => $r['Valor_Lab'] !== null ? strtoupper(trim((string)$r['Valor_Lab'])) : null,
         'rownum'  => $r['Id_Correlativo_Lab'] !== null ? (int)$r['Id_Correlativo_Lab'] : null,
-        'sexo'    => $r['Id_Genero'] !== null ? trim((string)$r['Id_Genero']) : '',
+        'sexo'    => $r['Id_Genero'] !== null ? strtoupper(trim((string)$r['Id_Genero'])) : '',
         'edad'    => $r['Edad_Reg'] !== null ? (int)$r['Edad_Reg'] : null,
-        'tipEdad' => $r['Tipo_Edad'] !== null ? trim((string)$r['Tipo_Edad']) : '',
-        'fg'      => $r['Fg_Tipo'] !== null ? trim((string)$r['Fg_Tipo']) : '',
+        'tipEdad' => $r['Tipo_Edad'] !== null ? strtoupper(trim((string)$r['Tipo_Edad'])) : '',
+        'fg'      => $r['Fg_Tipo'] !== null ? strtoupper(trim((string)$r['Fg_Tipo'])) : '',
     ];
 }
 
@@ -114,22 +201,29 @@ function cnrFila(array $r): array {
 function cnrCumple(array $f, array $cond, array $ctx): bool {
     if (isset($cond['cod'])) {
         $cods = is_array($cond['cod']) ? $cond['cod'] : [$cond['cod']];
+        // CI: la fila ya viene en mayusculas (cnrFila); se comparan los
+        // codigos de la condicion tambien en mayusculas (= MySQL _ci).
+        $cods = array_map(fn($c) => strtoupper((string)$c), $cods);
         if (!in_array($f['cod'], $cods, true)) return false;
     }
     if (isset($cond['codPref'])) {
         $prefs = is_array($cond['codPref']) ? $cond['codPref'] : [$cond['codPref']];
         $ok = false;
         foreach ($prefs as $p) {
+            $p = strtoupper((string)$p);
             if ($p !== '' && strpos($f['cod'], $p) === 0) { $ok = true; break; }
         }
         if (!$ok) return false;
     }
     if (isset($cond['codEntre'])) {
-        [$min, $max] = $cond['codEntre'];
+        // BETWEEN de strings, igual que el T-SQL/MySQL (ci + trim ya aplicados)
+        $min = strtoupper((string)$cond['codEntre'][0]);
+        $max = strtoupper((string)$cond['codEntre'][1]);
         if ($f['cod'] === '' || $f['cod'] < $min || $f['cod'] > $max) return false;
     }
     if (isset($cond['tip'])) {
         $tips = is_array($cond['tip']) ? $cond['tip'] : [$cond['tip']];
+        $tips = array_map(fn($t) => strtoupper((string)$t), $tips);
         if (!in_array($f['tip'], $tips, true)) return false;
     }
     if (isset($cond['vl'])) {
@@ -137,6 +231,7 @@ function cnrCumple(array $f, array $cond, array $ctx): bool {
             if ($f['vl'] !== null) return false;
         } else {
             $vals = is_array($cond['vl']) ? $cond['vl'] : [$cond['vl']];
+            $vals = array_map(fn($v) => strtoupper((string)$v), $vals);
             if ($f['vl'] === null || !in_array($f['vl'], $vals, true)) return false;
         }
     }
@@ -144,7 +239,7 @@ function cnrCumple(array $f, array $cond, array $ctx): bool {
         if ($f['rownum'] === null || $f['rownum'] !== (int)$cond['rownum']) return false;
     }
     if (isset($cond['sexo'])) {
-        if ($f['sexo'] !== $cond['sexo']) return false;
+        if ($f['sexo'] !== strtoupper((string)$cond['sexo'])) return false;
     }
     if (isset($cond['edadA'])) {
         [$min, $max] = $cond['edadA'];
@@ -156,7 +251,7 @@ function cnrCumple(array $f, array $cond, array $ctx): bool {
         if (!cnrEsMenor18($f)) return false;
     }
     if (isset($cond['fgTipo'])) {
-        if ($f['fg'] !== $cond['fgTipo']) return false;
+        if ($f['fg'] !== strtoupper((string)$cond['fgTipo'])) return false;
     }
     if (isset($cond['citaTiene'])) {
         if (!cnrCitaTiene($ctx, $f['cita'], $cond['citaTiene'])) return false;
@@ -210,8 +305,10 @@ function cnrCandidatos(array $cond, array $porCod, array $porIni, int $total): a
     }
     $out = [];
     if (isset($cond['cod'])) {
+        // CI: los buckets se llenan con el cod ya en mayusculas (cnrFila);
+        // el lookup de la condicion se hace tambien en mayusculas.
         foreach ((array)$cond['cod'] as $c) {
-            foreach ($porCod[$c] ?? [] as $idx) $out[$idx] = true;
+            foreach ($porCod[strtoupper((string)$c)] ?? [] as $idx) $out[$idx] = true;
         }
         return array_keys($out);
     }
@@ -239,7 +336,20 @@ function cnrCandidatos(array $cond, array $porCod, array $porIni, int $total): a
     return array_keys($out);
 }
 
-/** Resuelve el grupo de edad (gedad) de una fila segun la definicion de la seccion. */
+/**
+ * Resuelve el grupo de edad (gedad) de una fila segun la definicion de la seccion.
+ *
+ * ULTIMO RECURSO (fix RPT06_03): las lineas de algunas secciones NO filtran
+ * edad en su WHERE (p.ej. Casos 7 y 8 de RPT06_03: leucemias/linfomas con
+ * valor_lab='1'). Si una de esas filas llega con Tipo_Edad NULL/vacia/'S'
+ * o Edad_Reg NULL (dato de baja calidad), antes se DESCARTABA silenciosamente
+ * y el TOTAL del reporte quedaba por debajo del COUNT(*) de los SQL
+ * validados. Ahora se clasifica:
+ *   - con Edad_Reg numerica: se interpreta en anios (banda adulta o <18a)
+ *   - sin edad: al primer grupo clasificable de la seccion (<18a)
+ * Solo aplica a filas que ya pasaron el WHERE de su linea, y devuelve null
+ * unicamente si la seccion no tiene ninguna banda donde ubicarlas.
+ */
 function cnrGedad(array $f, array $gedades): ?int {
     foreach ($gedades as $g) {
         if (!empty($g['menor18'])) {
@@ -254,6 +364,29 @@ function cnrGedad(array $f, array $gedades): ?int {
         if ($f['edad'] >= $min && ($max === null || $f['edad'] <= $max)) {
             return (int)$g['key'];
         }
+    }
+
+    /* ---- Ultimo recurso (ver docblock): no descartar la fila ---- */
+    if ($f['edad'] !== null) {
+        // Tipo_Edad anomala (NULL/'S'/''): interpretar Edad_Reg en anios,
+        // igual que hace el HIS al exportar la mayoria de tramas.
+        foreach ($gedades as $g) {
+            if (!empty($g['menor18'])) {
+                if ($f['edad'] < 18) return (int)$g['key'];
+                continue;
+            }
+            if (!isset($g['min'])) continue;
+            $min = $g['min'];
+            $max = $g['max'] ?? null;
+            if ($f['edad'] >= $min && ($max === null || $f['edad'] <= $max)) {
+                return (int)$g['key'];
+            }
+        }
+        return null; // la seccion no tiene banda para esa edad (p.ej. solo <18a)
+    }
+    // Sin edad utilizable: primer grupo clasificable de la seccion (<18a)
+    foreach ($gedades as $g) {
+        if (!empty($g['menor18']) || isset($g['min'])) return (int)$g['key'];
     }
     return null;
 }
@@ -680,28 +813,41 @@ function cancerSecciones(): array {
      * SECCION 17 - RPT06_03_CANCER_ADULTOS (us usp_TRAMA_BASE_CANCER_2026_RPT06_03_CANCER_ADULTOS)
      * ATENCIONES DE TODO TIPO DE CANCER ADULTO
      *
-     * SQL VALIDADO contra la BD (devuelve los datos correctos):
-     *   SELECT * FROM T_CONSOLIDADO_NUEVA_TRAMA_HISMINSA_DETALLADO
-     *   WHERE fg_tipo='CX'
-     *     AND ( ( ((codigo_item BETWEEN 'C000' AND 'C218')
-     *              OR (codigo_item BETWEEN 'C23X' AND 'C809')
-     *              OR (codigo_item BETWEEN 'C860' AND 'C900')
-     *              OR (codigo_item BETWEEN 'C960' AND 'C962')
-     *              OR (codigo_item BETWEEN 'C964' AND 'C97X')
-     *              OR codigo_item IN ('C80X','C900','C902','C903'))
-     *            AND edad_reg>=18 AND tipo_edad='A' )
-     *       OR  ( (codigo_item='C901' OR codigo_item BETWEEN 'C910' AND 'C959')
-     *             AND valor_lab='1' )
-     *       OR  ( (codigo_item='C963' OR codigo_item BETWEEN 'C810' AND 'C859')
-     *             AND valor_lab='1' ) )
-     *     AND Id_correlativo_Lab=1
+     * Los 8 SQL validados contra la BD (cada SELECT cuenta las filas de un
+     * caso; fg_tipo='CX' e Id_correlativo_Lab=1 son comunes a los 8):
+     *
+     *   Caso 1: codigo_item BETWEEN 'C000' AND 'C218'
+     *           AND edad_reg>=18 AND tipo_edad='A'
+     *   Caso 2: codigo_item BETWEEN 'C23X' AND 'C809'
+     *           AND edad_reg>=18 AND tipo_edad='A'
+     *   Caso 3: codigo_item BETWEEN 'C860' AND 'C900'
+     *           AND edad_reg>=18 AND tipo_edad='A'
+     *   Caso 4: codigo_item BETWEEN 'C960' AND 'C962'
+     *           AND edad_reg>=18 AND tipo_edad='A'
+     *   Caso 5: codigo_item BETWEEN 'C964' AND 'C97X'
+     *           AND edad_reg>=18 AND tipo_edad='A'
+     *   Caso 6: codigo_item IN ('C80X','C900','C902','C903')
+     *           AND edad_reg>=18 AND tipo_edad='A'
+     *   Caso 7: (codigo_item='C901' OR codigo_item BETWEEN 'C910' AND 'C959')
+     *           AND valor_lab='1'
+     *   Caso 8: (codigo_item='C963' OR codigo_item BETWEEN 'C810' AND 'C859')
+     *           AND valor_lab='1'
+     *
+     * ADAPTACION 1:1: la condicion se construye a partir de cnrRpt0603Casos()
+     * (fuente unica de los 8 casos), unidos con OR; los filtros comunes
+     * (fg_tipo='CX', Id_correlativo_Lab=1) van al nivel superior del cond.
+     * El TOTAL de la fila "Todo tipo de cancer" equivale exactamente al
+     * UNION de los 8 SELECT (cada fila cuenta una sola vez).
      *
      * Correcciones aplicadas (la version anterior mostraba datos incorrectos):
-     *   1) SE APLICA fg_tipo='CX': antes se omitia ("el catalogo local puede
-     *      variar") y se contaban filas de otros Fg_Tipo (DX, PX, ...).
-     *   2) SE ELIMINA la rama ['codPref' => 'C22'] ("cancer de higado referido"):
-     *      NO existe en el SQL validado e inflaba el total contando C22* sin
-     *      importar valor_lab ni edad.
+     *   1) fg_tipo='CX' obligatorio: antes se omitia y se contaban filas de
+     *      otros Fg_Tipo (DX, PX, ...).
+     *   2) Casos 7 y 8 SIN filtro de edad (el SQL solo exige valor_lab='1'):
+     *      abarcan tambien menores de 18 (columna <18a) y cualquier tipo_edad.
+     *   3) valor_lab='1' aplica a AMBAS ramas del OR de los Casos 7 y 8.
+     *   4) Motor endurecido para igualar la semantica MySQL (_ci): compara en
+     *      mayusculas y cnrGedad() ya no descarta filas con tipo_edad/edad
+     *      anomalas (antes el TOTAL quedaba por debajo del COUNT de los SQL).
      * ---------------------------------------------------------- */
     [
         'codigo'   => 'RPT06_03',
@@ -724,21 +870,14 @@ function cancerSecciones(): array {
         ],
         'filas' => [
             ['clave' => 1, 'c1' => 'Todo tipo de cancer',
-             'cond' => ['rownum' => 1, 'fgTipo' => 'CX', 'cualquieraDe' => [
-                 // Rama 1: CIE de cancer en adulto (edad_reg>=18 y tipo_edad='A')
-                 ['codEntre' => ['C000', 'C218'], 'edadA' => [18, null]],
-                 ['codEntre' => ['C23X', 'C809'], 'edadA' => [18, null]],
-                 ['codEntre' => ['C860', 'C900'], 'edadA' => [18, null]],
-                 ['codEntre' => ['C960', 'C962'], 'edadA' => [18, null]],
-                 ['codEntre' => ['C964', 'C97X'], 'edadA' => [18, null]],
-                 ['cod' => ['C80X', 'C900', 'C902', 'C903'], 'edadA' => [18, null]],
-                 // Rama 2: leucemias C901 / C910-C959 confirmadas (valor_lab='1')
-                 ['cod' => 'C901', 'vl' => '1'],
-                 ['codEntre' => ['C910', 'C959'], 'vl' => '1'],
-                 // Rama 3: linfomas C963 / C810-C859 confirmados (valor_lab='1')
-                 ['cod' => 'C963', 'vl' => '1'],
-                 ['codEntre' => ['C810', 'C859'], 'vl' => '1'],
-             ]]],
+             'cond' => [
+                 // Filtros comunes a los 8 casos
+                 'fgTipo' => 'CX',  // fg_tipo = 'CX'
+                 'rownum' => 1,     // Id_correlativo_Lab = 1
+                 // UNION de los 8 casos (ver cnrRpt0603Casos): cada fila
+                 // cuenta una sola vez aunque cumpla varios casos.
+                 'cualquieraDe' => array_values(array_column(cnrRpt0603Casos(), 'cond')),
+             ]],
         ],
     ],
 
@@ -1100,6 +1239,24 @@ function cancerEjecutarReporte(PDO $pdo, array $filtros): array {
             $totalSec['atendidos'] += $fo['total']['atendidos'];
         }
 
+        // ---- RPT06_03: conteo por cada uno de los 8 casos SQL ----
+        // Se calcula con las MISMAS filas que ya leyo el reporte (sin
+        // consultas extra) para el panel de verificacion contra la BD
+        // (ver cancerVerificarRPT0603 y reporte_cancer.php).
+        $casosRpt0603 = null;
+        if ($sec['codigo'] === 'RPT06_03') {
+            $casosRpt0603 = [];
+            foreach (cnrRpt0603Casos() as $ci => $caso) {
+                // cond del caso = filtros comunes + cond propia del caso
+                $cc = ['fgTipo' => 'CX', 'rownum' => 1] + $caso['cond'];
+                $n = 0;
+                foreach (cnrCandidatos($cc, $porCod, $porIni, $totalFilas) as $idx) {
+                    if (cnrCumple($filas[$idx], $cc, $ctx)) $n++;
+                }
+                $casosRpt0603[$ci] = $n;
+            }
+        }
+
         $seccionesOut[] = [
             'codigo'       => $sec['codigo'],
             'procedimiento'=> $sec['procedimiento'],
@@ -1114,6 +1271,7 @@ function cancerEjecutarReporte(PDO $pdo, array $filtros): array {
             'gedades'      => $sec['gedades'],
             'filas'        => $filasOut,
             'total'        => $totalSec,
+            'rpt0603_casos'=> $casosRpt0603, // int => COUNT por caso (solo RPT06_03)
         ];
 
         $totCasos += $totalSec['casos'];
@@ -1132,7 +1290,84 @@ function cancerEjecutarReporte(PDO $pdo, array $filtros): array {
             'secciones_con_datos' => count(array_filter($seccionesOut, fn($s) =>
                 ($s['medidas'][0] === 'atenciones' ? $s['total']['atenciones'] : $s['total']['casos']) > 0)),
         ],
+        'version'          => CANCER_DATA_VERSION,
         'filas_leidas'     => count($filas),
         'tiempo_ejecucion' => round(microtime(true) - $t0, 2),
     ];
+}
+
+/**
+ * VERIFICACION de RPT06_03 (SECCION 17) contra la base de datos.
+ *
+ * Ejecuta DIRECTAMENTE en MySQL los 8 COUNT de los casos SQL validados por
+ * el usuario (mas la UNION de los 8), con los mismos filtros activos del
+ * reporte (anio/mes/establecimiento) y tambien SIN filtros (como se corre
+ * en phpMyAdmin). El reporte web compara estos numeros con los conteos del
+ * motor PHP: si coinciden, el reporte es fiel a la BD; si no, identifica
+ * exactamente que caso diverge.
+ *
+ * Esto responde a la pregunta "TOTAL DE ATENCIONES=1 cuando debe ser 4":
+ *   - UNION con filtros  = lo que el reporte DEBE mostrar con esos filtros.
+ *   - UNION sin filtros  = lo que devuelven los 8 SQL corridos en phpMyAdmin
+ *                          (todos los anios/meses/establecimientos).
+ *   - Si "sin filtros" = 4 pero "con filtros" = 1, la diferencia es el
+ *     ALCANCE de los filtros (anio/mes/establecimiento), no un error del
+ *     reporte.
+ *   - Si "con filtros" = 4 pero el TOTAL del reporte = 1, el servidor esta
+ *     ejecutando una version anterior de cancer_data.php (revisar el badge
+ *     de version / volver a subir el archivo / cache OPcache).
+ *
+ * @param array $filtros ['anio'=>, 'mes'=>, 'establecimiento'=>]
+ * @return array ['casos'=>[1..8=>int], 'union_filtros'=>int, 'union_global'=>int, 'error'=>?string]
+ */
+function cancerVerificarRPT0603(PDO $pdo, array $filtros): array {
+    $tabla = 'T_CONSOLIDADO_NUEVA_TRAMA_HISMINSA_DETALLADO';
+    $out = ['casos' => [], 'union_filtros' => null, 'union_global' => null, 'error' => null];
+
+    // Filtros activos (identica semantica a los del fetch del reporte)
+    $where = ["1=1"];
+    $params = [];
+    if (!empty($filtros['anio'])) {
+        $where[] = "Anio = :anio";
+        $params[':anio'] = (string)$filtros['anio'];
+    }
+    if (!empty($filtros['mes'])) {
+        $where[] = cancerTieneColumnaMesInt($pdo) ? "Mes_Int = :mes" : "CAST(TRIM(Mes) AS UNSIGNED) = :mes";
+        $params[':mes'] = intval($filtros['mes']);
+    }
+    if (!empty($filtros['establecimiento'])) {
+        $where[] = "TRIM(Codigo_Unico) = :est";
+        $params[':est'] = (string)$filtros['establecimiento'];
+    }
+    $whereF = implode(' AND ', $where);
+
+    // Filtros comunes a los 8 casos (tal cual los SQL validados)
+    $base = "Fg_Tipo = 'CX' AND Id_Correlativo_Lab = 1";
+
+    try {
+        // COUNT de cada caso (con los filtros activos del reporte)
+        foreach (cnrRpt0603Casos() as $ci => $caso) {
+            $sql = "SELECT COUNT(*) FROM {$tabla}
+                    WHERE {$base} AND ({$caso['sql']}) AND {$whereF}";
+            $st = $pdo->prepare($sql);
+            $st->execute($params);
+            $out['casos'][$ci] = (int)$st->fetchColumn();
+        }
+        // UNION de los 8 casos (con filtros): equivale al TOTAL DE ATENCIONES
+        // de "Todo tipo de cancer" que debe mostrar el reporte.
+        $or = implode(' OR ', array_map(fn($c) => '(' . $c['sql'] . ')', cnrRpt0603Casos()));
+        $st = $pdo->prepare("SELECT COUNT(*) FROM {$tabla}
+                             WHERE {$base} AND ({$or}) AND {$whereF}");
+        $st->execute($params);
+        $out['union_filtros'] = (int)$st->fetchColumn();
+        // UNION SIN filtros: lo que devuelven los 8 SQL corridos en phpMyAdmin
+        // (sin anio/mes/establecimiento). Puede tardar en tablas muy grandes;
+        // si falla, el panel muestra el error sin romper el reporte.
+        $st = $pdo->prepare("SELECT COUNT(*) FROM {$tabla} WHERE {$base} AND ({$or})");
+        $st->execute();
+        $out['union_global'] = (int)$st->fetchColumn();
+    } catch (Throwable $e) {
+        $out['error'] = $e->getMessage();
+    }
+    return $out;
 }
