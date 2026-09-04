@@ -144,16 +144,19 @@ include 'includes/header.php';
 <!-- Pagina indice: 17 tarjetas -->
 <div class="row g-3">
     <?php foreach ($estrategias as $key => $est):
-        // ESNI y Cancer ahora tienen su propio reporte completo data-driven
-        // (reporte_esni.php / reporte_cancer.php) - reemplazan el flujo manual
-        // SQL Server + Excel ODBC de sus respectivos modulos.
-        $esAvanzado = in_array($key, ['esni', 'cancer']);
+        // ESNI, Cancer y Materno ahora tienen su propio reporte completo data-driven
+        // (reporte_esni.php / reporte_cancer.php / reporte_materno.php) - reemplazan
+        // el flujo manual SQL Server + Excel ODBC de sus respectivos modulos.
+        $esAvanzado = in_array($key, ['esni', 'cancer', 'materno']);
         if ($key === 'esni') {
             $href = 'reporte_esni.php';
-            $desc = 'Reporte Operacional completo (14 secciones A-VPH, data-driven)';
+            $desc = 'Reporte Operacional completo';
         } elseif ($key === 'cancer') {
             $href = 'reporte_cancer.php';
-            $desc = 'Reporte de Actividades de Prevencion y Control del Cancer (9 secciones, 1 click + Excel)';
+            $desc = 'Reporte de Actividades de Prevencion y Control del Cancer';
+        } elseif ($key === 'materno') {
+            $href = 'reporte_materno.php';
+            $desc = 'Reporte de Actividades de Salud Sexual y Reproductiva';
         } else {
             $href = 'reporte_operacionales.php?sub=' . $key;
             $desc = 'Atenciones y atendidos por establecimiento';
@@ -179,6 +182,12 @@ include 'includes/header.php';
 <?php elseif ($sub === 'cancer'):
     // Redirigir al reporte completo de Cancer (data-driven, 1 click)
     header('Location: reporte_cancer.php');
+    exit;
+?>
+
+<?php elseif ($sub === 'materno'):
+    // Redirigir al reporte completo de Materno (data-driven, 1 click)
+    header('Location: reporte_materno.php');
     exit;
 ?>
 

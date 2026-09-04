@@ -20,7 +20,7 @@ El sistema soporta dos roles:
 
 ## Estructura de Paginas
 
-### Paginas principales (9 modulos)
+### Paginas principales (11 modulos)
 
 | # | Modulo | Archivo | Roles | Descripcion |
 |---|--------|---------|-------|-------------|
@@ -30,10 +30,11 @@ El sistema soporta dos roles:
 | 04 | Control de Calidad | `control_calidad.php` | Todos | Reporte de observaciones encontradas en los datos consolidados. |
 | 05 | Reporte de Atenciones | `reporte_atenciones.php` | Todos | 4 sub-reportes: Atenciones y Atendidos, Produccion Diario, Produccion Mensual, Reporte 40A. |
 | 06 | Reportes Operacionales | `reporte_operacionales.php` | Todos | 17 sub-reportes por estrategia: Adolescente, Adulto, Adulto Mayor, Cancer, ESNI, Joven, Materno, Medicina Alternativa, Metaxenicas, Nino, No Transmisibles, Planificacion Familiar, Salud Bucal, Salud Mental, Salud Ocular, TBC, Zoonosis. |
-| 07 | **Reporte ESNI (Inmunizaciones)** | `reporte_esni.php` | Todos | **NUEVO** Reporte Operacional completo de Inmunizaciones con 14 secciones (A-VPH), data-driven, con exportacion a Excel. Reemplaza el flujo manual SQL Server + Excel. |
+| 07 | **Reporte ESNI (Inmunizaciones)** | `reporte_esni.php` | Todos | Reporte Operacional completo de Inmunizaciones con 14 secciones (A-VPH), data-driven, con exportacion a Excel. Reemplaza el flujo manual SQL Server + Excel. |
 | 08 | Importar Datos | `import.php` | Solo Admin | Carga de archivos ZIP (MaestroRegistrador, MaestroPersonal, MaestroPaciente, NominalTrama). |
-| 09 | **Configurar ESNI** | `esni_config.php` | Solo Admin | **NUEVO** Gestion data-driven de vacunas, dosis, grupos de edad, secciones, lineas y reglas de mapeo. Reemplaza los stored procedures T-SQL hard-codeados. |
-| 10 | Gestion de Usuarios | `usuarios.php` | Solo Admin | CRUD completo de usuarios: crear, editar, activar/desactivar, resetear clave, eliminar. |
+| 09 | **Configurar ESNI** | `esni_config.php` | Solo Admin | Gestion data-driven de vacunas, dosis, grupos de edad, secciones, lineas y reglas de mapeo. Reemplaza los stored procedures T-SQL hard-codeados. |
+| 10 | **Reporte MATERNO (Salud Sexual y Reproductiva)** | `reporte_materno.php` | Todos | **NUEVO** Reporte de Actividades de la Direccion de Salud Sexual y Reproductiva con 10 secciones (I-X), data-driven, 1 click + Excel. Reemplaza el flujo manual SQL Server + Excel ODBC. |
+| 11 | Gestion de Usuarios | `usuarios.php` | Solo Admin | CRUD completo de usuarios: crear, editar, activar/desactivar, resetear clave, eliminar. |
 
 ### Sub-paginas
 
@@ -70,8 +71,11 @@ El sistema soporta dos roles:
 |-- esni_config.php             # Pagina 09: Configurar ESNI (vacunas, dosis, reglas) [NUEVO]
 |-- esni_export.php             # Exportar reporte ESNI a Excel (.xlsx) [NUEVO]
 |-- install_esni.php            # Asistente instalacion modulo ESNI (eliminar despues) [NUEVO]
+|-- reporte_materno.php         # Pagina 10: Reporte MATERNO - 10 secciones I-X data-driven [NUEVO]
+|-- materno_export.php          # Exportar reporte MATERNO a la plantilla oficial .xlsx [NUEVO]
+|-- install_materno.php         # Asistente instalacion modulo MATERNO (indices; eliminar despues) [NUEVO]
 |-- import.php                  # Pagina 08: Importar Datos (admin)
-|-- usuarios.php                # Pagina 10: Gestion de Usuarios (admin)
+|-- usuarios.php                # Pagina 11: Gestion de Usuarios (admin)
 |-- log.php                     # Log de auditoria
 |-- process.php                 # Procesamiento de consolidacion
 |-- export_excel.php            # Exportar a Excel
@@ -79,10 +83,13 @@ El sistema soporta dos roles:
 |-- install.php                 # Asistente de instalacion (eliminar despues)
 |-- api_estado_consolidacion.php
 |-- INSTALL_esni.md             # Documentacion detallada del modulo ESNI [NUEVO]
+|-- INSTALL_materno.md          # Documentacion detallada del modulo MATERNO [NUEVO]
 |-- includes/
 |   |-- auth.php                # Autenticacion y verificacion de roles
 |   |-- functions.php           # Funciones comunes (consolidacion, importacion, etc.)
 |   |-- esni_data.php           # Motor de reglas data-driven ESNI [NUEVO]
+|   |-- materno_data.php        # Motor de reglas data-driven MATERNO (10 secciones I-X) [NUEVO]
+|   |-- materno_render.php      # Render web + mapa de celdas del export MATERNO [NUEVO]
 |   |-- header.php              # Navbar reorganizado con dropdowns
 |   |-- footer.php              # Footer comun
 |   `-- ExcelWriter.php         # Generador de Excel
@@ -95,7 +102,7 @@ El sistema soporta dos roles:
 `-- uploads/                    # Archivos subidos
 ```
 
-## Modulo ESNI (NUEVO)
+## Modulo ESNI
 
 Reemplaza el flujo manual anterior (SQL Server + 4 archivos .txt + Excel con conexion ODBC) por una solucion web data-driven.
 
@@ -118,6 +125,29 @@ Reemplaza el flujo manual anterior (SQL Server + 4 archivos .txt + Excel con con
 - Filtros dinamicos por anio, mes, EE.SS., departamento, profesional
 
 Ver [INSTALL_esni.md](INSTALL_esni.md) para instrucciones detalladas de instalacion y uso.
+
+## Modulo MATERNO (v4.0)
+
+Reemplaza el flujo manual anterior (SQL Server + 3 archivos .txt + Excel con conexion ODBC) por una solucion web data-driven, igual que ESNI y Cancer.
+
+**Flujo anterior (4 pasos manuales):**
+1. SQL Server: ejecutar `01 Creacion tablas iniciales`
+2. SQL Server: ejecutar `02 Creacion tablas consolidacion`
+3. SQL Server: ejecutar `03 Creacion de Procedimientos`
+4. Excel: abrir `Reporte_Actividades_Materno.xlsx` y refrescar conexion ODBC
+
+**Flujo nuevo (1 click):**
+- Entrar a IntelHIS -> Reportes Operacionales -> MATERNO -> Generar Reporte
+- (Opcional) Exportar Excel (llena la plantilla oficial con el mismo layout)
+
+**Ventajas:**
+- No requiere SQL Server (usa la misma tabla consolidada MySQL que ESNI y Cancer)
+- No requiere Excel con conexion ODBC (exporta directamente desde la web)
+- 10 secciones (I-X) con el mismo layout que el Excel oficial (12 bloques)
+- Reglas por ocurrencia (1o/2o/3o...), trimestre por FUR y minimos (CONTROLADA >= 6)
+- Modo auditoria "Ver condiciones SQL" para comparar con el archivo 03 y ajustar en 1 solo archivo
+
+Ver [INSTALL_materno.md](INSTALL_materno.md) para instrucciones detalladas de instalacion y uso.
 
 ## Base de Datos
 
@@ -188,6 +218,8 @@ define('MAX_FILE_SIZE', 100 * 1024 * 1024);  // 100 MB
 7. **Auditoria:** Revisar `log.php` para auditoria de operaciones.
 
 ## Version
+
+**v4.0.0** - Modulo MATERNO data-driven: reemplaza el flujo manual SQL Server + Excel ODBC por una solucion web completa. Incluye motor de reglas en PHP con DSL auditable (10 secciones I-X = 12 bloques, 112 lineas de reporte), reglas por ocurrencia/trimestre/conteo minimo, pagina de reporte 1 click con panel de auditoria de condiciones, exportacion a la plantilla oficial y asistente de indices.
 
 **v3.0.0** - Modulo ESNI data-driven: reemplaza el flujo manual SQL Server + Excel por una solucion web completa. Incluye 7 tablas de configuracion (ESNI_*), motor de reglas en PHP, pagina de reporte con 14 secciones (A-VPH), pagina admin de configuracion, y exportacion a Excel.
 
