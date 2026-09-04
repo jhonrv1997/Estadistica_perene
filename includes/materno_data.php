@@ -3,98 +3,101 @@
  * Sistema de Gestion de Datos HIS (IntelHIS)
  * Modulo MATERNO - Motor de reporte data-driven (includes/materno_data.php)
  *
- * REEMPLAZA EL FLUJO MANUAL del Modulo de Materno:
- *   1) SQL Server: ejecutar "01 Creacion tablas iniciales"     (DimMaterno2023_*)
- *   2) SQL Server: ejecutar "02 Creacion tablas consolidacion" (TRAMA_BASE_MATERNO_2023_RPT_*)
- *   3) SQL Server: ejecutar "03 Creacion de Procedimientos"    (usp RPT_01..RPT_10)
- *   4) Excel:      abrir "Reporte_Actividades_Materno.xlsx" y refrescar conexion ODBC
+ * ADAPTACION FIEL del archivo "03 Creacion de Procedimientos.txt"
+ * (procedimientos usp_TRAMA_BASE_MATERNO_2023_RPT_01..RPT_10) sobre la tabla
+ * consolidada MySQL T_CONSOLIDADO_NUEVA_TRAMA_HISMINSA_DETALLADO.
  *
- * FLUJO NUEVO (1 click):
- *   Reportes Operacionales -> MATERNO -> [Generar Reporte]
- *   (Opcional) [Exportar Excel] -> llena la plantilla oficial
- *   "uploads/Reporte_Actividades_Materno.xlsx" con los mismos datos (materno_export.php).
+ * El archivo original NO estaba disponible cuando se migro el modulo (la
+ * version anterior de este archivo lo declaraba en sus "NOTAS DE ADAPTACION"
+ * y usaba codigos HIS-MINSA estimados). Esta version reemplaza TODAS las
+ * condiciones por las del archivo 03, categoria por categoria:
  *
- * El motor adapta la logica de los procedimientos del archivo "03 Creacion de
- * Procedimientos" (RPT_01_APN_REENFOCADA ... RPT_10_CONSEJERIA) y la ejecuta
- * contra la tabla consolidada MySQL T_CONSOLIDADO_NUEVA_TRAMA_HISMINSA_DETALLADO
- * (la misma que usan los modulos ESNI y CANCER). El layout replica el Excel
- * "Reporte_Actividades_Materno.xlsx" (10 secciones I-X).
+ *   I    RPT_01_APN_REENFOCADA        (25 categorias + Total calculado)
+ *   II   RPT_02_BIENESTAR             (6 categorias)
+ *   III  RPT_03_ANEMIA                (11 categorias)
+ *   IV   RPT_04_COMPLICACIONES        (15 filas)
+ *   V    RPT_05_MORBILIDAD_RN         (7 filas)
+ *   VI   RPT_06_ADMIN_MICRONUT        (10 categorias)
+ *   VII  RPT_07_PUERPERIO             (3 categorias)
+ *   VIII RPT_08_VISITA                (2 filas x 3 grupos etareos)
+ *   IX-1 RPT_09_1_TRANSMISION_VERT    (21 categorias)
+ *   IX-2 RPT_09_2_TRANSMISION_VERT    (6 categorias)
+ *   IX-3 RPT_09_3_TRANSMISION_VERT    (4 categorias; sin zona en la plantilla)
+ *   X    RPT_10_CONSEJERIA            (3 categorias)
  *
- * MAPEO DE COLUMNAS (TRAMAHIS SQL Server -> tabla consolidada MySQL):
- *   id_cita        -> Id_Cita
- *   renaes         -> Codigo_Unico
- *   id_persona     -> Id_Paciente
- *   aniomes        -> Anio + Mes
- *   fichafam       -> Ficha_Familiar
- *   ubigeo         -> Ubigueo_Establecimiento
- *   edad_reg       -> Edad_Reg
- *   id_tipedad_reg -> Tipo_Edad            ('D','M','A')
- *   id_genero      -> Id_Genero            ('F','M')
- *   id_etnia (et)  -> Id_Etnia
- *   id_financiador -> Id_Financiador
- *   id_profesional -> Id_Personal
- *   pais           -> Id_Pais
- *   id_ups         -> Id_Ups
- *   cod_item       -> Codigo_Item
- *   valor_lab      -> Valor_Lab
- *   fg_tipo        -> Fg_Tipo              ('CX','DX','PX','CP',...)
- *   fecha_atencion -> Fecha_Atencion       [adicional: calculo de trimestre por FUR]
- *   FUR            -> Fecha_Ultima_Regla   [adicional: edad gestacional]
- *   hemoglobina    -> Hemoglobina          [adicional: severidad de anemia]
- *   id_otra_cond   -> Id_Otra_Condicion / Descripcion_Otra_Condicion
- *                    ('GESTANTE', 'PUERPERA', ...)
+ * MAPEO DE COLUMNAS (TRAMAHIS_DTSG SQL Server -> tabla consolidada MySQL):
+ *   id_cita         -> Id_Cita
+ *   id_tipitem      -> Tipo_Diagnostico      ('D','P','R','C')
+ *   cod_item        -> Codigo_Item
+ *   cod_item_f      -> (sin columna) se replica con prefijo CIE de 3 letras
+ *                      (cod_item_f in ('O44','O45') == Codigo_Item LIKE 'O44%')
+ *   valor_lab       -> Valor_Lab
+ *   I_ROWNUM_LAB    -> Id_Correlativo_Lab
+ *   id_genero       -> Id_Genero             ('F','M')
+ *   edad_reg        -> Edad_Reg
+ *   id_tipedad_reg  -> Tipo_Edad             ('D','M','A')
+ *   renaes          -> Codigo_Unico
+ *   periodo         -> Anio + Mes (filtro web del reporte)
  *
- * ESTRUCTURA DEL REPORTE (10 secciones = 12 bloques, como el Excel oficial):
- *   I    RPT_01_APN_REENFOCADA      25 columnas x 4 grupos etareos + TOTAL
- *   II   RPT_02_BIENESTAR             6 columnas x 4 grupos etareos + TOTAL
- *   III  RPT_03_ANEMIA               11 columnas x 4 grupos etareos + TOTAL
- *   IV   RPT_04_COMPLICACIONES       15 filas (complicaciones) x TOTAL + 4 grupos
- *   V    RPT_05_MORBILIDAD_RN         7 filas (causas RN) x N (una columna)
- *   VI   RPT_06_ADMIN_MICRONUT       10 columnas x 4 grupos etareos + TOTAL
- *   VII  RPT_07_PUERPERIO             3 columnas x 4 grupos etareos + TOTAL
- *   VIII RPT_08_VISITA                2 filas (gestante/puerpera) x 3 grupos
- *   IX-1 RPT_09_1_TRANSMISION_VERT   21 columnas x 4 grupos etareos + TOTAL
- *   IX-2 RPT_09_2_TRANSMISION_VERT    6 columnas x 4 grupos etareos + TOTAL
- *   IX-3 RPT_09_3_TRANSMISION_VERT    4 columnas (sin zona en la plantilla; web only)
- *   X    RPT_10_CONSEJERIA            3 columnas x 4 grupos etareos + TOTAL
+ * REGLA DE CONTEO (regla 'filas'): el T-SQL inserta en cada tabla
+ * TRAMA_BASE_MATERNO_*_NOMINAL UNA FILA POR CADA FILA de TRAMAHIS_DTSG que
+ * cumple el WHERE de la categoria y luego consolida con COUNT(*). El motor
+ * replica exactamente eso: cada FILA HIS que cumple la condicion cuenta 1
+ * en su grupo etareo. NO hay dedup por cita ni reglas de ocurrencia.
  *
- * GRUPOS ETAREOS (DimMaterno2023_Gedad):
- *   1 = '<12 a.'    2 = '12 - 17 a.'    3 = '18 - 29 a.'    4 = '30 - 59 a.'
+ * EL "N-ESIMO" VIENE EN VALOR_LAB (no se calcula): en el archivo 03 el numero
+ * de atencion / entrega / sesion / monitoreo / tamizaje / ecografia viene
+ * codificado en valor_lab del item HIS:
+ *   - Z3491/Z3492/Z3493 y Z3591/Z3592/Z3593: valor '1'..'14' = N° atencion
+ *     prenatal ('6' = gestante CONTROLADA; 'TA' con I_ROWNUM_LAB=3 = tamizaje
+ *     para la atencion prenatal reenfocada).
+ *   - 76817/76805 (ecografia): valor '1'/'2'/'3' = 1°/2°/3° ecografia.
+ *   - 59020/59025 (monitoreo fetal): valor '1'/'2' = 1°/2° monitoreo.
+ *   - 99412.01/99412.02: valor '1' = atendida/1°, '6' = preparada/6°.
+ *   - 99199.26 (sulfato ferroso): '1'/'6' = 1°/6° entrega; 'TA' = puerpera.
+ *   - 99199.18 (acido folico), 59401.05 (calcio), 85018 (hemoglobina),
+ *     U1692/59401.06 (plan de parto), 90714/90744/90746 (vacunas): idem.
+ *   - O990: valor 'LEV'/'MOD'/'SEV' (D) = anemia leve/moderada/severa;
+ *     valor 'PR' (R) = recuperada.
+ *   - Laboratorios IX: valor 'RP' = reactivo; 99401.33/99402.05 (consejeria)
+ *     valor '1' = 1° prueba, '2' = 2° prueba.
+ *   - 59430 (puerperio): valor '1' = atendida, '2' = controlada.
  *
- * REGLAS DE CONTEO (adaptan la logica "N-ésima atencion/entrega" del archivo 03):
- *   simple        : cada CITA que cumple cuenta 1 vez en su grupo etareo
- *   trimestre N   : cuenta la cita si la edad gestacional (por Fecha_Ultima_Regla)
- *                   cae en el trimestre N (I: <14 sem, II: 14-27.6, III: >=28 sem)
- *   ocurrencia N  : del paciente, solo la N-esima cita que cumple (por fecha) cuenta
- *   ocurrenciaMin N: pacientes con N o mas citas que cumplen: la N-esima cuenta
- *                    (para filas "5° a +", "6° ENTREGA", etc.)
- *   conteoMinimo N: pacientes con N o mas citas que cumplen cuentan 1 vez
- *                    (para "Gestante CONTROLADA": >= 6 atenciones prenatales)
- *   calc          : columna calculada = suma de otras columnas (como la columna
- *                   "Total" de Gestante Atendida en el Excel: =SUM(C:E))
+ * TRIMESTRE GESTACIONAL (seccion IX-1): lo da el CODIGO, no la FUR:
+ *   Z3491/Z3591 = I Trim, Z3492/Z3592 = II Trim, Z3493/Z3593 = III Trim,
+ *   o Z359/Z349 con valor_lab 1/2/3 e I_ROWNUM_LAB=1. 1° vs 2° tamizaje =
+ *   Tipo_Diagnostico 'D' (definitivo) vs 'R' (repetido), como en el CASE.
  *
- * NOTAS DE ADAPTACION (desviaciones documentadas respecto al T-SQL original):
- *   - El archivo "03 Creacion de Procedimientos.txt" del modulo Materno NO fue
- *     adjuntado al migrar; las condiciones iniciales por categoria usan los
- *     codigos HIS-MINSA estandar del paquete materno (Z32/Z34/Z35 APN, 88141 PAP,
- *     85018 Hb, O00-O9A complicaciones/parto/puerperio, P05-P39 morbilidad RN,
- *     90715/90714/90744/90658 inmunizaciones, etc.). TODAS las condiciones estan
- *     centralizadas en maternoSecciones() con un DSL legible y auditable: use el
- *     boton "Ver condiciones SQL" del reporte web para compararlas con su archivo
- *     03 y ajustarlas en un solo lugar.
- *   - El conteo es por CITA (igual que las tablas TRAMA_*_NOMINAL del archivo 02,
- *     que tienen una fila por id_cita); los totales consolidan COUNT(casos).
- *   - periodo >= '202301' del T-SQL se convierte en el filtro web de Anio/Mes.
- *   - La fila TOTAL de cada seccion es la suma de los 4 grupos etareos (la
- *     plantilla calcula lo mismo con =SUM).
- *   - La plantilla oficial no tiene zona de datos para RPT_09_3 (prueba rapida
- *     VIH en trabajo de parto / aborto): en el flujo ODBC original esas 4
- *     categorias quedaban siempre en 0. Se muestran en la web y NO se exportan.
+ * GRUPOS ETAREOS (CASE gedad del T-SQL):
+ *   1 = 10-11 a.   2 = 12-17 a.   3 = 18-29 a.   4 = 30-59 a.
+ *   (RPT_05: recien nacidos, Tipo_Edad 'D' y 1-29 dias -> columna "N°")
+ *
+ * NOTAS DE ADAPTACION (desviaciones documentadas):
+ *   - periodo >= '20230101' del T-SQL se convierte en los filtros web de
+ *     Anio/Mes/Establecimiento (mismos datos, distinta presentacion).
+ *   - RPT_03 (#EMBARAZO y #ANEMIA): el T-SQL escribe "(A) OR (B) AND filtros"
+ *     que por precedencia de AND/OR deja la rama A sin filtros; aqui los
+ *     filtros se aplican a ambas ramas porque el resultado final es identico
+ *     (los SELECT de las tablas nominales re-aplican todos los filtros a
+ *     nivel de fila: sexo, edad y periodo).
+ *   - RPT_04/RPT_01: la tabla #GEST usa EXISTS(valor_lab='G'); las filas con
+ *     valor 'G' pueden estar en cualquier codigo, por eso la consulta base
+ *     trae tambien todas las filas con Valor_Lab='G'.
+ *   - RPT_06: se replica la exclusion "id_cita NOT IN (select ... #ANEMIA)"
+ *     (citas con diagnostico O990) mediante el predicado 'citaNoTiene'.
+ *   - RPT_08/RPT_09_2 usan EXISTS sobre la cita (#VISITA/#PUERPERAS) =>
+ *     predicado 'citaTiene' / 'citaTieneTodo'.
+ *   - La fila TOTAL de cada seccion es la suma de los grupos etareos (como la
+ *     plantilla con =SUM). La columna "Gestante Atendida Total" de la seccion
+ *     I es calculada = I + II + III Trim (la plantilla usa =SUM(C:E)).
+ *   - RPT_09_3 (1° prueba rapida VIH en trabajo de parto / aborto) no tiene
+ *     zona de datos en la plantilla oficial: se muestra en la web y NO se
+ *     exporta al Excel (igual que en el flujo ODBC original, quedaba en 0).
  */
 
 require_once __DIR__ . '/../config.php';
 
-define('MATERNO_DATA_VERSION', '2026-09-04-r1');
+define('MATERNO_DATA_VERSION', '2026-09-04-r2');
 
 /** Version del motor de reporte de Materno (para el badge del reporte). */
 function maternoDataVersion(): string {
@@ -108,14 +111,18 @@ function maternoDataVersion(): string {
 /**
  * Normaliza una fila HIS traida de la tabla consolidada.
  *
- * El modulo Materno necesita, ademas de los campos comunes (codigo, valor lab,
- * sexo, edad), tres campos adicionales que los modulos ESNI/Cancer no usaban:
- *   - Fecha_Atencion + Fecha_Ultima_Regla -> edad gestacional (trimestres)
- *   - Hemoglobina                         -> severidad de anemia
+ * El modulo Materno necesita, ademas de los campos comunes (codigo, valor
+ * lab, sexo, edad), tres campos adicionales que los modulos ESNI/Cancer no
+ * usaban:
+ *   - Fecha_Atencion + Fecha_Ultima_Regla -> edad gestacional (informativa)
+ *   - Hemoglobina                         -> severidad de anemia (informativa)
  *   - Descripcion_Otra_Condicion          -> 'GESTANTE' / 'PUERPERA'
  *
- * Como en cancer_data.php, los textos se normalizan a MAYUSCULAS para replicar
- * la colacion case-insensitive de MySQL en el matching PHP.
+ * Los textos se normalizan a MAYUSCULAS para replicar la colacion
+ * case-insensitive de MySQL en el matching PHP. La regla 'filas' del archivo
+ * 03 NO usa FUR ni hemoglobina (el trimestre lo da el codigo Z y la severidad
+ * el valor 'LEV'/'MOD'/'SEV'/'PR' de O990), pero se conservan por si el
+ * usuario quiere auditar esos campos.
  */
 function mtrFila(array $r): array {
     $otraCondRaw = isset($r['Descripcion_Otra_Condicion']) ? $r['Descripcion_Otra_Condicion'] : null;
@@ -143,6 +150,7 @@ function mtrFila(array $r): array {
 /**
  * Edad gestacional en semanas (float) de una fila, segun
  * Fecha_Atencion - Fecha_Ultima_Regla. Null si no se puede calcular.
+ * (Informativa: la regla 'filas' del archivo 03 no la usa.)
  */
 function mtrEdadGestacional(array $f): ?float {
     if ($f['fecha'] === null || $f['fur'] === null) return null;
@@ -151,7 +159,7 @@ function mtrEdadGestacional(array $f): ?float {
     return $dias / 7.0;
 }
 
-/** Trimestre gestacional (1, 2 o 3) de una fila segun su EG; null si no calculable. */
+/** Trimestre gestacional (1, 2 o 3) por FUR (informativo; el archivo 03 usa el codigo Z). */
 function mtrTrimestreEG(array $f): ?int {
     $eg = mtrEdadGestacional($f);
     if ($eg === null) return null;
@@ -184,23 +192,31 @@ function mtrEsPuerpera(array $f): bool {
  * Claves admitidas (se combinan con AND):
  *   'cod'         => '85018' | ['Z321','Z320']   Codigo_Item en la lista (exacto)
  *   'codPref'     => 'O44' | ['O44','O45']       Codigo_Item LIKE 'O44%'
- *   'codEntre'    => ['O10','O16']               BETWEEN de strings (como el T-SQL)
- *   'tip'         => 'D' | ['P','R']             Tipo_Diagnostico
+ *                                                   (equivale a cod_item_f = 'O44')
+ *   'codEntre'    => ['O10','O16Z']               BETWEEN de strings (como el T-SQL)
+ *   'tip'         => 'D' | ['P','R']             Tipo_Diagnostico (id_tipitem)
  *   'vl'          => 'NULL' | '1' | ['1','A']    Valor_Lab (NULL = IS NULL)
+ *   'vlVacia'     => true                        Valor_Lab IS NULL o ''
+ *   'vlNum'       => [6, null]                   TRY_CONVERT(int, valor_lab) >= 6
+ *                                                   (rango numerico, como el T-SQL)
  *   'vlPresente'  => true                        Valor_Lab IS NOT NULL
- *   'rownum'      => 1                           Id_Correlativo_Lab = N
+ *   'rownum'      => 1                           Id_Correlativo_Lab = N (I_ROWNUM_LAB)
  *   'sexo'        => 'F' | 'M'                   Id_Genero
  *   'edadA'       => [12, 17] | [30, null]       Tipo_Edad='A' y Edad_Reg en rango
+ *   'edadD'       => [1, 29]                     Tipo_Edad='D' y Edad_Reg en rango
  *   'fgTipo'      => 'CX'                        Fg_Tipo
  *   'gestante'    => true                        Descripcion_Otra_Condicion GESTANTE
  *   'puerpera'    => true                        Descripcion_Otra_Condicion PUERPERA
  *   'otraCond'    => 'NULL' | 'GESTANTE'         igualdad exacta / IS NULL
  *   'hb'          => [10, 10.9] | [7, null]      Hemoglobina presente y en rango
  *   'hbVacia'     => true                        Hemoglobina IS NULL/vacia
- *   'citaTiene'   => <predicado>                 alguna fila de la MISMA cita lo cumple
- *   'citaTieneTodo' => [<pred>, ...]             todas existen en la cita (AND)
- *   'pacTiene'    => <predicado>                 alguna cita del MISMO paciente lo cumple
- *   'pacTieneTodo'  => [<pred>, ...]             todas existen en alguna cita del paciente
+ *   'citaTiene'   => <predicado>                 EXISTS: alguna fila de la MISMA
+ *                                                   cita lo cumple (tabla #temp)
+ *   'citaTieneTodo' => [<pred>, ...]             AND de EXISTS sobre la cita
+ *   'citaNoTiene' => <predicado>                 NOT EXISTS sobre la cita
+ *                                                   ("id_cita NOT IN (select...)")
+ *   'pacTiene'    => <predicado>                 alguna cita del MISMO paciente
+ *   'pacTieneTodo'  => [<pred>, ...]             todas existen en alguna cita
  *   'cualquieraDe'  => [<pred>, ...]             OR de predicados sobre la misma fila
  *
  * $ctx: contexto de ejecucion (filas + indices porCita/porPaciente).
@@ -239,6 +255,18 @@ function mtrCumple(array $f, array $cond, array $ctx): bool {
             if ($f['vl'] === null || !in_array($f['vl'], $vals, true)) return false;
         }
     }
+    if (!empty($cond['vlVacia'])) {
+        // como el T-SQL: (valor_lab in ('') or valor_lab is null)  [#PAP del RPT_01]
+        if ($f['vl'] !== null && $f['vl'] !== '') return false;
+    }
+    if (isset($cond['vlNum'])) {
+        // como TRY_CONVERT(int, valor_lab) del T-SQL [Temporal11 del RPT_01]
+        [$min, $max] = $cond['vlNum'];
+        if ($f['vl'] === null || !is_numeric($f['vl'])) return false;
+        $v = (float)$f['vl'];
+        if ($v < (float)$min) return false;
+        if ($max !== null && $v > (float)$max) return false;
+    }
     if (!empty($cond['vlPresente'])) {
         if ($f['vl'] === null || $f['vl'] === '') return false;
     }
@@ -251,6 +279,13 @@ function mtrCumple(array $f, array $cond, array $ctx): bool {
     if (isset($cond['edadA'])) {
         [$min, $max] = $cond['edadA'];
         if ($f['tipEdad'] !== 'A' || $f['edad'] === null) return false;
+        if ($f['edad'] < $min) return false;
+        if ($max !== null && $f['edad'] > $max) return false;
+    }
+    if (isset($cond['edadD'])) {
+        // RPT_05: id_tipedad_reg='D' and edad_reg between 1 and 29
+        [$min, $max] = $cond['edadD'];
+        if ($f['tipEdad'] !== 'D' || $f['edad'] === null) return false;
         if ($f['edad'] < $min) return false;
         if ($max !== null && $f['edad'] > $max) return false;
     }
@@ -294,6 +329,10 @@ function mtrCumple(array $f, array $cond, array $ctx): bool {
             if (!mtrCitaTiene($ctx, $f['cita'], $sub)) return false;
         }
     }
+    if (isset($cond['citaNoTiene'])) {
+        // "id_cita not in (select id_cita from #ANEMIA)" del RPT_06
+        if (mtrCitaTiene($ctx, $f['cita'], $cond['citaNoTiene'])) return false;
+    }
     if (isset($cond['pacTiene'])) {
         if (!mtrPacTiene($ctx, $f['pac'], $cond['pacTiene'])) return false;
     }
@@ -334,10 +373,9 @@ function mtrPacTiene(array $ctx, string $pac, array $cond): bool {
  * Resuelve el grupo etareo (1..4) de una fila. Null si esta fuera de los
  * grupos del reporte (p.ej. 60+ anos: el reporte materno solo llega a 59).
  *
- *   1 = '<12 a.'  : Tipo_Edad 'D'/'M' o ('A' y edad < 12)
- *   2 = '12 - 17 a.'
- *   3 = '18 - 29 a.'
- *   4 = '30 - 59 a.'
+ * CASE gedad del T-SQL (con Tipo_Edad='A' y 10-59):
+ *   1 = 10-11   2 = 12-17   3 = 18-29   4 = 30-59
+ * RPT_05 (RN, Tipo_Edad='D'): todo cuenta en el grupo 1 (columna "N°").
  */
 function mtrGedad(array $f): ?int {
     if ($f['tipEdad'] === 'D' || $f['tipEdad'] === 'M') return 1;
@@ -364,7 +402,7 @@ function maternoCondicionSQL(array $cond, int $nivel = 0): string {
                 break;
             case 'codPref':
                 $lista = is_array($v) ? $v : [$v];
-                $partes[] = "(" . implode(' OR ', array_map(fn($x) => "codigo_item LIKE '" . $x . "%'", $lista)) . ")";
+                $partes[] = "(" . implode(' OR ', array_map(fn($x) => "codigo_item LIKE '" . $x . "%' (= cod_item_f)", $lista)) . ")";
                 break;
             case 'codEntre':
                 $partes[] = "codigo_item BETWEEN '{$v[0]}' AND '{$v[1]}'";
@@ -380,17 +418,26 @@ function maternoCondicionSQL(array $cond, int $nivel = 0): string {
                     $partes[] = "valor_lab IN (" . implode(', ', array_map(fn($x) => "'$x'", $lista)) . ")";
                 }
                 break;
+            case 'vlVacia':
+                if ($v) $partes[] = "(valor_lab IS NULL OR valor_lab = '')";
+                break;
+            case 'vlNum':
+                $partes[] = "TRY_CONVERT(int, valor_lab) BETWEEN {$v[0]} AND " . ($v[1] ?? 999);
+                break;
             case 'vlPresente':
                 if ($v) $partes[] = "valor_lab IS NOT NULL";
                 break;
             case 'rownum':
-                $partes[] = "Id_Correlativo_Lab = $v";
+                $partes[] = "I_ROWNUM_LAB = $v";
                 break;
             case 'sexo':
                 $partes[] = "id_genero = '$v'";
                 break;
             case 'edadA':
                 $partes[] = "tipo_edad = 'A' AND edad_reg BETWEEN {$v[0]} AND " . ($v[1] ?? 999);
+                break;
+            case 'edadD':
+                $partes[] = "tipo_edad = 'D' AND edad_reg BETWEEN {$v[0]} AND " . ($v[1] ?? 999);
                 break;
             case 'fgTipo':
                 $partes[] = "fg_tipo = '$v'";
@@ -417,6 +464,9 @@ function maternoCondicionSQL(array $cond, int $nivel = 0): string {
                 $sub = implode(' AND ', array_map(fn($s) => "EXISTS (misma cita: " . maternoCondicionSQL($s, $nivel + 1) . ")", $v));
                 $partes[] = "($sub)";
                 break;
+            case 'citaNoTiene':
+                $partes[] = "NOT EXISTS (misma cita: " . maternoCondicionSQL($v, $nivel + 1) . ")";
+                break;
             case 'pacTiene':
                 $partes[] = "EXISTS (mismo paciente: " . maternoCondicionSQL($v, $nivel + 1) . ")";
                 break;
@@ -434,48 +484,170 @@ function maternoCondicionSQL(array $cond, int $nivel = 0): string {
 }
 
 /* ============================================================
- * 3) DEFINICION DE SECCIONES (etiquetas de las dims del archivo 01
- *    + condiciones adaptadas del archivo 03)
+ * 3) DEFINICION DE SECCIONES (adaptacion fiel del archivo
+ *    "03 Creacion de Procedimientos": RPT_01..RPT_10)
  * ============================================================ */
 
 /**
  * Devuelve la definicion completa de las secciones del reporte de Materno.
  *
- * Cada seccion replica un bloque del Excel "Reporte_Actividades_Materno.xlsx":
- *   - eje 'gedad'    : filas = grupos etareos (4 + TOTAL); 'columnas' = categorias
- *   - eje 'categoria': filas = categorias; columnas = TOTAL + grupos etareos
- *
- * Las etiquetas de las columnas/filas son EXACTAMENTE las de las tablas
- * DimMaterno2023_Categoria01..10 del archivo "01 Creacion tablas iniciales"
- * (CategoriaKey, Grupo, Subgrupo, Categoria), en el mismo orden del Excel.
- *
- * CONDICIONES: la adaptacion inicial del archivo "03 Creacion de Procedimientos"
- * usa los codigos HIS-MINSA estandar del paquete materno. Cada condicion es
- * auditable desde el reporte web (boton "Ver condiciones SQL") y se ajusta en
- * este unico archivo.
+ * Cada seccion replica un bloque del Excel "Reporte_Actividades_Materno.xlsx"
+ * y cada columna/fila replica una Categoria de los procedimientos
+ * usp_TRAMA_BASE_MATERNO_2023_RPT_01..RPT_10 (mismo numero y orden).
+ * La regla 'filas' cuenta cada fila HIS que cumple, como el count(*) del
+ * T-SQL sobre las tablas nominales.
  */
 function maternoSecciones(): array {
-    // Condiciones base reutilizables (adaptadas de los procedimientos RPT_*)
-    $labsVIH   = ['cod' => ['86701', '86702', '86703', '87389']];
-    $labsSif   = ['cod' => ['86592', '86780', '86781']];
-    $labsHepB  = ['cod' => ['87340']];
-    $labsBact  = ['cod' => ['87086', '87088', '81003', '81001', '81002']];
-    $labsProt  = ['cod' => ['81000', '81003', '81001', '81002']];
-    $bateriaLabs = [ // laboratorios de la bateria completa de la gestante
-        ['cod' => ['85018']],                          // Dosaje de hemoglobina
-        ['cod' => ['81003', '81001', '81005']],        // Examen de orina
-        ['cod' => ['86592', '86780']],                  // RPR / VDRL
-        ['cod' => ['82947', '82948', '82950']],         // Glicemia
-        ['cod' => ['86900', '86901', '86904']],         // Grupo sanguineo y Rh
-        ['cod' => ['87340', '86701', '86702', '87389']],// HBsAg / VIH
-    ];
+    // ===== Predicados base compartidos (WHERE comun de los RPT) =====
+    $mujer1059 = ['sexo' => 'F', 'edadA' => [10, 59]];        // id_genero='F' and id_tipedad_reg='A' and edad between 10 and 59
+    $rn        = ['edadD' => [1, 29]];                        // RPT_05: id_tipedad_reg='D' and edad between 1 and 29
+    $filas     = ['tipo' => 'filas'];                         // count(*) del T-SQL
+
+    // Codigos Z de atencion prenatal: I/II/III trimestre por codigo
+    $zTrim1 = ['Z3491', 'Z3591'];
+    $zTrim2 = ['Z3492', 'Z3592'];
+    $zTrim3 = ['Z3493', 'Z3593'];
+    $z6     = ['Z3491', 'Z3492', 'Z3493', 'Z3591', 'Z3592', 'Z3593'];
+    $z8     = ['Z3491', 'Z3492', 'Z3493', 'Z3591', 'Z3592', 'Z3593', 'Z359', 'Z349'];
+
+    // Trimestre de la gestante (EXISTS en la cita): como el T-SQL
+    // "#PRUEBAS where cod in (Z3491,Z3591) OR (Z359/Z349 and valor in ('N') and ROWNUM=1)"
+    $trim1 = ['cualquieraDe' => [
+        ['cod' => $zTrim1, 'tip' => 'D'],
+        ['cod' => ['Z359', 'Z349'], 'vl' => '1', 'rownum' => 1, 'tip' => 'D'],
+    ]];
+    $trim2 = ['cualquieraDe' => [
+        ['cod' => $zTrim2, 'tip' => 'D'],
+        ['cod' => ['Z359', 'Z349'], 'vl' => '2', 'rownum' => 1, 'tip' => 'D'],
+    ]];
+    $trim3 = ['cualquieraDe' => [
+        ['cod' => $zTrim3, 'tip' => 'D'],
+        ['cod' => ['Z359', 'Z349'], 'vl' => '3', 'rownum' => 1, 'tip' => 'D'],
+    ]];
+
+    // Laboratorios de tamizaje de transmision vertical (RPT_09_1)
+    $vihLabs = ['86703.01', '86703.02', '87389', '86703'];
+    $sifLabs = ['86780.01', '86592', '86593', '86780'];
+    $hepLabs = ['87342', '87340', '82397', '86706', '86704', '86705', '87351', '86707'];
+    // Fila de laboratorio con I_ROWNUM_LAB=1 (o prueba rapida 86318.01 1a vez)
+    $vihRow = ['cualquieraDe' => [
+        ['cod' => $vihLabs, 'rownum' => 1],
+        ['cod' => '86318.01', 'rownum' => 1],
+    ]];
+    $sifRow = ['cualquieraDe' => [
+        ['cod' => $sifLabs, 'rownum' => 1],
+        ['cod' => '86318.01', 'rownum' => 1],
+    ]];
+    $hepRow = ['cod' => $hepLabs, 'rownum' => 1];
+    // Base de #PRUEBAS: cualquier laboratorio de tamizaje (D o R) en la cita
+    $tamizBase = ['cualquieraDe' => [
+        ['cod' => array_merge($vihLabs, $sifLabs, $hepLabs), 'rownum' => 1, 'tip' => ['D', 'R']],
+        ['cod' => '86318.01', 'tip' => ['D', 'R']],
+    ]];
+    // Z-row de gestante (parte de #PRUEBAS: la cita tiene codigo gestacional)
+    $gestZ = ['cualquieraDe' => [
+        ['cod' => $z6, 'tip' => 'D'],
+        ['cod' => ['Z359', 'Z349'], 'vl' => ['1', '2', '3'], 'rownum' => 1, 'tip' => 'D'],
+    ]];
+    // Bases de #CONSEJ_VIH / #CONSEJ_SIFILIS / #CONSEJ_HEPATITIS
+    $consejVihBase = ['cualquieraDe' => [
+        ['cod' => $vihLabs, 'rownum' => 1, 'tip' => ['D', 'R']],
+        ['cod' => '86318.01', 'tip' => ['D', 'R']],
+    ]];
+    $consejSifBase = ['cualquieraDe' => [
+        ['cod' => $sifLabs, 'rownum' => 1, 'tip' => ['D', 'R']],
+        ['cod' => '86318.01', 'tip' => ['D', 'R']],
+    ]];
+    $consejHepBase = ['cod' => $hepLabs, 'rownum' => 1, 'tip' => ['D', 'R']];
+    // Consejeria previa al resultado: valor '1' (1a prueba) / '2' (2a prueba)
+    $consejVih1 = ['cod' => '99401.33', 'vl' => '1', 'tip' => 'D'];
+    $consejVih2 = ['cod' => '99401.33', 'vl' => '2', 'tip' => 'D'];
+    $consejSif1 = ['cod' => '99402.05', 'vl' => '1', 'tip' => 'D'];
+    $consejSif2 = ['cod' => '99402.05', 'vl' => '2', 'tip' => 'D'];
+    $consejHep1 = ['cod' => '99402.05', 'vl' => '1', 'tip' => 'D'];
+    $consejHep2 = ['cod' => '99402.05', 'vl' => '2', 'tip' => 'D'];
+
+    // #EMBARAZO del RPT_01: citas con (96150.01/81002/82044/R456/81000.02/81007 D R1)
+    // y ademas una fila Z8 D R1 (gestante en atencion prenatal)
+    $embarazoR01 = ['citaTieneTodo' => [
+        ['cod' => ['96150.01', '81002', '82044', 'R456', '81000.02', '81007'], 'tip' => 'D', 'rownum' => 1],
+        ['cod' => $z8, 'tip' => 'D', 'rownum' => 1],
+    ]];
+    // #GEST del RPT_01/RPT_04: la cita tiene una fila de vacuna/procedimiento con
+    // I_ROWNUM_LAB=1 y una fila con valor_lab='G' (gestante)
+    $gestTodo = ['citaTieneTodo' => [
+        ['cod' => ['90715', '90714', '90744', '90746', '90658', '90749.01', 'D1110'], 'rownum' => 1],
+        ['vl' => 'G'],
+    ]];
+    // #EMBARAZO del RPT_02: citas con (59020/59025 valor '1'/'2') y ademas
+    // (Z359 valor '3' D o Z3493/Z3593 D R1) => gestante de 2do/3er trimestre
+    $embarazoR02 = ['citaTieneTodo' => [
+        ['cod' => ['59020', '59025'], 'vl' => ['1', '2']],
+        ['cualquieraDe' => [
+            ['cod' => 'Z359', 'vl' => '3', 'tip' => 'D'],
+            ['cod' => ['Z3493', 'Z3593'], 'tip' => 'D', 'rownum' => 1],
+        ]],
+    ]];
+
+    // #SUPLEM del RPT_06 (union de 4 ramas):
+    //   S1: (85018 '1' R1) + Z6 D R1            -> dosaje 1° en gestante (cualq. trim.)
+    //   S2: (85018 '2'/'3' R1 o 99199.26 '1'/'6' R1 o 59401.05 '1'/'5' R1) + Z II/III trim D R1
+    //   S3: (99199.18 '1'/'2' R1) + Z I trim D R1
+    //   S4: (99199.26 'TA') + 59430 D R1         -> entrega a puerpera
+    $S1 = ['citaTieneTodo' => [
+        ['cod' => ['85018', '85018.01'], 'vl' => '1', 'rownum' => 1],
+        ['cod' => $z6, 'tip' => 'D', 'rownum' => 1],
+    ]];
+    $S2 = ['citaTieneTodo' => [
+        ['cualquieraDe' => [
+            ['cod' => ['85018', '85018.01'], 'vl' => ['2', '3'], 'rownum' => 1],
+            ['cod' => '99199.26', 'vl' => ['1', '6'], 'rownum' => 1],
+            ['cod' => '59401.05', 'vl' => ['1', '5'], 'rownum' => 1],
+        ]],
+        ['cod' => ['Z3593', 'Z3493', 'Z3592', 'Z3492'], 'tip' => 'D', 'rownum' => 1],
+    ]];
+    $S3 = ['citaTieneTodo' => [
+        ['cod' => '99199.18', 'vl' => ['1', '2'], 'rownum' => 1],
+        ['cod' => ['Z3591', 'Z3491'], 'tip' => 'D', 'rownum' => 1],
+    ]];
+    $S4 = ['citaTieneTodo' => [
+        ['cod' => '99199.26', 'vl' => 'TA'],
+        ['cod' => '59430', 'tip' => 'D', 'rownum' => 1],
+    ]];
+    $suplem = ['cualquieraDe' => [$S1, $S2, $S3, $S4]];
+    // #ANEMIA del RPT_06: "id_cita not in (select id_cita ... O990 R1)"
+    $noAnemia = ['citaNoTiene' => ['cod' => 'O990', 'rownum' => 1]];
+
+    // #PUERPERAS del RPT_09_2: citas con tamizaje y 59430 valor '1' D
+    // (atencion de puerperio inmediato)
+    $puerpera59430 = ['citaTiene' => ['cod' => '59430', 'vl' => '1', 'tip' => 'D']];
+
+    // #TEMP del RPT_10 (union de #CONSEJ_GEST y #CONSEJ_PUERP):
+    //  - gestante: 99401.02 D '3' y (Z3493/Z3593 D o Z359/Z349 '3' R1 D)
+    //  - puerpera inmediata: 99401.02 D '4' y 59410/59515 R1
+    //  - atencion puerperal: 99401.02 D '5' y 59430 R1
+    $gestZ3 = ['cualquieraDe' => [
+        ['cod' => ['Z3493', 'Z3593'], 'tip' => 'D'],
+        ['cod' => ['Z359', 'Z349'], 'vl' => '3', 'rownum' => 1, 'tip' => 'D'],
+    ]];
+    $consejGest = ['citaTieneTodo' => [ ['cod' => '99401.02', 'tip' => 'D', 'vl' => '3'], $gestZ3 ]];
+    $consejPuerp4 = ['citaTieneTodo' => [ ['cod' => '99401.02', 'tip' => 'D', 'vl' => '4'], ['cod' => ['59410', '59515'], 'rownum' => 1] ]];
+    $consejPuerp5 = ['citaTieneTodo' => [ ['cod' => '99401.02', 'tip' => 'D', 'vl' => '5'], ['cod' => '59430', 'rownum' => 1] ]];
+    $tempX = ['cualquieraDe' => [$consejGest, $consejPuerp4, $consejPuerp5]];
 
     return [
 
     /* ------------------------------------------------------------
-     * SECCION I - RPT_01_APN_REENFOCADA
-     * I. ATENCION PRENATAL REENFOCADA (25 columnas, Dim Categoria01)
-     * ---------------------------------------------------------- */
+     * SECCION I - RPT_01_APN_REENFOCADA (usptrama...RPT_01)
+     * I. ATENCION PRENATAL REENFOCADA (25 categorias + Total calculado)
+     * Temporales del T-SQL:
+     *   #PAP       = citas (Z8 D R1) con 88141 valor null/''
+     *   #POSITIVO  = citas (Z359 D R1) con D060/D061/D069/N879/N870/N871/N872 D R1
+     *   #GEST      = citas (vacunas/D1110 R1) con alguna fila valor_lab='G'
+     *   #EMBARAZO  = citas (96150.01/81002/82044/R456/81000.02/81007 D R1)
+     *                con Z8 D R1
+     *   #LAB_TA    = citas (Z3593/Z3493 D R1) con Z3593/Z3493 valor 'TA' R3
+     * ------------------------------------------------------------ */
     [
         'codigo'   => 'RPT01_APN',
         'procedimiento' => 'usp_TRAMA_BASE_MATERNO_2023_RPT_01_APN_REENFOCADA',
@@ -484,103 +656,120 @@ function maternoSecciones(): array {
         'gedades'  => [1, 2, 3, 4],
         'xmap'     => ['filas' => [1 => 16, 2 => 17, 3 => 18, 4 => 19, 'T' => 20], 'colIni' => 'B'],
         'columnas' => [
-            // GESTANTE / ATENDIDA (Total = I + II + III Trim, como =SUM(C:E) del Excel)
-            ['key' => 1,  'niv1' => 'Gestante', 'niv2' => 'Atendida', 'niv3' => 'Total',
+            // GESTANTE ATENDIDA (Total = I + II + III Trim, como =SUM(C:E) del Excel)
+            ['key' => 1, 'niv1' => 'Gestante', 'niv2' => 'Atendida', 'niv3' => 'Total',
              'regla' => ['tipo' => 'calc', 'cols' => [2, 3, 4]]],
-            ['key' => 2,  'niv1' => 'Gestante', 'niv2' => 'Atendida', 'niv3' => 'I Trim',
-             'cond' => ['tip' => 'D', 'sexo' => 'F', 'cod' => ['Z321', 'Z320']],
-             'regla' => ['tipo' => 'trimestre', 'n' => 1, 'oc' => 1]],
-            ['key' => 3,  'niv1' => 'Gestante', 'niv2' => 'Atendida', 'niv3' => 'II Trim',
-             'cond' => ['tip' => 'D', 'sexo' => 'F', 'cod' => ['Z321', 'Z320']],
-             'regla' => ['tipo' => 'trimestre', 'n' => 2, 'oc' => 1]],
-            ['key' => 4,  'niv1' => 'Gestante', 'niv2' => 'Atendida', 'niv3' => 'III Trim',
-             'cond' => ['tip' => 'D', 'sexo' => 'F', 'cod' => ['Z321', 'Z320']],
-             'regla' => ['tipo' => 'trimestre', 'n' => 3, 'oc' => 1]],
-            ['key' => 5,  'niv1' => 'Gestante', 'niv2' => 'Atenciones', 'niv3' => '----------',
-             'cond' => ['tip' => 'D', 'sexo' => 'F', 'codPref' => ['Z32', 'Z34', 'Z35']],
-             'regla' => ['tipo' => 'simple']],
-            ['key' => 6,  'niv1' => 'Gestante', 'niv2' => 'Controlada', 'niv3' => '----------',
-             'cond' => ['tip' => 'D', 'sexo' => 'F', 'codPref' => ['Z32', 'Z34', 'Z35']],
-             'regla' => ['tipo' => 'conteoMinimo', 'n' => 6]],
-            // PAPANICOLAU
-            ['key' => 7,  'niv1' => 'Papanicolaou', 'niv2' => 'Toma de Muestra', 'niv3' => '----------',
-             'cond' => ['tip' => 'D', 'sexo' => 'F', 'gestante' => true, 'cod' => '88141', 'vl' => 'NULL'],
-             'regla' => ['tipo' => 'simple']],
-            ['key' => 8,  'niv1' => 'Papanicolaou', 'niv2' => 'Positivo', 'niv3' => '----------',
-             'cond' => ['tip' => 'D', 'sexo' => 'F', 'gestante' => true, 'cod' => '88141',
-                        'citaTiene' => ['cod' => ['N870', 'N871', 'N872', 'N873', 'D069', 'R876', 'C539'], 'tip' => 'P']],
-             'regla' => ['tipo' => 'simple']],
-            // GESTANTE CON BATERIA COMPLETA (1ra / 2da cita con la bateria de laboratorio)
-            ['key' => 9,  'niv1' => 'Gestante Controlada con Bateria Completa', 'niv2' => '1° Bateria', 'niv3' => '----------',
-             'cond' => ['sexo' => 'F', 'citaTieneTodo' => $bateriaLabs],
-             'regla' => ['tipo' => 'ocurrencia', 'n' => 1]],
-            ['key' => 10, 'niv1' => 'Gestante Controlada con Bateria Completa', 'niv2' => '2° Bateria', 'niv3' => '----------',
-             'cond' => ['sexo' => 'F', 'citaTieneTodo' => $bateriaLabs],
-             'regla' => ['tipo' => 'ocurrencia', 'n' => 2]],
-            // VIOLENCIA BASADA EN GENERO
-            ['key' => 11, 'niv1' => 'Violencia Basada en Genero (VBG)', 'niv2' => 'Tamizada', 'niv3' => '----------',
-             'cond' => ['tip' => 'D', 'sexo' => 'F', 'gestante' => true, 'cod' => ['Z004', '99408']],
-             'regla' => ['tipo' => 'simple']],
-            ['key' => 12, 'niv1' => 'Violencia Basada en Genero (VBG)', 'niv2' => 'Positivo', 'niv3' => '----------',
-             'cond' => ['tip' => 'D', 'sexo' => 'F', 'gestante' => true,
-                        'cualquieraDe' => [ ['codPref' => 'T74'], ['cod' => 'Z634'] ]],
-             'regla' => ['tipo' => 'simple']],
-            // ECOGRAFIA (1ra / 2da / 3ra ecografia de la gestante)
+            // Cat 1 (#NOMINAL): Z3491/Z3591 D valor '1' R1
+            ['key' => 2, 'niv1' => 'Gestante', 'niv2' => 'Atendida', 'niv3' => 'I Trim',
+             'cond' => array_merge($mujer1059, ['cod' => $zTrim1, 'vl' => '1', 'tip' => 'D', 'rownum' => 1]),
+             'regla' => $filas],
+            // Cat 2: Z3492/Z3592 D valor '1' R1
+            ['key' => 3, 'niv1' => 'Gestante', 'niv2' => 'Atendida', 'niv3' => 'II Trim',
+             'cond' => array_merge($mujer1059, ['cod' => $zTrim2, 'vl' => '1', 'tip' => 'D', 'rownum' => 1]),
+             'regla' => $filas],
+            // Cat 3: Z3493/Z3593 D valor '1' R1
+            ['key' => 4, 'niv1' => 'Gestante', 'niv2' => 'Atendida', 'niv3' => 'III Trim',
+             'cond' => array_merge($mujer1059, ['cod' => $zTrim3, 'vl' => '1', 'tip' => 'D', 'rownum' => 1]),
+             'regla' => $filas],
+            // Cat 4 (Temporal1): Z6 D R1 con valor '1'..'14' (todas las atenciones)
+            ['key' => 5, 'niv1' => 'Gestante', 'niv2' => 'Atenciones', 'niv3' => '----------',
+             'cond' => array_merge($mujer1059, ['cod' => $z6, 'vl' => ['1','2','3','4','5','6','7','8','9','10','11','12','13','14'], 'tip' => 'D', 'rownum' => 1]),
+             'regla' => $filas],
+            // Cat 5 (#NOMINAL): Z6 D R1 con valor '6' (gestante CONTROLADA)
+            ['key' => 6, 'niv1' => 'Gestante', 'niv2' => 'Controlada', 'niv3' => '----------',
+             'cond' => array_merge($mujer1059, ['cod' => $z6, 'vl' => '6', 'tip' => 'D', 'rownum' => 1]),
+             'regla' => $filas],
+            // Cat 6 (Temporal2 + #PAP): Z8 D R1 y la cita tiene 88141 con valor null/''
+            ['key' => 7, 'niv1' => 'Papanicolaou', 'niv2' => 'Toma de Muestra', 'niv3' => '----------',
+             'cond' => array_merge($mujer1059, ['cod' => $z8, 'tip' => 'D', 'rownum' => 1],
+                        ['citaTiene' => ['cod' => '88141', 'vlVacia' => true]]),
+             'regla' => $filas],
+            // Cat 7 (Temporal3 + #POSITIVO): Z359 D R1 y la cita tiene Dx de lesion D R1
+            ['key' => 8, 'niv1' => 'Papanicolaou', 'niv2' => 'Positivo', 'niv3' => '----------',
+             'cond' => array_merge($mujer1059, ['cod' => 'Z359', 'tip' => 'D', 'rownum' => 1],
+                        ['citaTiene' => ['cod' => ['D060','D061','D069','N879','N870','N871','N872'], 'tip' => 'D', 'rownum' => 1]]),
+             'regla' => $filas],
+            // Cat 8 (Temporal4): 80055.01 D R1 (1a bateria completa)
+            ['key' => 9, 'niv1' => 'Gestante Controlada con Batería Completa', 'niv2' => '1° Batería', 'niv3' => '----------',
+             'cond' => array_merge($mujer1059, ['cod' => '80055.01', 'tip' => 'D', 'rownum' => 1]),
+             'regla' => $filas],
+            // Cat 9: 80055.02 D R1 (2a bateria completa)
+            ['key' => 10, 'niv1' => 'Gestante Controlada con Batería Completa', 'niv2' => '2° Batería', 'niv3' => '----------',
+             'cond' => array_merge($mujer1059, ['cod' => '80055.02', 'tip' => 'D', 'rownum' => 1]),
+             'regla' => $filas],
+            // Cat 10 (Temporal5 + #EMBARAZO): 96150.01 D R1 (VBG tamizada)
+            ['key' => 11, 'niv1' => 'Violencia Basada en Género (VBG)', 'niv2' => 'Tamizada', 'niv3' => '----------',
+             'cond' => array_merge($mujer1059, ['cod' => '96150.01', 'tip' => 'D', 'rownum' => 1], $embarazoR01),
+             'regla' => $filas],
+            // Cat 11 (Temporal5 + #EMBARAZO): R456 D R1 (VBG positivo)
+            ['key' => 12, 'niv1' => 'Violencia Basada en Género (VBG)', 'niv2' => 'Positivo', 'niv3' => '----------',
+             'cond' => array_merge($mujer1059, ['cod' => 'R456', 'tip' => 'D', 'rownum' => 1], $embarazoR01),
+             'regla' => $filas],
+            // Cat 12 (Temporal4): 76817/76805 D valor '1' (1a ecografia)
             ['key' => 13, 'niv1' => 'Ecografía', 'niv2' => '1° Ecografía', 'niv3' => '----------',
-             'cond' => ['sexo' => 'F', 'gestante' => true, 'cod' => ['76801', '76805', '76811']],
-             'regla' => ['tipo' => 'ocurrencia', 'n' => 1]],
+             'cond' => array_merge($mujer1059, ['cod' => ['76817', '76805'], 'vl' => '1', 'tip' => 'D']),
+             'regla' => $filas],
             ['key' => 14, 'niv1' => 'Ecografía', 'niv2' => '2° Ecografía', 'niv3' => '----------',
-             'cond' => ['sexo' => 'F', 'gestante' => true, 'cod' => ['76801', '76805', '76811']],
-             'regla' => ['tipo' => 'ocurrencia', 'n' => 2]],
+             'cond' => array_merge($mujer1059, ['cod' => ['76817', '76805'], 'vl' => '2', 'tip' => 'D']),
+             'regla' => $filas],
             ['key' => 15, 'niv1' => 'Ecografía', 'niv2' => '3° Ecografía', 'niv3' => '----------',
-             'cond' => ['sexo' => 'F', 'gestante' => true, 'cod' => ['76801', '76805', '76811']],
-             'regla' => ['tipo' => 'ocurrencia', 'n' => 3]],
-            // TAMIZAJE DE BACTERIURIA
+             'cond' => array_merge($mujer1059, ['cod' => ['76817', '76805'], 'vl' => '3', 'tip' => 'D']),
+             'regla' => $filas],
+            // Cat 15 (Temporal5 + #EMBARAZO): 81000.02/81002/81007 D R1 (tamizaje bacteriuria)
             ['key' => 16, 'niv1' => 'Tamizaje de Bacteriuria', 'niv2' => 'N°', 'niv3' => '----------',
-             'cond' => ['sexo' => 'F', 'gestante' => true] + $labsBact,
-             'regla' => ['tipo' => 'simple']],
+             'cond' => array_merge($mujer1059, ['cod' => ['81000.02', '81002', '81007'], 'tip' => 'D', 'rownum' => 1], $embarazoR01),
+             'regla' => $filas],
+            // Cat 16 (Temporal8 + #EMBARAZO): idem con valor 'RP' (positivo)
             ['key' => 17, 'niv1' => 'Tamizaje de Bacteriuria', 'niv2' => 'Positivo', 'niv3' => '----------',
-             'cond' => ['sexo' => 'F', 'gestante' => true, 'vl' => ['1', 'A', 'P', 'R', '+']] + $labsBact,
-             'regla' => ['tipo' => 'simple']],
-            // TAMIZAJE DE PROTEINURIA
+             'cond' => array_merge($mujer1059, ['cod' => ['81000.02', '81002', '81007'], 'tip' => 'D', 'vl' => 'RP'], $embarazoR01),
+             'regla' => $filas],
+            // Cat 17 (Temporal5 + #EMBARAZO): 82044 D R1 (tamizaje proteinuria)
             ['key' => 18, 'niv1' => 'Tamizaje de Proteniuria', 'niv2' => 'N°', 'niv3' => '----------',
-             'cond' => ['sexo' => 'F', 'gestante' => true] + $labsProt,
-             'regla' => ['tipo' => 'simple']],
+             'cond' => array_merge($mujer1059, ['cod' => '82044', 'tip' => 'D', 'rownum' => 1], $embarazoR01),
+             'regla' => $filas],
+            // Cat 18 (Temporal8 + #EMBARAZO): 82044 D valor 'RP' (positivo)
             ['key' => 19, 'niv1' => 'Tamizaje de Proteniuria', 'niv2' => 'Positivo', 'niv3' => '----------',
-             'cond' => ['sexo' => 'F', 'gestante' => true, 'vl' => ['1', 'A', 'P', 'R', '+']] + $labsProt,
-             'regla' => ['tipo' => 'simple']],
-            // GESTANTE CON ATENCION PRENATAL REENFOCADA
+             'cond' => array_merge($mujer1059, ['cod' => '82044', 'tip' => 'D', 'vl' => 'RP'], $embarazoR01),
+             'regla' => $filas],
+            // Cat 19 (Temporal11 + #LAB_TA): Z3593/Z3493 D R1 con TRY_CONVERT(int,valor)>=6
+            // y la cita tiene Z3593/Z3493 valor 'TA' con I_ROWNUM_LAB=3
             ['key' => 20, 'niv1' => 'Gestante con Atención Prenatal Reenfocada', 'niv2' => '----------', 'niv3' => '----------',
-             'cond' => ['sexo' => 'F', 'gestante' => true,
-                        'citaTieneTodo' => [ ['codPref' => ['Z34', 'Z35', 'Z32'], 'tip' => 'D'], ['cod' => '85018'] ]],
-             'regla' => ['tipo' => 'simple']],
-            // INMUNIZACION A LA GESTANTE (PROTEGIDAS)
-            ['key' => 21, 'niv1' => 'Inmunización a la Gestante', 'niv2' => 'DTPA', 'niv3' => 'Protegidas',
-             'cond' => ['sexo' => 'F', 'gestante' => true, 'cod' => '90715'],
-             'regla' => ['tipo' => 'simple']],
+             'cond' => array_merge($mujer1059, ['cod' => ['Z3593', 'Z3493'], 'tip' => 'D', 'rownum' => 1, 'vlNum' => [6, null]],
+                        ['citaTiene' => ['cod' => ['Z3593', 'Z3493'], 'vl' => 'TA', 'rownum' => 3]]),
+             'regla' => $filas],
+            // Cat 20 (Temporal12 + #GEST): 90715 D R1 (dTpa)
+            ['key' => 21, 'niv1' => 'Inmunización a la Gestante', 'niv2' => 'DTPa', 'niv3' => 'Protegidas',
+             'cond' => array_merge($mujer1059, ['cod' => '90715', 'tip' => 'D', 'rownum' => 1], $gestTodo),
+             'regla' => $filas],
+            // Cat 21: 90714 D valor '2' (dT)
             ['key' => 22, 'niv1' => 'Inmunización a la Gestante', 'niv2' => 'dT', 'niv3' => 'Protegidas',
-             'cond' => ['sexo' => 'F', 'gestante' => true, 'cod' => '90714'],
-             'regla' => ['tipo' => 'ocurrenciaMin', 'n' => 5]],
+             'cond' => array_merge($mujer1059, ['cod' => '90714', 'tip' => 'D', 'vl' => '2'], $gestTodo),
+             'regla' => $filas],
+            // Cat 22: 90744/90746 D valor '3' (Hepatitis B)
             ['key' => 23, 'niv1' => 'Inmunización a la Gestante', 'niv2' => 'HvB', 'niv3' => 'Protegidas',
-             'cond' => ['sexo' => 'F', 'gestante' => true, 'cod' => ['90744', '90746']],
-             'regla' => ['tipo' => 'simple']],
+             'cond' => array_merge($mujer1059, ['cod' => ['90744', '90746'], 'tip' => 'D', 'vl' => '3'], $gestTodo),
+             'regla' => $filas],
+            // Cat 23: 90658 D R1 (Influenza)
             ['key' => 24, 'niv1' => 'Inmunización a la Gestante', 'niv2' => 'Influenza', 'niv3' => 'Protegidas',
-             'cond' => ['sexo' => 'F', 'gestante' => true, 'cod' => ['90657', '90658']],
-             'regla' => ['tipo' => 'simple']],
+             'cond' => array_merge($mujer1059, ['cod' => '90658', 'tip' => 'D', 'rownum' => 1], $gestTodo),
+             'regla' => $filas],
+            // Cat 24: 90749.01 D R1 (COVID)
             ['key' => 25, 'niv1' => 'Inmunización a la Gestante', 'niv2' => 'COVID', 'niv3' => 'Protegidas',
-             'cond' => ['sexo' => 'F', 'gestante' => true, 'codEntre' => ['90692', '90703']],
-             'regla' => ['tipo' => 'simple']],
-            // ATENCION ODONTOLOGICA
+             'cond' => array_merge($mujer1059, ['cod' => '90749.01', 'tip' => 'D', 'rownum' => 1], $gestTodo),
+             'regla' => $filas],
+            // Cat 25 (Temporal13 + #GEST): D1110 D valor '1' (atencion odontologica)
             ['key' => 26, 'niv1' => 'Atención Odontológica', 'niv2' => 'Protegidas', 'niv3' => '----------',
-             'cond' => ['sexo' => 'F', 'gestante' => true, 'codPref' => ['Z012', 'Z013']],
-             'regla' => ['tipo' => 'ocurrencia', 'n' => 1]],
+             'cond' => array_merge($mujer1059, ['cod' => 'D1110', 'tip' => 'D', 'vl' => '1'], $gestTodo),
+             'regla' => $filas],
         ],
     ],
 
     /* ------------------------------------------------------------
-     * SECCION II - RPT_02_BIENESTAR (bloque izquierdo del Excel)
-     * EVALUACION DE BIENESTAR FETAL / PSICOPROFILAXIS / ESTIMULACION
-     * ---------------------------------------------------------- */
+     * SECCION II - RPT_02_BIENESTAR
+     * II. EVALUACION DE BIENESTAR FETAL, PSICOPROFILAXIS Y ESTIMULACION
+     * #EMBARAZO(RPT_02) = citas (59020/59025 valor 1/2) y
+     *   (Z359 valor '3' D o Z3493/Z3593 D R1)
+     * ------------------------------------------------------------ */
     [
         'codigo'   => 'RPT02_BIENESTAR',
         'procedimiento' => 'usp_TRAMA_BASE_MATERNO_2023_RPT_02_BIENESTAR',
@@ -589,31 +778,41 @@ function maternoSecciones(): array {
         'gedades'  => [1, 2, 3, 4],
         'xmap'     => ['filas' => [1 => 25, 2 => 26, 3 => 27, 4 => 28, 'T' => 29], 'colIni' => 'B'],
         'columnas' => [
+            // Cat 1 (#NOMINAL + #EMBARAZO): 59020/59025 D valor '1' (1° monitoreo)
             ['key' => 1, 'niv1' => 'Evaluación de Bienestar Fetal', 'niv2' => '1° Monitoreo',
-             'cond' => ['sexo' => 'F', 'gestante' => true, 'cod' => '59025'],
-             'regla' => ['tipo' => 'ocurrencia', 'n' => 1]],
+             'cond' => array_merge($mujer1059, ['cod' => ['59020', '59025'], 'vl' => '1', 'tip' => 'D'], $embarazoR02),
+             'regla' => $filas],
+            // Cat 2: 59020/59025 D valor '2' (2° monitoreo)
             ['key' => 2, 'niv1' => 'Evaluación de Bienestar Fetal', 'niv2' => '2° Monitoreo',
-             'cond' => ['sexo' => 'F', 'gestante' => true, 'cod' => '59025'],
-             'regla' => ['tipo' => 'ocurrencia', 'n' => 2]],
+             'cond' => array_merge($mujer1059, ['cod' => ['59020', '59025'], 'vl' => '2', 'tip' => 'D'], $embarazoR02),
+             'regla' => $filas],
+            // Cat 3 (Temporal1): 99412.02 D valor '1' (psicoprofilaxis atendida)
             ['key' => 3, 'niv1' => 'Psicoprofilaxis', 'niv2' => 'Atendida',
-             'cond' => ['sexo' => 'F', 'gestante' => true, 'cod' => '99207.04'],
-             'regla' => ['tipo' => 'ocurrencia', 'n' => 1]],
+             'cond' => array_merge($mujer1059, ['cod' => '99412.02', 'vl' => '1', 'tip' => 'D']),
+             'regla' => $filas],
+            // Cat 4: 99412.02 D valor '6' (psicoprofilaxis preparada)
             ['key' => 4, 'niv1' => 'Psicoprofilaxis', 'niv2' => 'Preparada',
-             'cond' => ['sexo' => 'F', 'gestante' => true, 'cod' => '99207.04'],
-             'regla' => ['tipo' => 'ocurrenciaMin', 'n' => 6]],
+             'cond' => array_merge($mujer1059, ['cod' => '99412.02', 'vl' => '6', 'tip' => 'D']),
+             'regla' => $filas],
+            // Cat 5: 99412.01 D valor '1' (estimulacion 1° sesion)
             ['key' => 5, 'niv1' => 'Estimulación Prenatal', 'niv2' => '1° Sesión',
-             'cond' => ['sexo' => 'F', 'gestante' => true, 'cod' => '99207.05'],
-             'regla' => ['tipo' => 'ocurrencia', 'n' => 1]],
+             'cond' => array_merge($mujer1059, ['cod' => '99412.01', 'vl' => '1', 'tip' => 'D']),
+             'regla' => $filas],
+            // Cat 6: 99412.01 D valor '6' (estimulacion 6° sesion)
             ['key' => 6, 'niv1' => 'Estimulación Prenatal', 'niv2' => '6° Sesión',
-             'cond' => ['sexo' => 'F', 'gestante' => true, 'cod' => '99207.05'],
-             'regla' => ['tipo' => 'ocurrenciaMin', 'n' => 6]],
+             'cond' => array_merge($mujer1059, ['cod' => '99412.01', 'vl' => '6', 'tip' => 'D']),
+             'regla' => $filas],
         ],
     ],
 
     /* ------------------------------------------------------------
-     * SECCION III - RPT_03_ANEMIA (bloque derecho del Excel)
-     * GESTANTE CON ANEMIA / MANEJO TERAPEUTICO / DOSAJE HB / PLAN DE PARTO
-     * ---------------------------------------------------------- */
+     * SECCION III - RPT_03_ANEMIA
+     * III. GESTANTE CON ANEMIA, MANEJO TERAPEUTICO Y PLAN DE PARTO
+     * #EMBARAZO(RPT_03) = citas (99199.26 valor 1/6 o 85018 valor '1' D)
+     *                     y una fila Z8 D
+     * #ANEMIA(RPT_03)   = citas (99199.26 valor 1/6 o 85018 valor '1' R1)
+     *                     con O990 R1
+     * ------------------------------------------------------------ */
     [
         'codigo'   => 'RPT03_ANEMIA',
         'procedimiento' => 'usp_TRAMA_BASE_MATERNO_2023_RPT_03_ANEMIA',
@@ -622,47 +821,69 @@ function maternoSecciones(): array {
         'gedades'  => [1, 2, 3, 4],
         'xmap'     => ['filas' => [1 => 25, 2 => 26, 3 => 27, 4 => 28, 'T' => 29], 'colIni' => 'J'],
         'columnas' => [
+            // Cat 1 (#NOMINAL): O990 D valor 'LEV' (anemia leve)
             ['key' => 1, 'niv1' => 'Gestante', 'niv2' => 'Anemia', 'niv3' => 'Leve',
-             'cond' => ['tip' => 'D', 'sexo' => 'F', 'codEntre' => ['D50', 'D64Z'], 'hb' => [10, 10.9]],
-             'regla' => ['tipo' => 'simple']],
+             'cond' => array_merge($mujer1059, ['cod' => 'O990', 'vl' => 'LEV', 'tip' => 'D']),
+             'regla' => $filas],
+            // Cat 2: O990 D valor 'MOD'
             ['key' => 2, 'niv1' => 'Gestante', 'niv2' => 'Anemia', 'niv3' => 'Moderada',
-             'cond' => ['tip' => 'D', 'sexo' => 'F', 'codEntre' => ['D50', 'D64Z'], 'hb' => [7, 9.9]],
-             'regla' => ['tipo' => 'simple']],
+             'cond' => array_merge($mujer1059, ['cod' => 'O990', 'vl' => 'MOD', 'tip' => 'D']),
+             'regla' => $filas],
+            // Cat 3: O990 D valor 'SEV'
             ['key' => 3, 'niv1' => 'Gestante', 'niv2' => 'Anemia', 'niv3' => 'Severa',
-             'cond' => ['tip' => 'D', 'sexo' => 'F', 'codEntre' => ['D50', 'D64Z'], 'hb' => [0, 6.9]],
-             'regla' => ['tipo' => 'simple']],
+             'cond' => array_merge($mujer1059, ['cod' => 'O990', 'vl' => 'SEV', 'tip' => 'D']),
+             'regla' => $filas],
+            // Cat 4: O990 R valor 'PR' (anemia recuperada)
             ['key' => 4, 'niv1' => 'Gestante', 'niv2' => 'Anemia', 'niv3' => 'Recuperada',
-             'cond' => ['tip' => 'D', 'sexo' => 'F', 'codEntre' => ['D50', 'D64Z'], 'hb' => [11, null]],
-             'regla' => ['tipo' => 'simple']],
+             'cond' => array_merge($mujer1059, ['cod' => 'O990', 'vl' => 'PR', 'tip' => 'R']),
+             'regla' => $filas],
+            // Cat 5 (Temporal0): 99199.26 D valor '1' y cita en #EMBARAZO (fila Z D)
+            // y cita con O990 R1 tipo D (en #ANEMIA con id_tipitem='D')
             ['key' => 5, 'niv1' => 'Gestante', 'niv2' => 'Manejo Terapéutico', 'niv3' => '1° Entrega',
-             'cond' => ['sexo' => 'F', 'gestante' => true, 'codPref' => ['99604']],
-             'regla' => ['tipo' => 'ocurrencia', 'n' => 1]],
+             'cond' => array_merge($mujer1059, ['cod' => '99199.26', 'vl' => '1', 'tip' => 'D'],
+                        ['citaTieneTodo' => [ ['cod' => $z8, 'tip' => 'D'], ['cod' => 'O990', 'rownum' => 1, 'tip' => 'D'] ]]),
+             'regla' => $filas],
+            // Cat 6: 99199.26 D valor '6' y cita en #EMBARAZO y #ANEMIO con id_tipitem='R'
             ['key' => 6, 'niv1' => 'Gestante', 'niv2' => 'Manejo Terapéutico', 'niv3' => '6° Entrega',
-             'cond' => ['sexo' => 'F', 'gestante' => true, 'codPref' => ['99604']],
-             'regla' => ['tipo' => 'ocurrencia', 'n' => 6]],
+             'cond' => array_merge($mujer1059, ['cod' => '99199.26', 'vl' => '6', 'tip' => 'D'],
+                        ['citaTieneTodo' => [ ['cod' => $z8, 'tip' => 'D'], ['cod' => 'O990', 'rownum' => 1, 'tip' => 'R'] ]]),
+             'regla' => $filas],
+            // Cat 7 (Temporal0): 85018/85018.01 D valor '1' y cita en #ANEMIA
+            // (#ANEMIA = base 99199.26 1/6 o 85018 '1' R1, con O990 R1)
             ['key' => 7, 'niv1' => 'Gestante', 'niv2' => 'Dosaje de Hemoglobina', 'niv3' => '1° Dosaje',
-             'cond' => ['sexo' => 'F', 'gestante' => true, 'cod' => '85018'],
-             'regla' => ['tipo' => 'ocurrencia', 'n' => 1]],
+             'cond' => array_merge($mujer1059, ['cod' => ['85018', '85018.01'], 'vl' => '1', 'tip' => 'D'],
+                        ['citaTieneTodo' => [
+                            ['cod' => 'O990', 'rownum' => 1],
+                            ['cualquieraDe' => [
+                                ['cod' => '99199.26', 'vl' => ['1', '6']],
+                                ['cod' => ['85018', '85018.01'], 'vl' => '1', 'rownum' => 1],
+                            ]],
+                        ]]),
+             'regla' => $filas],
+            // Cat 8 (Temporal1): U1692/59401.06 D valor '1' (plan de parto 1° entrevista)
             ['key' => 8, 'niv1' => 'Plan de Parto', 'niv2' => '1° Entrevista', 'niv3' => '----------',
-             'cond' => ['sexo' => 'F', 'gestante' => true, 'codPref' => ['99499']],
-             'regla' => ['tipo' => 'ocurrencia', 'n' => 1]],
+             'cond' => array_merge($mujer1059, ['cod' => ['U1692', '59401.06'], 'vl' => '1', 'tip' => 'D']),
+             'regla' => $filas],
+            // Cat 9: valor '2'
             ['key' => 9, 'niv1' => 'Plan de Parto', 'niv2' => '2° Entrevista', 'niv3' => '----------',
-             'cond' => ['sexo' => 'F', 'gestante' => true, 'codPref' => ['99499']],
-             'regla' => ['tipo' => 'ocurrencia', 'n' => 2]],
+             'cond' => array_merge($mujer1059, ['cod' => ['U1692', '59401.06'], 'vl' => '2', 'tip' => 'D']),
+             'regla' => $filas],
+            // Cat 10: valor '3'
             ['key' => 10, 'niv1' => 'Plan de Parto', 'niv2' => '3° Entrevista', 'niv3' => '----------',
-             'cond' => ['sexo' => 'F', 'gestante' => true, 'codPref' => ['99499']],
-             'regla' => ['tipo' => 'ocurrencia', 'n' => 3]],
+             'cond' => array_merge($mujer1059, ['cod' => ['U1692', '59401.06'], 'vl' => '3', 'tip' => 'D']),
+             'regla' => $filas],
+            // Cat 11: valor 'TA' (plan de parto efectivo)
             ['key' => 11, 'niv1' => 'Plan de Parto', 'niv2' => 'Efectivo', 'niv3' => '----------',
-             'cond' => ['sexo' => 'F', 'tip' => 'D', 'codEntre' => ['O80', 'O84Z'],
-                        'pacTiene' => ['codPref' => ['99499'], 'sexo' => 'F']],
-             'regla' => ['tipo' => 'simple']],
+             'cond' => array_merge($mujer1059, ['cod' => ['U1692', '59401.06'], 'vl' => 'TA', 'tip' => 'D']),
+             'regla' => $filas],
         ],
     ],
 
     /* ------------------------------------------------------------
      * SECCION IV - RPT_04_COMPLICACIONES (15 filas)
-     * IV. ATENCION DE LA GESTANTE CON COMPLICACIONES
-     * ---------------------------------------------------------- */
+     * #NOMINAL = codigos exactos; Temporal1 = familias cod_item_f (prefijos)
+     * #GEST (para TBC) = citas con A15/A16 D R1 y alguna fila valor 'G'
+     * ------------------------------------------------------------ */
     [
         'codigo'   => 'RPT04_COMPLICACIONES',
         'procedimiento' => 'usp_TRAMA_BASE_MATERNO_2023_RPT_04_COMPLICACIONES',
@@ -671,43 +892,80 @@ function maternoSecciones(): array {
         'gedades'  => [1, 2, 3, 4],
         'xmap'     => ['colTotal' => 'F', 'colGedad' => [1 => 'G', 2 => 'H', 3 => 'I', 4 => 'J'], 'filaIni' => 33],
         'filas' => [
-            ['key' => 1,  'label' => 'Amenaza de parto prematuro',
-             'cond' => ['tip' => 'D', 'sexo' => 'F', 'codPref' => 'O47']],
-            ['key' => 2,  'label' => 'Hemorragias de la 1º mitad del embarazo sin laparotomía',
-             'cond' => ['tip' => 'D', 'sexo' => 'F', 'codPref' => 'O20']],
-            ['key' => 3,  'label' => 'Hemorragia de la 2º mitad del embarazo',
-             'cond' => ['tip' => 'D', 'sexo' => 'F', 'codPref' => ['O44', 'O45', 'O46']]],
-            ['key' => 4,  'label' => 'Hiperémesis gravídica',
-             'cond' => ['tip' => 'D', 'sexo' => 'F', 'codPref' => 'O21']],
-            ['key' => 5,  'label' => 'Infección del tracto urinario en el embarazo',
-             'cond' => ['tip' => 'D', 'sexo' => 'F', 'codPref' => 'O23']],
-            ['key' => 6,  'label' => 'Ruptura prematura de membranas y otras relacionadas',
-             'cond' => ['tip' => 'D', 'sexo' => 'F', 'codPref' => 'O42']],
-            ['key' => 7,  'label' => 'Hemorragias de la 1º mitad del embarazo con laparotomía',
-             'cond' => ['tip' => 'D', 'sexo' => 'F', 'codPref' => ['O00', 'O02', 'O08']]],
-            ['key' => 8,  'label' => 'Trastorno hipertensivos en el Embarazo',
-             'cond' => ['tip' => 'D', 'sexo' => 'F', 'codEntre' => ['O10', 'O16Z']]],
-            ['key' => 9,  'label' => 'Trastornos metabólicos del embarazo',
-             'cond' => ['tip' => 'D', 'sexo' => 'F', 'codPref' => ['O24', 'O25']]],
+            // Cat 1 (#NOMINAL): O470/O60X D R1
+            ['key' => 1, 'label' => 'Amenaza de parto prematuro',
+             'cond' => array_merge($mujer1059, ['cod' => ['O470', 'O60X'], 'tip' => 'D', 'rownum' => 1]),
+             'regla' => $filas],
+            // Cat 2 (Temporal1): cod_item_f in (O20,O03,O06,O01,O02)
+            ['key' => 2, 'label' => 'Hemorragias de la 1º mitad del embarazo sin laparotomía',
+             'cond' => array_merge($mujer1059, ['codPref' => ['O20', 'O03', 'O06', 'O01', 'O02'], 'tip' => 'D', 'rownum' => 1]),
+             'regla' => $filas],
+            // Cat 3: cod_item_f in (O44,O45,O71)
+            ['key' => 3, 'label' => 'Hemorragia de la 2º mitad del embarazo',
+             'cond' => array_merge($mujer1059, ['codPref' => ['O44', 'O45', 'O71'], 'tip' => 'D', 'rownum' => 1]),
+             'regla' => $filas],
+            // Cat 4: cod_item_f O21
+            ['key' => 4, 'label' => 'Hiperémesis gravídica',
+             'cond' => array_merge($mujer1059, ['codPref' => 'O21', 'tip' => 'D', 'rownum' => 1]),
+             'regla' => $filas],
+            // Cat 5: cod_item_f O23
+            ['key' => 5, 'label' => 'Infección del tracto urinario en el embarazo',
+             'cond' => array_merge($mujer1059, ['codPref' => 'O23', 'tip' => 'D', 'rownum' => 1]),
+             'regla' => $filas],
+            // Cat 6: cod_item_f O41
+            ['key' => 6, 'label' => 'Ruptura prematura de membranas y otras relacionadas',
+             'cond' => array_merge($mujer1059, ['codPref' => 'O41', 'tip' => 'D', 'rownum' => 1]),
+             'regla' => $filas],
+            // Cat 7 (#NOMINAL): O009 D R1
+            ['key' => 7, 'label' => 'Hemorragias de la 1º mitad del embarazo con laparotomía',
+             'cond' => array_merge($mujer1059, ['cod' => 'O009', 'tip' => 'D', 'rownum' => 1]),
+             'regla' => $filas],
+            // Cat 8 (Temporal1): cod_item_f in (O11,O13,O14)
+            ['key' => 8, 'label' => 'Trastorno hipertensivos en el Embarazo',
+             'cond' => array_merge($mujer1059, ['codPref' => ['O11', 'O13', 'O14'], 'tip' => 'D', 'rownum' => 1]),
+             'regla' => $filas],
+            // Cat 9: E010 (#NOMINAL) o cod_item_f O24/E05 (Temporal1)
+            ['key' => 9, 'label' => 'Trastornos metabólicos del embarazo',
+             'cond' => array_merge($mujer1059, ['cualquieraDe' => [
+                 ['cod' => 'E010', 'tip' => 'D', 'rownum' => 1],
+                 ['codPref' => 'O24', 'tip' => 'D', 'rownum' => 1],
+                 ['codPref' => 'E05', 'tip' => 'D', 'rownum' => 1],
+             ]]),
+             'regla' => $filas],
+            // Cat 10 (#NOMINAL): O40X/O410/O48X/O360/O362 D R1
             ['key' => 10, 'label' => 'Otras enfermedades del embarazo',
-             'cond' => ['tip' => 'D', 'sexo' => 'F', 'codEntre' => ['O98', 'O99Z']]],
+             'cond' => array_merge($mujer1059, ['cod' => ['O40X', 'O410', 'O48X', 'O360', 'O362'], 'tip' => 'D', 'rownum' => 1]),
+             'regla' => $filas],
+            // Cat 11 (#NOMINAL): O85X D R1
             ['key' => 11, 'label' => 'Sepsis',
-             'cond' => ['tip' => 'D', 'sexo' => 'F', 'cualquieraDe' => [ ['codPref' => 'A41'], ['codPref' => 'O85'] ]]],
+             'cond' => array_merge($mujer1059, ['cod' => 'O85X', 'tip' => 'D', 'rownum' => 1]),
+             'regla' => $filas],
+            // Cat 12: O980 (#NOMINAL) o A15/A16 + #GEST (TBC en gestante)
             ['key' => 12, 'label' => 'TBC',
-             'cond' => ['tip' => 'D', 'sexo' => 'F', 'codEntre' => ['A15', 'A19Z']]],
+             'cond' => array_merge($mujer1059, ['cualquieraDe' => [
+                 ['cod' => 'O980', 'tip' => 'D', 'rownum' => 1],
+                 ['codPref' => ['A15', 'A16'], 'tip' => 'D', 'rownum' => 1, 'citaTiene' => ['vl' => 'G']],
+             ]]),
+             'regla' => $filas],
+            // Cat 13 (#NOMINAL): O730/O731 D R1
             ['key' => 13, 'label' => 'Retención de Placentaria',
-             'cond' => ['tip' => 'D', 'sexo' => 'F', 'codPref' => ['O72', 'O73']]],
+             'cond' => array_merge($mujer1059, ['cod' => ['O730', 'O731'], 'tip' => 'D', 'rownum' => 1]),
+             'regla' => $filas],
+            // Cat 14 (#NOMINAL): O420/O421/O422/O429 D R1
             ['key' => 14, 'label' => 'Ruptura prematura de las membranas',
-             'cond' => ['tip' => 'D', 'sexo' => 'F', 'codPref' => 'O42']],
+             'cond' => array_merge($mujer1059, ['cod' => ['O420', 'O421', 'O422', 'O429'], 'tip' => 'D', 'rownum' => 1]),
+             'regla' => $filas],
+            // Cat 15 (#NOMINAL): O450/O458/O459 D R1
             ['key' => 15, 'label' => 'Desprendimiento Prematuro de la Placenta',
-             'cond' => ['tip' => 'D', 'sexo' => 'F', 'codPref' => 'O45']],
+             'cond' => array_merge($mujer1059, ['cod' => ['O450', 'O458', 'O459'], 'tip' => 'D', 'rownum' => 1]),
+             'regla' => $filas],
         ],
     ],
 
     /* ------------------------------------------------------------
      * SECCION V - RPT_05_MORBILIDAD_RN (7 filas, columna N unica)
-     * V. MORBILIDAD DEL RN
-     * ---------------------------------------------------------- */
+     * RN: id_tipedad_reg='D' and edad_reg between 1 and 29 (sin filtro de sexo)
+     * ------------------------------------------------------------ */
     [
         'codigo'   => 'RPT05_MORBILIDAD_RN',
         'procedimiento' => 'usp_TRAMA_BASE_MATERNO_2023_RPT_05_MORBILIDAD_RN',
@@ -717,27 +975,47 @@ function maternoSecciones(): array {
         'soloTotal'=> true,           // el Excel solo muestra la columna 'N°'
         'xmap'     => ['colTotal' => 'O', 'colGedad' => [1 => null], 'filaIni' => 33],
         'filas' => [
+            // Cat 1: P050/P070/P071/P0711/P0712 D R1 (bajo peso)
             ['key' => 1, 'label' => 'Bajo Peso',
-             'cond' => ['tip' => 'D', 'cualquieraDe' => [ ['codPref' => 'P05'], ['cod' => 'P072'] ]]],
+             'cond' => array_merge($rn, ['cod' => ['P050', 'P070', 'P071', 'P0711', 'P0712'], 'tip' => 'D', 'rownum' => 1]),
+             'regla' => $filas],
+            // Cat 2: P072 D R1 (prematuro)
             ['key' => 2, 'label' => 'Prematuro',
-             'cond' => ['tip' => 'D', 'codPref' => 'P07']],
+             'cond' => array_merge($rn, ['cod' => 'P072', 'tip' => 'D', 'rownum' => 1]),
+             'regla' => $filas],
+            // Cat 3: cod_item_f P21 (hipoxia)
             ['key' => 3, 'label' => 'Hipoxia',
-             'cond' => ['tip' => 'D', 'codEntre' => ['P20', 'P21Z']]],
+             'cond' => array_merge($rn, ['codPref' => 'P21', 'tip' => 'D', 'rownum' => 1]),
+             'regla' => $filas],
+            // Cat 4: P240 o cod_item_f P22/P23 (SDR)
             ['key' => 4, 'label' => 'Síndrome de Distrés Respiratorio',
-             'cond' => ['tip' => 'D', 'codPref' => 'P22']],
+             'cond' => array_merge($rn, ['cualquieraDe' => [
+                 ['cod' => 'P240', 'tip' => 'D', 'rownum' => 1],
+                 ['codPref' => 'P22', 'tip' => 'D', 'rownum' => 1],
+                 ['codPref' => 'P23', 'tip' => 'D', 'rownum' => 1],
+             ]]),
+             'regla' => $filas],
+            // Cat 5: cod_item_f P36 (sepsis neonatal)
             ['key' => 5, 'label' => 'Sepsis Neonatal',
-             'cond' => ['tip' => 'D', 'codEntre' => ['P36', 'P39Z']]],
+             'cond' => array_merge($rn, ['codPref' => 'P36', 'tip' => 'D', 'rownum' => 1]),
+             'regla' => $filas],
+            // Cat 6: cod_item_f A50 (sifilis congenita)
             ['key' => 6, 'label' => 'Sífilis Congénita',
-             'cond' => ['tip' => 'D', 'codPref' => 'A50']],
+             'cond' => array_merge($rn, ['codPref' => 'A50', 'tip' => 'D', 'rownum' => 1]),
+             'regla' => $filas],
+            // Cat 7: Z206 D R1 (RN VIH expuesto)
             ['key' => 7, 'label' => 'RN - VIH Expuesto',
-             'cond' => ['tip' => 'D', 'cod' => ['R75', 'Z134']]],
+             'cond' => array_merge($rn, ['cod' => 'Z206', 'tip' => 'D', 'rownum' => 1]),
+             'regla' => $filas],
         ],
     ],
 
     /* ------------------------------------------------------------
      * SECCION VI - RPT_06_ADMIN_MICRONUT (10 columnas)
-     * VI. TAMIZAJE DE HB Y ADMINISTRACION PREVENTIVA DE MICRONUTRIENTES
-     * ---------------------------------------------------------- */
+     * #SUPLEM = union de 4 ramas (S1..S4); se excluyen citas con O990 R1
+     * (#ANEMIA): a esas gestantes se les entrega sulfato ferroso por
+     * manejo TERAPEUTICO (seccion III), no preventivo.
+     * ------------------------------------------------------------ */
     [
         'codigo'   => 'RPT06_ADMIN_MICRONUT',
         'procedimiento' => 'usp_TRAMA_BASE_MATERNO_2023_RPT_06_ADMIN_MICRONUT',
@@ -747,42 +1025,43 @@ function maternoSecciones(): array {
         'xmap'     => ['filas' => [1 => 53, 2 => 54, 3 => 55, 4 => 56, 'T' => 57], 'colIni' => 'B'],
         'columnas' => [
             ['key' => 1, 'niv1' => 'Dosaje de Hemoglobina', 'niv2' => '1°',
-             'cond' => ['sexo' => 'F', 'gestante' => true, 'cod' => '85018'],
-             'regla' => ['tipo' => 'ocurrencia', 'n' => 1]],
+             'cond' => array_merge($mujer1059, ['cod' => ['85018', '85018.01'], 'vl' => '1', 'tip' => 'D'], $suplem, $noAnemia),
+             'regla' => $filas],
             ['key' => 2, 'niv1' => 'Dosaje de Hemoglobina', 'niv2' => '2°',
-             'cond' => ['sexo' => 'F', 'gestante' => true, 'cod' => '85018'],
-             'regla' => ['tipo' => 'ocurrencia', 'n' => 2]],
+             'cond' => array_merge($mujer1059, ['cod' => ['85018', '85018.01'], 'vl' => '2', 'tip' => 'D'], $suplem, $noAnemia),
+             'regla' => $filas],
             ['key' => 3, 'niv1' => 'Dosaje de Hemoglobina', 'niv2' => '3°',
-             'cond' => ['sexo' => 'F', 'gestante' => true, 'cod' => '85018'],
-             'regla' => ['tipo' => 'ocurrencia', 'n' => 3]],
+             'cond' => array_merge($mujer1059, ['cod' => ['85018', '85018.01'], 'vl' => '3', 'tip' => 'D'], $suplem, $noAnemia),
+             'regla' => $filas],
             ['key' => 4, 'niv1' => 'Suplem. Con Sulfato Ferroso', 'niv2' => 'Atendida',
-             'cond' => ['sexo' => 'F', 'gestante' => true, 'cod' => ['99604', '99604.01']],
-             'regla' => ['tipo' => 'ocurrencia', 'n' => 1]],
+             'cond' => array_merge($mujer1059, ['cod' => '99199.26', 'vl' => '1', 'tip' => 'D'], $suplem, $noAnemia),
+             'regla' => $filas],
             ['key' => 5, 'niv1' => 'Suplem. Con Sulfato Ferroso', 'niv2' => 'Suplementada - Gestante',
-             'cond' => ['sexo' => 'F', 'gestante' => true, 'cod' => ['99604', '99604.01']],
-             'regla' => ['tipo' => 'ocurrenciaMin', 'n' => 6]],
+             'cond' => array_merge($mujer1059, ['cod' => '99199.26', 'vl' => '6', 'tip' => 'D'], $suplem, $noAnemia),
+             'regla' => $filas],
             ['key' => 6, 'niv1' => 'Suplem. Con Sulfato Ferroso', 'niv2' => 'Suplementada - Puérpera',
-             'cond' => ['sexo' => 'F', 'puerpera' => true, 'cod' => ['99604', '99604.01']],
-             'regla' => ['tipo' => 'ocurrencia', 'n' => 1]],
+             'cond' => array_merge($mujer1059, ['cod' => '99199.26', 'vl' => 'TA', 'tip' => 'D'], $suplem, $noAnemia),
+             'regla' => $filas],
             ['key' => 7, 'niv1' => 'Suplem. Con Ácido Fólico', 'niv2' => '1°',
-             'cond' => ['sexo' => 'F', 'gestante' => true, 'cod' => '99604.02'],
-             'regla' => ['tipo' => 'ocurrencia', 'n' => 1]],
+             'cond' => array_merge($mujer1059, ['cod' => '99199.18', 'vl' => '1', 'tip' => 'D'], $suplem, $noAnemia),
+             'regla' => $filas],
             ['key' => 8, 'niv1' => 'Suplem. Con Ácido Fólico', 'niv2' => '2°',
-             'cond' => ['sexo' => 'F', 'gestante' => true, 'cod' => '99604.02'],
-             'regla' => ['tipo' => 'ocurrencia', 'n' => 2]],
+             'cond' => array_merge($mujer1059, ['cod' => '99199.18', 'vl' => '2', 'tip' => 'D'], $suplem, $noAnemia),
+             'regla' => $filas],
             ['key' => 9, 'niv1' => 'Suplem. Cálcio', 'niv2' => 'Atendida 1° Dosis',
-             'cond' => ['sexo' => 'F', 'gestante' => true, 'cod' => '99604.03'],
-             'regla' => ['tipo' => 'ocurrencia', 'n' => 1]],
+             'cond' => array_merge($mujer1059, ['cod' => '59401.05', 'vl' => '1', 'tip' => 'D'], $suplem, $noAnemia),
+             'regla' => $filas],
             ['key' => 10, 'niv1' => 'Suplem. Cálcio', 'niv2' => 'Suplementada 5° Dosis',
-             'cond' => ['sexo' => 'F', 'gestante' => true, 'cod' => '99604.03'],
-             'regla' => ['tipo' => 'ocurrencia', 'n' => 5]],
+             'cond' => array_merge($mujer1059, ['cod' => '59401.05', 'vl' => '5', 'tip' => 'D'], $suplem, $noAnemia),
+             'regla' => $filas],
         ],
     ],
 
     /* ------------------------------------------------------------
      * SECCION VII - RPT_07_PUERPERIO (3 columnas)
-     * VII. ATENCION DE PUERPERIO
-     * ---------------------------------------------------------- */
+     * Cat 1/2 = 59430 valor '1'/'2'; Cat 3 = O85X/O152 (#NOMINAL)
+     * o cod_item_f O91/O86/O90 (Temporal1)
+     * ------------------------------------------------------------ */
     [
         'codigo'   => 'RPT07_PUERPERIO',
         'procedimiento' => 'usp_TRAMA_BASE_MATERNO_2023_RPT_07_PUERPERIO',
@@ -791,24 +1070,31 @@ function maternoSecciones(): array {
         'gedades'  => [1, 2, 3, 4],
         'xmap'     => ['filas' => [1 => 53, 2 => 54, 3 => 55, 4 => 56, 'T' => 57], 'colIni' => 'N'],
         'columnas' => [
+            // Cat 1 (#NOMINAL): 59430 D valor '1' R1 (puerperio atendida)
             ['key' => 1, 'niv1' => 'Puerperio', 'niv2' => 'Atendida',
-             'cond' => ['tip' => 'D', 'sexo' => 'F', 'cod' => ['Z390', 'Z39']],
-             'regla' => ['tipo' => 'ocurrencia', 'n' => 1]],
+             'cond' => array_merge($mujer1059, ['cod' => '59430', 'vl' => '1', 'tip' => 'D', 'rownum' => 1]),
+             'regla' => $filas],
+            // Cat 2: 59430 D valor '2' R1 (puerperio controlada)
             ['key' => 2, 'niv1' => 'Puerperio', 'niv2' => 'Controlada',
-             'cond' => ['tip' => 'D', 'sexo' => 'F', 'cod' => ['Z392', 'Z391']],
-             'regla' => ['tipo' => 'ocurrencia', 'n' => 1]],
+             'cond' => array_merge($mujer1059, ['cod' => '59430', 'vl' => '2', 'tip' => 'D', 'rownum' => 1]),
+             'regla' => $filas],
+            // Cat 3: O85X/O152 D R1 o cod_item_f O91/O86/O90 D R1 (complicada)
             ['key' => 3, 'niv1' => 'Puerperio', 'niv2' => 'Complicada',
-             'cond' => ['tip' => 'D', 'sexo' => 'F', 'codEntre' => ['O85', 'O92Z']],
-             'regla' => ['tipo' => 'simple']],
+             'cond' => array_merge($mujer1059, ['cualquieraDe' => [
+                 ['cod' => ['O85X', 'O152'], 'tip' => 'D', 'rownum' => 1],
+                 ['codPref' => ['O91', 'O86', 'O90'], 'tip' => 'D', 'rownum' => 1],
+             ]]),
+             'regla' => $filas],
         ],
     ],
 
     /* ------------------------------------------------------------
      * SECCION VIII - RPT_08_VISITA (2 filas x 3 grupos etareos)
-     * VIII. VISITA DOMICILIARIA
-     * La plantilla official usa una mini-tabla de 2 filas (A Gestante /
-     * A Puérpera) x 3 columnas (12-17 / 18-29 / 30-59) en las filas 50-51.
-     * ---------------------------------------------------------- */
+     * #VISITA = citas (Z359/Z349 D R1) con C0011 D R1 (visita domiciliaria)
+     * Cat 2 = 99501 D R1 (atencion integral a la puerpera)
+     * La plantilla oficial usa una mini-tabla de 2 filas x 3 columnas
+     * (12-17 / 18-29 / 30-59), filas 50-51.
+     * ------------------------------------------------------------ */
     [
         'codigo'   => 'RPT08_VISITA',
         'procedimiento' => 'usp_TRAMA_BASE_MATERNO_2023_RPT_08_VISITA',
@@ -818,17 +1104,26 @@ function maternoSecciones(): array {
         'conTotal' => false,
         'xmap'     => ['colGedad' => [2 => 'S', 3 => 'T', 4 => 'U'], 'filaIni' => 50],
         'filas' => [
+            // Cat 1 (#NOMINAL + #VISITA): Z359/Z349 D R1 y la cita tiene C0011 D R1
             ['key' => 1, 'label' => 'A Gestante',
-             'cond' => ['tip' => 'D', 'sexo' => 'F', 'gestante' => true, 'cod' => ['Z001', 'Z008']]],
+             'cond' => array_merge($mujer1059, ['cod' => ['Z359', 'Z349'], 'tip' => 'D', 'rownum' => 1],
+                        ['citaTiene' => ['cod' => 'C0011', 'tip' => 'D', 'rownum' => 1]]),
+             'regla' => $filas],
+            // Cat 2 (#NOMINAL): 99501 D R1
             ['key' => 2, 'label' => 'A Puérpera',
-             'cond' => ['tip' => 'D', 'sexo' => 'F', 'puerpera' => true, 'cod' => ['Z001', 'Z008']]],
+             'cond' => array_merge($mujer1059, ['cod' => '99501', 'tip' => 'D', 'rownum' => 1]),
+             'regla' => $filas],
         ],
     ],
 
     /* ------------------------------------------------------------
      * SECCION IX-1 - RPT_09_1_TRANSMISION_VERTICAL (21 columnas)
-     * IX. TRANSMISION VERTICAL - GESTANTES
-     * ---------------------------------------------------------- */
+     * Temporales: #PRUEBAS (tamizajes + Z de gestante), #CONSEJ_VIH,
+     * #CONSEJ_SIFILIS, #CONSEJ_HEPATITIS, #TEMP (union de consejerias).
+     * 1° vs 2° tamizaje = Tipo_Diagnostico 'D' vs 'R'; el trimestre lo da
+     * el codigo Z (Z3491/Z3591 = I, Z3492/Z3592 = II, Z3493/Z3593 = III
+     * o Z359/Z349 con valor 1/2/3 y R1).
+     * ------------------------------------------------------------ */
     [
         'codigo'   => 'RPT09_1_TRANSMISION_VERTICAL',
         'procedimiento' => 'usp_TRAMA_BASE_MATERNO_2023_RPT_09_1_TRANSMISION_VERTICAL',
@@ -837,88 +1132,127 @@ function maternoSecciones(): array {
         'gedades'  => [1, 2, 3, 4],
         'xmap'     => ['filas' => [1 => 64, 2 => 65, 3 => 66, 4 => 67, 'T' => 68], 'colIni' => 'B'],
         'columnas' => [
-            // VIH/SIDA - 1° Tamizaje (I / II / III trimestre + Reactivo)
-            ['key' => 1,  'niv1' => 'VIH/SIDA', 'niv2' => '1° Tamizaje', 'niv3' => 'I Trim',
-             'cond' => ['sexo' => 'F', 'gestante' => true] + $labsVIH,
-             'regla' => ['tipo' => 'trimestre', 'n' => 1, 'oc' => 1]],
-            ['key' => 2,  'niv1' => 'VIH/SIDA', 'niv2' => '1° Tamizaje', 'niv3' => 'II Trim',
-             'cond' => ['sexo' => 'F', 'gestante' => true] + $labsVIH,
-             'regla' => ['tipo' => 'trimestre', 'n' => 2, 'oc' => 1]],
-            ['key' => 3,  'niv1' => 'VIH/SIDA', 'niv2' => '1° Tamizaje', 'niv3' => 'III Trim',
-             'cond' => ['sexo' => 'F', 'gestante' => true] + $labsVIH,
-             'regla' => ['tipo' => 'trimestre', 'n' => 3, 'oc' => 1]],
-            ['key' => 4,  'niv1' => 'VIH/SIDA', 'niv2' => '1° Tamizaje', 'niv3' => 'Reactivo',
-             'cond' => ['sexo' => 'F', 'gestante' => true] + $labsVIH,
-             'regla' => ['tipo' => 'ocurrencia', 'n' => 1,
-                         'citaCond' => ['cualquieraDe' => [ ['vl' => ['1', 'A', 'R']] + $labsVIH, ['cod' => ['B20', 'B24'], 'tip' => 'D'] ]]]],
-            // VIH/SIDA - 2° Tamizaje (II / III trimestre + Reactivo)
-            ['key' => 5,  'niv1' => 'VIH/SIDA', 'niv2' => '2° Tamizaje', 'niv3' => 'II Trim',
-             'cond' => ['sexo' => 'F', 'gestante' => true] + $labsVIH,
-             'regla' => ['tipo' => 'trimestre', 'n' => 2, 'oc' => 2]],
-            ['key' => 6,  'niv1' => 'VIH/SIDA', 'niv2' => '2° Tamizaje', 'niv3' => 'III Trim',
-             'cond' => ['sexo' => 'F', 'gestante' => true] + $labsVIH,
-             'regla' => ['tipo' => 'trimestre', 'n' => 3, 'oc' => 2]],
-            ['key' => 7,  'niv1' => 'VIH/SIDA', 'niv2' => '2° Tamizaje', 'niv3' => 'Reactivo',
-             'cond' => ['sexo' => 'F', 'gestante' => true] + $labsVIH,
-             'regla' => ['tipo' => 'ocurrencia', 'n' => 2,
-                         'citaCond' => ['vl' => ['1', 'A', 'R']] ]],
-            // SIFILIS - 1° Tamizaje
-            ['key' => 8,  'niv1' => 'SIFILIS', 'niv2' => '1° Tamizaje', 'niv3' => 'I Trim',
-             'cond' => ['sexo' => 'F', 'gestante' => true] + $labsSif,
-             'regla' => ['tipo' => 'trimestre', 'n' => 1, 'oc' => 1]],
-            ['key' => 9,  'niv1' => 'SIFILIS', 'niv2' => '1° Tamizaje', 'niv3' => 'II Trim',
-             'cond' => ['sexo' => 'F', 'gestante' => true] + $labsSif,
-             'regla' => ['tipo' => 'trimestre', 'n' => 2, 'oc' => 1]],
+            // VIH/SIDA - 1° Tamizaje (Tipo 'D'): I / II / III trimestre
+            ['key' => 1, 'niv1' => 'VIH/SIDA', 'niv2' => '1° Tamizaje', 'niv3' => 'I Trim',
+             'cond' => array_merge($mujer1059, $vihRow, ['tip' => 'D'],
+                        ['citaTieneTodo' => [$trim1, $consejVih1]]),
+             'regla' => $filas],
+            ['key' => 2, 'niv1' => 'VIH/SIDA', 'niv2' => '1° Tamizaje', 'niv3' => 'II Trim',
+             'cond' => array_merge($mujer1059, $vihRow, ['tip' => 'D'],
+                        ['citaTieneTodo' => [$trim2, $consejVih1]]),
+             'regla' => $filas],
+            ['key' => 3, 'niv1' => 'VIH/SIDA', 'niv2' => '1° Tamizaje', 'niv3' => 'III Trim',
+             'cond' => array_merge($mujer1059, $vihRow, ['tip' => 'D'],
+                        ['citaTieneTodo' => [$trim3, $consejVih1]]),
+             'regla' => $filas],
+            // VIH/SIDA - 1° Tamizaje Reactivo (Temporal3): labs 'RP' o 86318.01 'RP' R1,
+            // cita en #PRUEBAS y #CONSEJ_VIH valor '1'
+            ['key' => 4, 'niv1' => 'VIH/SIDA', 'niv2' => '1° Tamizaje', 'niv3' => 'Reactivo',
+             'cond' => array_merge($mujer1059, ['tip' => 'D',
+                        'cualquieraDe' => [
+                            ['cod' => $vihLabs, 'vl' => 'RP'],
+                            ['cod' => '86318.01', 'vl' => 'RP', 'rownum' => 1],
+                        ]],
+                        ['citaTieneTodo' => [$tamizBase, $gestZ, $consejVihBase, $consejVih1]]),
+             'regla' => $filas],
+            // VIH/SIDA - 2° Tamizaje (Tipo 'R'): II / III trimestre
+            ['key' => 5, 'niv1' => 'VIH/SIDA', 'niv2' => '2° Tamizaje', 'niv3' => 'II Trim',
+             'cond' => array_merge($mujer1059, $vihRow, ['tip' => 'R'],
+                        ['citaTieneTodo' => [$trim2, $consejVih2]]),
+             'regla' => $filas],
+            ['key' => 6, 'niv1' => 'VIH/SIDA', 'niv2' => '2° Tamizaje', 'niv3' => 'III Trim',
+             'cond' => array_merge($mujer1059, $vihRow, ['tip' => 'R'],
+                        ['citaTieneTodo' => [$trim3, $consejVih2]]),
+             'regla' => $filas],
+            // VIH/SIDA - 2° Tamizaje Reactivo: labs 'RP' o 86318.01 'RP' R1 y #CONSEJ_VIH valor '2'
+            ['key' => 7, 'niv1' => 'VIH/SIDA', 'niv2' => '2° Tamizaje', 'niv3' => 'Reactivo',
+             'cond' => array_merge($mujer1059, ['tip' => 'D',
+                        'cualquieraDe' => [
+                            ['cod' => $vihLabs, 'vl' => 'RP'],
+                            ['cod' => '86318.01', 'vl' => 'RP', 'rownum' => 1],
+                        ]],
+                        ['citaTieneTodo' => [$tamizBase, $gestZ, $consejVihBase, $consejVih2]]),
+             'regla' => $filas],
+            // SIFILIS - 1° Tamizaje (Tipo 'D'): I / II / III trimestre
+            ['key' => 8, 'niv1' => 'SIFILIS', 'niv2' => '1° Tamizaje', 'niv3' => 'I Trim',
+             'cond' => array_merge($mujer1059, $sifRow, ['tip' => 'D'],
+                        ['citaTieneTodo' => [$trim1, $consejSif1]]),
+             'regla' => $filas],
+            ['key' => 9, 'niv1' => 'SIFILIS', 'niv2' => '1° Tamizaje', 'niv3' => 'II Trim',
+             'cond' => array_merge($mujer1059, $sifRow, ['tip' => 'D'],
+                        ['citaTieneTodo' => [$trim2, $consejSif1]]),
+             'regla' => $filas],
             ['key' => 10, 'niv1' => 'SIFILIS', 'niv2' => '1° Tamizaje', 'niv3' => 'III Trim',
-             'cond' => ['sexo' => 'F', 'gestante' => true] + $labsSif,
-             'regla' => ['tipo' => 'trimestre', 'n' => 3, 'oc' => 1]],
+             'cond' => array_merge($mujer1059, $sifRow, ['tip' => 'D'],
+                        ['citaTieneTodo' => [$trim3, $consejSif1]]),
+             'regla' => $filas],
+            // SIFILIS - 1° Tamizaje Positivo: labs 'RP' o 86318.01 'RP' R2 y #CONSEJ_SIF '1'
             ['key' => 11, 'niv1' => 'SIFILIS', 'niv2' => '1° Tamizaje', 'niv3' => 'Positivo',
-             'cond' => ['sexo' => 'F', 'gestante' => true] + $labsSif,
-             'regla' => ['tipo' => 'ocurrencia', 'n' => 1,
-                         'citaCond' => ['cualquieraDe' => [ ['vl' => ['1', 'A', 'R']] + $labsSif, ['cod' => 'A53', 'tip' => 'D'] ]]]],
-            // SIFILIS - 2° Tamizaje
+             'cond' => array_merge($mujer1059, ['tip' => 'D',
+                        'cualquieraDe' => [
+                            ['cod' => $sifLabs, 'vl' => 'RP'],
+                            ['cod' => '86318.01', 'vl' => 'RP', 'rownum' => 2],
+                        ]],
+                        ['citaTieneTodo' => [$tamizBase, $gestZ, $consejSifBase, $consejSif1]]),
+             'regla' => $filas],
+            // SIFILIS - 2° Tamizaje (Tipo 'R'): II / III trimestre
             ['key' => 12, 'niv1' => 'SIFILIS', 'niv2' => '2° Tamizaje', 'niv3' => 'II Trim',
-             'cond' => ['sexo' => 'F', 'gestante' => true] + $labsSif,
-             'regla' => ['tipo' => 'trimestre', 'n' => 2, 'oc' => 2]],
+             'cond' => array_merge($mujer1059, $sifRow, ['tip' => 'R'],
+                        ['citaTieneTodo' => [$trim2, $consejSif2]]),
+             'regla' => $filas],
             ['key' => 13, 'niv1' => 'SIFILIS', 'niv2' => '2° Tamizaje', 'niv3' => 'III Trim',
-             'cond' => ['sexo' => 'F', 'gestante' => true] + $labsSif,
-             'regla' => ['tipo' => 'trimestre', 'n' => 3, 'oc' => 2]],
+             'cond' => array_merge($mujer1059, $sifRow, ['tip' => 'R'],
+                        ['citaTieneTodo' => [$trim3, $consejSif2]]),
+             'regla' => $filas],
+            // SIFILIS - 2° Tamizaje Positivo: labs 'RP' o 86318.01 'RP' R2 y #CONSEJ_SIF '2'
             ['key' => 14, 'niv1' => 'SIFILIS', 'niv2' => '2° Tamizaje', 'niv3' => 'Positivo',
-             'cond' => ['sexo' => 'F', 'gestante' => true] + $labsSif,
-             'regla' => ['tipo' => 'ocurrencia', 'n' => 2,
-                         'citaCond' => ['vl' => ['1', 'A', 'R']] ]],
-            // HEPATITIS B - 1° Tamizaje
+             'cond' => array_merge($mujer1059, ['tip' => 'D',
+                        'cualquieraDe' => [
+                            ['cod' => $sifLabs, 'vl' => 'RP'],
+                            ['cod' => '86318.01', 'vl' => 'RP', 'rownum' => 2],
+                        ]],
+                        ['citaTieneTodo' => [$tamizBase, $gestZ, $consejSifBase, $consejSif2]]),
+             'regla' => $filas],
+            // HEPATITIS B - 1° Tamizaje (Tipo 'D'): I / II / III trimestre
             ['key' => 15, 'niv1' => 'HEPATITIS B', 'niv2' => '1° Tamizaje', 'niv3' => 'I Trim',
-             'cond' => ['sexo' => 'F', 'gestante' => true] + $labsHepB,
-             'regla' => ['tipo' => 'trimestre', 'n' => 1, 'oc' => 1]],
+             'cond' => array_merge($mujer1059, $hepRow, ['tip' => 'D'],
+                        ['citaTieneTodo' => [$trim1, $consejHep1]]),
+             'regla' => $filas],
             ['key' => 16, 'niv1' => 'HEPATITIS B', 'niv2' => '1° Tamizaje', 'niv3' => 'II Trim',
-             'cond' => ['sexo' => 'F', 'gestante' => true] + $labsHepB,
-             'regla' => ['tipo' => 'trimestre', 'n' => 2, 'oc' => 1]],
+             'cond' => array_merge($mujer1059, $hepRow, ['tip' => 'D'],
+                        ['citaTieneTodo' => [$trim2, $consejHep1]]),
+             'regla' => $filas],
             ['key' => 17, 'niv1' => 'HEPATITIS B', 'niv2' => '1° Tamizaje', 'niv3' => 'III Trim',
-             'cond' => ['sexo' => 'F', 'gestante' => true] + $labsHepB,
-             'regla' => ['tipo' => 'trimestre', 'n' => 3, 'oc' => 1]],
+             'cond' => array_merge($mujer1059, $hepRow, ['tip' => 'D'],
+                        ['citaTieneTodo' => [$trim3, $consejHep1]]),
+             'regla' => $filas],
+            // HEPATITIS B - 1° Tamizaje Reactivo: labs 'RP' y #CONSEJ_HEPATITIS '1'
             ['key' => 18, 'niv1' => 'HEPATITIS B', 'niv2' => '1° Tamizaje', 'niv3' => 'Reactivo',
-             'cond' => ['sexo' => 'F', 'gestante' => true] + $labsHepB,
-             'regla' => ['tipo' => 'ocurrencia', 'n' => 1,
-                         'citaCond' => ['cualquieraDe' => [ ['vl' => ['1', 'A', 'R']] + $labsHepB, ['codPref' => 'B16', 'tip' => 'D'] ]]]],
-            // HEPATITIS B - 2° Tamizaje
+             'cond' => array_merge($mujer1059, ['cod' => $hepLabs, 'vl' => 'RP', 'tip' => 'D'],
+                        ['citaTieneTodo' => [$tamizBase, $gestZ, $consejHepBase, $consejHep1]]),
+             'regla' => $filas],
+            // HEPATITIS B - 2° Tamizaje (Tipo 'R'): II / III trimestre
             ['key' => 19, 'niv1' => 'HEPATITIS B', 'niv2' => '2° Tamizaje', 'niv3' => 'II Trim',
-             'cond' => ['sexo' => 'F', 'gestante' => true] + $labsHepB,
-             'regla' => ['tipo' => 'trimestre', 'n' => 2, 'oc' => 2]],
+             'cond' => array_merge($mujer1059, $hepRow, ['tip' => 'R'],
+                        ['citaTieneTodo' => [$trim2, $consejHep2]]),
+             'regla' => $filas],
             ['key' => 20, 'niv1' => 'HEPATITIS B', 'niv2' => '2° Tamizaje', 'niv3' => 'III Trim',
-             'cond' => ['sexo' => 'F', 'gestante' => true] + $labsHepB,
-             'regla' => ['tipo' => 'trimestre', 'n' => 3, 'oc' => 2]],
+             'cond' => array_merge($mujer1059, $hepRow, ['tip' => 'R'],
+                        ['citaTieneTodo' => [$trim3, $consejHep2]]),
+             'regla' => $filas],
+            // HEPATITIS B - 2° Tamizaje Reactivo: labs 'RP' y #CONSEJ_HEPATITIS '2'
+            // (los reactivos del T-SQL son siempre id_tipitem='D')
             ['key' => 21, 'niv1' => 'HEPATITIS B', 'niv2' => '2° Tamizaje', 'niv3' => 'Reactivo',
-             'cond' => ['sexo' => 'F', 'gestante' => true] + $labsHepB,
-             'regla' => ['tipo' => 'ocurrencia', 'n' => 2,
-                         'citaCond' => ['vl' => ['1', 'A', 'R']] ]],
+             'cond' => array_merge($mujer1059, ['cod' => $hepLabs, 'vl' => 'RP', 'tip' => 'D'],
+                        ['citaTieneTodo' => [$tamizBase, $gestZ, $consejHepBase, $consejHep2]]),
+             'regla' => $filas],
         ],
     ],
 
     /* ------------------------------------------------------------
      * SECCION IX-2 - RPT_09_2_TRANSMISION_VERTICAL (6 columnas)
-     * IX. TRANSMISION VERTICAL - PUERPERAS INMEDIATAS
-     * ---------------------------------------------------------- */
+     * #PUERPERAS = citas con tamizaje (VIH o sifilis) y 59430 valor '1' D
+     * ------------------------------------------------------------ */
     [
         'codigo'   => 'RPT09_2_TRANSMISION_VERTICAL',
         'procedimiento' => 'usp_TRAMA_BASE_MATERNO_2023_RPT_09_2_TRANSMISION_VERTICAL',
@@ -927,34 +1261,53 @@ function maternoSecciones(): array {
         'gedades'  => [1, 2, 3, 4],
         'xmap'     => ['filas' => [1 => 75, 2 => 76, 3 => 77, 4 => 78, 'T' => 79], 'colIni' => 'B'],
         'columnas' => [
+            // Cat 1 (#NOMINAL): VIH labs D R1 (o 86318.01 R1) en puerpera inmediata
             ['key' => 1, 'niv1' => 'VIH/SIDA', 'niv2' => 'PR / Para VIH',
-             'cond' => ['sexo' => 'F', 'puerpera' => true] + $labsVIH,
-             'regla' => ['tipo' => 'simple']],
+             'cond' => array_merge($mujer1059, $vihRow, ['tip' => 'D'], $puerpera59430),
+             'regla' => $filas],
+            // Cat 2 (Temporal1): VIH labs 'RP' o 86318.01 'RP' R1
             ['key' => 2, 'niv1' => 'VIH/SIDA', 'niv2' => 'Reactivo Para VIH',
-             'cond' => ['sexo' => 'F', 'puerpera' => true, 'vl' => ['1', 'A', 'R']] + $labsVIH,
-             'regla' => ['tipo' => 'simple']],
+             'cond' => array_merge($mujer1059, ['tip' => 'D',
+                        'cualquieraDe' => [
+                            ['cod' => $vihLabs, 'vl' => 'RP'],
+                            ['cod' => '86318.01', 'vl' => 'RP', 'rownum' => 1],
+                        ]], $puerpera59430),
+             'regla' => $filas],
+            // Cat 3: 86780.01/86780 D R1 (o 86318.01 R1) = prueba rapida sifilis
             ['key' => 3, 'niv1' => 'SIFILIS', 'niv2' => 'Prueba Rápida',
-             'cond' => ['sexo' => 'F', 'puerpera' => true, 'cod' => ['Z113', '86781']],
-             'regla' => ['tipo' => 'simple']],
+             'cond' => array_merge($mujer1059, ['tip' => 'D',
+                        'cualquieraDe' => [
+                            ['cod' => ['86780.01', '86780'], 'rownum' => 1],
+                            ['cod' => '86318.01', 'rownum' => 1],
+                        ]], $puerpera59430),
+             'regla' => $filas],
+            // Cat 4: 86780.01/86780 'RP' o 86318.01 'RP' R2 = prueba rapida positiva
             ['key' => 4, 'niv1' => 'SIFILIS', 'niv2' => 'Positivo',
-             'cond' => ['sexo' => 'F', 'puerpera' => true, 'vl' => ['1', 'A', 'R'], 'cod' => ['Z113', '86781']],
-             'regla' => ['tipo' => 'simple']],
+             'cond' => array_merge($mujer1059, ['tip' => 'D',
+                        'cualquieraDe' => [
+                            ['cod' => ['86780.01', '86780'], 'vl' => 'RP'],
+                            ['cod' => '86318.01', 'vl' => 'RP', 'rownum' => 2],
+                        ]], $puerpera59430),
+             'regla' => $filas],
+            // Cat 5: 86592/86593 D R1 = tamizaje RPR
             ['key' => 5, 'niv1' => 'SIFILIS', 'niv2' => 'Tamizaje RPR',
-             'cond' => ['sexo' => 'F', 'puerpera' => true, 'cod' => ['86592', '86780']],
-             'regla' => ['tipo' => 'simple']],
+             'cond' => array_merge($mujer1059, ['cod' => ['86592', '86593'], 'tip' => 'D', 'rownum' => 1], $puerpera59430),
+             'regla' => $filas],
+            // Cat 6: 86592/86593 'RP' R1 = RPR reactivo
             ['key' => 6, 'niv1' => 'SIFILIS', 'niv2' => 'RPR Reactivo',
-             'cond' => ['sexo' => 'F', 'puerpera' => true, 'vl' => ['1', 'A', 'R'], 'cod' => ['86592', '86780']],
-             'regla' => ['tipo' => 'simple']],
+             'cond' => array_merge($mujer1059, ['cod' => ['86592', '86593'], 'vl' => 'RP', 'tip' => 'D', 'rownum' => 1], $puerpera59430),
+             'regla' => $filas],
         ],
     ],
 
     /* ------------------------------------------------------------
      * SECCION IX-3 - RPT_09_3_TRANSMISION_VERTICAL (4 columnas)
-     * Prueba rapida VIH en trabajo de parto / aborto.
-     * La plantilla oficial NO tiene zona de datos para este bloque (en el
-     * flujo ODBC original quedaba siempre en 0): se muestra en la web con
-     * fines de auditoria y NO se exporta al Excel.
-     * ---------------------------------------------------------- */
+     * 1° prueba rapida para VIH en trabajo de parto / aborto.
+     * #RIESGO = citas con 99401.34/99403.03 valor RSA (trabajo de parto) /
+     * RMA (aborto). La plantilla oficial NO tiene zona de datos para este
+     * bloque (en el flujo ODBC original quedaba siempre en 0): se muestra
+     * en la web y NO se exporta al Excel.
+     * ------------------------------------------------------------ */
     [
         'codigo'   => 'RPT09_3_TRANSMISION_VERTICAL',
         'procedimiento' => 'usp_TRAMA_BASE_MATERNO_2023_RPT_09_3_TRANSMISION_VERTICAL',
@@ -963,25 +1316,44 @@ function maternoSecciones(): array {
         'gedades'  => [1, 2, 3, 4],
         'xmap'     => null, // sin zona en la plantilla oficial
         'columnas' => [
+            // Cat 1 (#NOMINAL): VIH labs D R1 y #RIESGO 99401.34 valor 'RSA'
             ['key' => 1, 'niv1' => 'VIH en Trabajo de Parto', 'niv2' => '1° Prueba Rápida',
-             'cond' => ['sexo' => 'F', 'citaTiene' => ['tip' => 'D', 'codEntre' => ['O80', 'O84Z']]] + $labsVIH,
-             'regla' => ['tipo' => 'simple']],
+             'cond' => array_merge($mujer1059, $vihRow, ['tip' => 'D'],
+                        ['citaTiene' => ['cod' => '99401.34', 'vl' => 'RSA']]),
+             'regla' => $filas],
+            // Cat 2 (Temporal1): VIH labs 'RP' o 86318.01 'RP' R1 y #RIESGO 99403.03 'RSA'
             ['key' => 2, 'niv1' => 'VIH en Trabajo de Parto', 'niv2' => 'Reactivo',
-             'cond' => ['sexo' => 'F', 'citaTiene' => ['tip' => 'D', 'codEntre' => ['O80', 'O84Z']]] + $labsVIH,
-             'regla' => ['tipo' => 'simple', 'citaCond' => ['vl' => ['1', 'A', 'R']]]],
+             'cond' => array_merge($mujer1059, ['tip' => 'D',
+                        'cualquieraDe' => [
+                            ['cod' => $vihLabs, 'vl' => 'RP'],
+                            ['cod' => '86318.01', 'vl' => 'RP', 'rownum' => 1],
+                        ]],
+                        ['citaTiene' => ['cod' => '99403.03', 'vl' => 'RSA']]),
+             'regla' => $filas],
+            // Cat 3: VIH labs D R1 y #RIESGO 99401.34 valor 'RMA'
             ['key' => 3, 'niv1' => 'VIH en Aborto', 'niv2' => '1° Prueba Rápida',
-             'cond' => ['sexo' => 'F', 'citaTiene' => ['tip' => 'D', 'codEntre' => ['O00', 'O07Z']]] + $labsVIH,
-             'regla' => ['tipo' => 'simple']],
+             'cond' => array_merge($mujer1059, $vihRow, ['tip' => 'D'],
+                        ['citaTiene' => ['cod' => '99401.34', 'vl' => 'RMA']]),
+             'regla' => $filas],
+            // Cat 4: VIH labs 'RP' o 86318.01 'RP' R1 y #RIESGO 99403.03 'RMA'
             ['key' => 4, 'niv1' => 'VIH en Aborto', 'niv2' => 'Reactivo',
-             'cond' => ['sexo' => 'F', 'citaTiene' => ['tip' => 'D', 'codEntre' => ['O00', 'O07Z']]] + $labsVIH,
-             'regla' => ['tipo' => 'simple', 'citaCond' => ['vl' => ['1', 'A', 'R']]]],
+             'cond' => array_merge($mujer1059, ['tip' => 'D',
+                        'cualquieraDe' => [
+                            ['cod' => $vihLabs, 'vl' => 'RP'],
+                            ['cod' => '86318.01', 'vl' => 'RP', 'rownum' => 1],
+                        ]],
+                        ['citaTiene' => ['cod' => '99403.03', 'vl' => 'RMA']]),
+             'regla' => $filas],
         ],
     ],
 
     /* ------------------------------------------------------------
      * SECCION X - RPT_10_CONSEJERIA (3 columnas)
-     * X. CONSEJERIA EN LACTANCIA MATERNA
-     * ---------------------------------------------------------- */
+     * #CONSEJ_GEST  = citas con 99401.02 D valor '3' y (Z3493/Z3593 D o
+     *                 Z359/Z349 valor '3' R1)
+     * #CONSEJ_PUERP = citas con 99401.02 D valor '4' y 59410/59515 R1,
+     *                 o 99401.02 D valor '5' y 59430 R1
+     * ------------------------------------------------------------ */
     [
         'codigo'   => 'RPT10_CONSEJERIA',
         'procedimiento' => 'usp_TRAMA_BASE_MATERNO_2023_RPT_10_CONSEJERIA',
@@ -990,15 +1362,18 @@ function maternoSecciones(): array {
         'gedades'  => [1, 2, 3, 4],
         'xmap'     => ['filas' => [1 => 85, 2 => 86, 3 => 87, 4 => 88, 'T' => 89], 'colIni' => 'B'],
         'columnas' => [
+            // Cat 1: 99401.02 D valor '3' (gestante 3° consejeria)
             ['key' => 1, 'niv1' => 'Consejería Lactancia Materna', 'niv2' => 'GESTANTE 3° CONSEJERÍA',
-             'cond' => ['sexo' => 'F', 'gestante' => true, 'cod' => ['99401', '99207.04']],
-             'regla' => ['tipo' => 'ocurrencia', 'n' => 3]],
+             'cond' => array_merge($mujer1059, ['cod' => '99401.02', 'tip' => 'D', 'vl' => '3'], $tempX),
+             'regla' => $filas],
+            // Cat 2: 99401.02 D valor '4' (puerperio inmediato 4° consejeria)
             ['key' => 2, 'niv1' => 'Consejería Lactancia Materna', 'niv2' => 'PUÉRPERIO INMEDIATO 4° CONSEJERÍA',
-             'cond' => ['sexo' => 'F', 'puerpera' => true, 'cod' => ['99401', '99207.04']],
-             'regla' => ['tipo' => 'ocurrencia', 'n' => 4]],
+             'cond' => array_merge($mujer1059, ['cod' => '99401.02', 'tip' => 'D', 'vl' => '4'], $tempX),
+             'regla' => $filas],
+            // Cat 3: 99401.02 D valor '5' (atencion puerperal 5° a + consejeria)
             ['key' => 3, 'niv1' => 'Consejería Lactancia Materna', 'niv2' => 'ATENCIÓN PUÉRPERAL 5° a + CONSEJERÍA',
-             'cond' => ['sexo' => 'F', 'puerpera' => true, 'cod' => ['99401', '99207.04']],
-             'regla' => ['tipo' => 'ocurrenciaMin', 'n' => 5]],
+             'cond' => array_merge($mujer1059, ['cod' => '99401.02', 'tip' => 'D', 'vl' => '5'], $tempX),
+             'regla' => $filas],
         ],
     ],
     ];
@@ -1036,82 +1411,104 @@ function maternoGetEstablecimientosZS(PDO $pdo): array {
 }
 
 /**
- * Codigos de item que intervienen en el reporte de Materno (para acotar la
- * consulta a la tabla consolidada): prefijos CIE del paquete materno + items
- * de laboratorio / procedimientos / vacunas.
+ * Codigos de item que intervienen en el reporte de Materno, segun los
+ * procedimientos del archivo "03 Creacion de Procedimientos" (RPT_01..RPT_10).
+ *
+ * Devuelve ['prefijos' => [...], 'exactos' => [...]]:
+ *   - prefijos: familias CIE (como cod_item_f) y bloques de codigos -> LIKE 'XXX%'
+ *   - exactos: items de laboratorio / procedimientos / vacunas / consejeria
+ *
+ * La consulta trae ademas TODAS las filas con Valor_Lab='G' (el marcador de
+ * gestante que usan #GEST del RPT_01 y RPT_04 puede estar en cualquier codigo).
  */
 function maternoCodigosInteres(): array {
     return [
-        // Prefijos CIE (se usan con LIKE 'xxx%')
-        'O',                                  // embarazo / parto / puerperio / complicaciones (O00-O9A)
-        'Z32', 'Z33', 'Z34', 'Z35',           // atencion prenatal
-        'Z39', 'Z390', 'Z391', 'Z392',        // atencion de puerperio
-        'Z00', 'Z001', 'Z008', 'Z012', 'Z013',// visita domiciliaria / atencion odontologica
-        'Z63', 'Z634',                        // VBG (positivo)
-        'Z11', 'Z113', 'Z114',                // tamizajes
-        'D50',                                // anemia (D50-D64)
-        'P05', 'P07', 'P2', 'P3',             // morbilidad del RN
-        'A50', 'A41', 'A53',                  // sifilis congenita / sepsis / sifilis
-        'A15', 'A16', 'A17', 'A18', 'A19',    // TBC
-        'B16', 'B17', 'B18', 'B20', 'B24',    // hepatitis B / VIH
-        'T74',                                // maltrato (VBG positivo)
-        'R75', 'Z134',                        // RN VIH expuesto
-        'N87', 'N870', 'N871', 'N872', 'N873',// lesiones PAP
-        'D069', 'R876', 'C539',               // lesiones PAP (con C539 para PAP positivo)
-        // Items exactos (laboratorio / procedimientos / vacunas / consejeria)
-        '88141',                              // Papanicolaou
-        '85018',                              // Dosaje de hemoglobina
-        '81000', '81001', '81002', '81003', '81005', // orina / proteinuria
-        '82947', '82948', '82950',            // glicemia
-        '86592', '86780', '86781',            // RPR / VDRL / prueba rapida sifilis
-        '86701', '86702', '86703', '87389',   // VIH
-        '87340',                              // HBsAg (hepatitis B)
-        '86900', '86901', '86904',            // grupo sanguineo y Rh
-        '87086', '87088',                     // urocultivo (bacteriuria)
-        '76801', '76805', '76811',            // ecografia obstetrica
-        '59025',                              // monitoreo fetal
-        '99604', '99604.01', '99604.02', '99604.03', // entrega de micronutrientes
-        '99401', '99207.04', '99207.05', '99408', '99499', // consejeria / plan de parto / VBG
-        '90715', '90714',                     // dtpa / dT (gestantes)
-        '90744', '90746',                     // Hepatitis B (gestantes)
-        '90657', '90658',                     // Influenza
+        // Familias CIE (cod_item_f) y bloques usados por los RPT_04/RPT_05
+        'prefijos' => [
+            'O',                    // O00-O9A: embarazo/parto/puerperio/complicaciones (O470, O60X, O009, O85X, O152, O980, O72x, O45x...)
+            'Z34', 'Z35',          // atencion prenatal: Z3491/Z3492/Z3493/Z3591/Z3592/Z3593/Z349/Z359
+            'A15', 'A16',          // TBC (cod_item_f A15/A16 del RPT_04 cat 12)
+            'A50',                 // sifilis congenita (cod_item_f A50 del RPT_05)
+            'D06',                 // D060/D061/D069 (lesiones por PAP, #POSITIVO RPT_01)
+            'N87',                 // N870/N871/N872/N879 (lesiones por PAP, #POSITIVO RPT_01)
+            'P05', 'P07',          // RN bajo peso / prematuro (P050, P07x, P0711, P0712, P072)
+            'P2', 'P3',            // RN: P21x (hipoxia), P22x, P23x, P240, P36x (sepsis)
+            'E05',                 // tiroides (cod_item_f E05 del RPT_04 cat 9)
+            'Z20',                 // Z206 (RN VIH expuesto)
+        ],
+        'exactos' => [
+            // ---- RPT_01: APN reenfocada ----
+            '88141',                              // Papanicolaou (#PAP)
+            '90715', '90714',                     // dTpa / dT (inmunizacion gestante)
+            '90744', '90746',                     // Hepatitis B (inmunizacion gestante)
+            '90658',                              // Influenza (inmunizacion gestante)
+            '90749.01',                           // COVID (inmunizacion gestante)
+            'D1110',                              // atencion odontologica
+            '96150.01',                           // VBG tamizada (#EMBARAZO / Temporal5)
+            'R456',                               // VBG positivo (Temporal5)
+            '81000.02', '81002', '81007',         // tamizaje bacteriuria (#EMBARAZO / Temporal5/8)
+            '82044',                              // tamizaje proteinuria
+            '80055.01', '80055.02',               // 1a/2a bateria completa
+            '76817', '76805',                     // ecografia obstetrica (1a/2a/3a por valor)
+            // ---- RPT_02: bienestar fetal / psicoprofilaxis / estimulacion ----
+            '59020', '59025',                     // monitoreo fetal (1o/2o por valor)
+            '99412.01', '99412.02',               // estimulacion prenatal / psicoprofilaxis
+            // ---- RPT_03: anemia / manejo terapeutico / plan de parto ----
+            '99199.26',                           // sulfato ferroso (1a/6a entrega, 'TA' puerpera)
+            '85018', '85018.01',                  // dosaje de hemoglobina
+            'U1692', '59401.06',                  // plan de parto
+            // (O990 = anemia, cubierto por el prefijo 'O')
+            // ---- RPT_06: micronutrientes ----
+            '99199.18',                           // acido folico
+            '59401.05',                           // suplemento de calcio
+            // ---- RPT_07 / RPT_09_2 / RPT_10: puerperio ----
+            '59430',                              // atencion de puerperio (vl 1/2)
+            '59410', '59515',                     // puerperio inmediato (RPT_10)
+            // ---- RPT_08: visita domiciliaria ----
+            'C0011',                              // visita domiciliaria a la gestante
+            '99501',                              // atencion integral a la puerpera
+            // ---- RPT_09_1/2/3: transmision vertical ----
+            '86703.01', '86703.02', '87389', '86703', // ELISA VIH
+            '86780.01', '86592', '86593', '86780',   // RPR / VDRL sifilis
+            '87342', '87340', '82397', '86706', '86704', '86705', '87351', '86707', // hepatitis B
+            '86318.01',                           // prueba rapida VIH (1a/2a por I_ROWNUM_LAB)
+            '99401.33',                           // consejeria pre-test VIH (vl 1/2)
+            '99402.05',                           // consejeria pre-test sifilis/hepatitis (vl 1/2)
+            '99401.34', '99403.03',               // riesgo en trabajo de parto/aborto (RSA/RMA)
+            // ---- RPT_10: consejeria en lactancia materna ----
+            '99401.02',                           // consejeria LMF (vl 3/4/5)
+            // ---- RPT_04 cat 9: trastornos metabolicos ----
+            'E010',                               // trastorno tiroideo en el embarazo
+        ],
     ];
 }
 
 /**
  * Construye la clausula WHERE de codigos de item a partir de
  * maternoCodigosInteres(): prefijos (LIKE) + codigos exactos (IN).
+ * Incluye las filas con Valor_Lab='G' (marcador de gestante de #GEST).
  */
 function maternoWhereCodigos(array &$params): string {
-    $codigos = maternoCodigosInteres();
-    $likes = [];
-    $exactos = [];
-    foreach ($codigos as $c) {
-        if (strlen($c) === 1) {
-            $likes[] = $c;
-        } else {
-            $exactos[] = $c;
-        }
-    }
+    $lista = maternoCodigosInteres();
     $partes = [];
     $i = 0;
-    foreach ($likes as $pref) {
+    foreach ($lista['prefijos'] as $pref) {
         $k = ":pref_$i";
         $params[$k] = $pref . '%';
         $partes[] = "Codigo_Item LIKE $k";
         $i++;
     }
     $inPh = [];
-    foreach ($exactos as $j => $c) {
+    foreach ($lista['exactos'] as $j => $c) {
         $k = ":cod_$j";
         $params[$k] = $c;
         $inPh[] = $k;
     }
     if ($inPh) $partes[] = "Codigo_Item IN (" . implode(',', $inPh) . ")";
-    // Vacunas COVID: rango 90692-90703 (codigo_item alfanumerico de 5 digitos)
-    $params[':cod_covid_min'] = '90692';
-    $params[':cod_covid_max'] = '90703';
-    $partes[] = "(Codigo_Item BETWEEN :cod_covid_min AND :cod_covid_max AND Codigo_Item REGEXP '^90[0-9]{3}$')";
+    // #GEST (RPT_01/RPT_04): el marcador valor_lab='G' puede estar en cualquier
+    // codigo de la cita, por eso se traen todas las filas con valor 'G'.
+    $params[':vl_g'] = 'G';
+    $partes[] = "Valor_Lab = :vl_g";
     return "(" . implode(" OR ", $partes) . ")";
 }
 
@@ -1224,24 +1621,46 @@ function mtrCandidatos(array $cond, array $porCod, array $porIni2, array $porIni
 }
 
 /**
- * Cuenta las CITAS que cumplen una condicion aplicando la regla de conteo.
+ * Cuenta las FILAS que cumplen una condicion aplicando la regla de conteo.
  *
- * 1) Encuentra las filas que cumplen la condicion y las DEDUP por cita
- *    (una cita = una atencion: varias filas de la misma cita cuentan 1 vez,
- *    igual que las tablas TRAMA_*_NOMINAL del archivo 02).
- * 2) Ordena las citas de cada paciente por fecha.
- * 3) Aplica la regla:
- *      simple          : cada cita cuenta en su grupo etareo
- *      trimestre N [oc]: la oc-esima cita del paciente cuenta si su edad
- *                        gestacional (por FUR) cae en el trimestre N
- *      ocurrencia N    : la N-esima cita del paciente cuenta 1 vez
- *      ocurrenciaMin N : pacientes con N o mas citas: la N-esima cuenta
- *      conteoMinimo N  : pacientes con N o mas citas cuentan 1 vez (la 1a)
+ * REGLA 'filas' (adaptacion fiel del archivo 03): el T-SQL inserta en cada
+ * tabla TRAMA_BASE_MATERNO_*_NOMINAL una fila por cada fila de TRAMAHIS_DTSG
+ * que cumple el WHERE de la categoria y consolida con COUNT(*) agrupado por
+ * renaes/periodo/sexo/etnia/financiador/pais/ups/Categoria/gedad. El motor
+ * replica eso: cada fila HIS que cumple la condicion cuenta 1 en el grupo
+ * etareo de su propia edad (CASE gedad del T-SQL). Sin dedup por cita ni
+ * orden por fecha: el "N-esimo" viene en valor_lab del item HIS.
+ *
+ * Las reglas 'simple'/'trimestre'/'ocurrencia'/'ocurrenciaMin'/'conteoMinimo'
+ * se conservan por compatibilidad con versiones anteriores del modulo, pero
+ * las secciones actuales del reporte solo usan 'filas' (y 'calc', que se
+ * resuelve fuera).
  *
  * @return array ['valores'=>[gedad=>n], 'citas'=>int, 'pacientes'=>int]
  */
 function mtrContarRegla(array $cond, array $regla, array $ctx): array {
     $valores = [];
+    $tipo = $regla['tipo'] ?? 'simple';
+
+    // ---- Regla 'filas': count(*) fila a fila, como el T-SQL ----
+    if ($tipo === 'filas') {
+        $citas = [];
+        $pacs = [];
+        $candidatos = mtrCandidatos($cond, $ctx['porCod'], $ctx['porIni2'], $ctx['porIni'], count($ctx['filas']));
+        foreach ($candidatos as $idx) {
+            $f = $ctx['filas'][$idx];
+            if (!mtrCumple($f, $cond, $ctx)) continue;
+            $g = mtrGedad($f);
+            if ($g !== null) {
+                $valores[$g] = ($valores[$g] ?? 0) + 1;
+            }
+            if ($f['cita'] !== '') $citas[$f['cita']] = true;
+            if ($f['pac'] !== '')  $pacs[$f['pac']] = true;
+        }
+        return ['valores' => $valores, 'citas' => count($citas), 'pacientes' => count($pacs)];
+    }
+
+    // ---- Reglas legacy (versiones anteriores; ya no las usan las secciones) ----
     $nCitas = 0;
     $nPacs = 0;
 
@@ -1262,8 +1681,6 @@ function mtrContarRegla(array $cond, array $regla, array $ctx): array {
         }
     }
     // 1b) Completar trimestre/edad gestacional desde OTRAS filas de la misma cita
-    // (el HIS repite la FUR en todas las filas de la cita, pero si solo viene
-    // en una, se propaga aqui para no perder el trimestre del tamizaje).
     foreach ($infoCita as $cita => $info) {
         if ($info['trim'] !== null || $cita === '' || $cita[0] === '#') continue;
         if (!isset($ctx['porCita'][$cita])) continue;
@@ -1283,7 +1700,6 @@ function mtrContarRegla(array $cond, array $regla, array $ctx): array {
     $nPacs = count($porPac);
 
     // 3) Aplicar la regla de conteo
-    $tipo = $regla['tipo'] ?? 'simple';
     $citaCond = $regla['citaCond'] ?? null; // condicion adicional evaluada sobre
     // las filas de la CITA seleccionada (resultado reactivo del tamizaje, etc.)
     $citaOk = function (array $c) use ($citaCond, $ctx): bool {

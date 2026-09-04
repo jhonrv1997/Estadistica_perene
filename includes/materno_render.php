@@ -21,6 +21,8 @@ function mtrGedadLabel(int $g): string {
 /** Descripcion legible de una regla de conteo (para auditoria). */
 function mtrEtiquetaRegla(array $regla): string {
     switch ($regla['tipo'] ?? 'simple') {
+        case 'filas':
+            return 'cada fila HIS que cumple (count(*) del T-SQL)';
         case 'simple':
             return 'cada cita que cumple';
         case 'trimestre':
