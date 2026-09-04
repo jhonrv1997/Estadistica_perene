@@ -102,8 +102,19 @@ require_once __DIR__ . '/../config.php';
  *   consejeria, dos consejerias, referido. No cambia ninguna condicion SQL,
  *   solo el orden de presentacion (web y Excel), que ahora calza 1:1 con
  *   la plantilla oficial.
+ *
+ * r7 (2026-09-05): FIX SECCION 10 RPT04_01_CONSEJERIAS: la columna '<18a'
+ *   salia siempre 0. Las 8 lineas llevaban 'edadA' => [18, 75], que
+ *   descarta a los menores de 18 en el WHERE de la linea ANTES de que
+ *   cnrGedad() los pueda rutar a la columna '<18a' definida en 'gedades'.
+ *   Se relaja el filtro de linea a (edadA [18,75]) OR (menor18) via
+ *   'cualquieraDe' (mismo patron de las ramas GESTANTE de RPT01_01).
+ *   Ahora los menores con consejeria (ej. adolescente de 16 anios con
+ *   99402.08 VL 1/2) cuentan en la columna '<18a'; los adultos siguen
+ *   contando en su banda y los mayores de 75 siguen excluidos (igual
+ *   que el T-SQL original).
  */
-define('CANCER_DATA_VERSION', '2026-09-04-r6');
+define('CANCER_DATA_VERSION', '2026-09-05-r7');
 
 /** Version del motor de reporte de Cancer (para el badge del reporte). */
 function cancerDataVersion(): string {
@@ -892,7 +903,19 @@ function cancerSecciones(): array {
      * (Dim Consejeria04 / Gedad05)
      * NOTA: Temporal3 del original asignaba 3/4 (duplicaba Telemedicina preventiva);
      * se adapta a 7/8 (Telemedicina en pacientes diagnosticados) segun el diseno.
-     * ---------------------------------------------------------- */
+     *
+     * FIX r7 (columna '<18a' en 0): las 8 lineas filtraban edadA [18,75],
+     * lo que EXCLUIA a los menores de 18 en el WHERE de la linea ANTES
+     * de que cnrGedad() pudiera rutearlos a la columna '<18a' (que por
+     * diseño del Excel/Gedad05 existe en esta seccion). Resultado: la
+     * columna salia siempre 0 aunque la trama tuviera consejerias
+     * validas de adolescentes (ej. gestante de 16 anios con 99402.08,
+     * Valor_Lab 1 y 2). Se relaja el filtro de linea a:
+     *     (edadA [18,75]) OR (menor18)
+     * usando 'cualquieraDe' (mismo patron que las ramas GESTANTE de
+     * RPT01_01). Los mayores de 75 siguen excluidos (comportamiento
+     * del T-SQL original) y los adultos se siguen ruteando a su banda.
+     * ------------------------------------------------------------ */
     [
         'codigo'   => 'RPT04_01',
         'procedimiento' => 'usp_TRAMA_BASE_CANCER_2026_RPT04_01_CONSEJERIAS',
@@ -913,29 +936,37 @@ function cancerSecciones(): array {
         ],
         'filas' => [
             ['clave' => 1, 'c1' => 'CONSEJERIA PREVENTIVA EN FACTORES DE RIESGO PARA EL CANCER', 'c3' => 'Consultorio Externo, Personas con una consejeria',
-             'cond' => ['tip' => 'D', 'cod' => '99402.08', 'vl' => '1', 'edadA' => [18, 75]]],
+             'cond' => ['tip' => 'D', 'cod' => '99402.08', 'vl' => '1',
+                        'cualquieraDe' => [['edadA' => [18, 75]], ['menor18' => true]]]],
             ['clave' => 2, 'c1' => 'CONSEJERIA PREVENTIVA EN FACTORES DE RIESGO PARA EL CANCER', 'c3' => 'Consultorio Externo, Personas con dos consejerias',
-             'cond' => ['tip' => 'D', 'cod' => '99402.08', 'vl' => '2', 'edadA' => [18, 75]]],
+             'cond' => ['tip' => 'D', 'cod' => '99402.08', 'vl' => '2',
+                        'cualquieraDe' => [['edadA' => [18, 75]], ['menor18' => true]]]],
             ['clave' => 3, 'c1' => 'CONSEJERIA PREVENTIVA EN FACTORES DE RIESGO PARA EL CANCER', 'c3' => 'Telemedicina, Personas con una consejeria',
-             'cond' => ['tip' => 'D', 'cod' => '99402.08', 'vl' => '1', 'edadA' => [18, 75],
+             'cond' => ['tip' => 'D', 'cod' => '99402.08', 'vl' => '1',
+                        'cualquieraDe' => [['edadA' => [18, 75]], ['menor18' => true]],
                         'citaTiene' => ['cod' => ['99499.08', '99499.09'], 'tip' => 'D', 'vl' => 'NULL', 'rownum' => 1]]],
             ['clave' => 4, 'c1' => 'CONSEJERIA PREVENTIVA EN FACTORES DE RIESGO PARA EL CANCER', 'c3' => 'Telemedicina, Personas con dos consejerias',
-             'cond' => ['tip' => 'D', 'cod' => '99402.08', 'vl' => '2', 'edadA' => [18, 75],
+             'cond' => ['tip' => 'D', 'cod' => '99402.08', 'vl' => '2',
+                        'cualquieraDe' => [['edadA' => [18, 75]], ['menor18' => true]],
                         'citaTiene' => ['cod' => ['99499.08', '99499.09'], 'tip' => 'D', 'vl' => 'NULL', 'rownum' => 1]]],
             ['clave' => 5, 'c1' => 'CONSEJERIA PARA PACIENTES DIAGNOSTICADOS Y CON TRATAMIENTO DE CANCER', 'c3' => 'Personas con una consejeria',
-             'cond' => ['tip' => 'D', 'cod' => ['99401.19', '99401.26'], 'vl' => '1', 'edadA' => [18, 75],
+             'cond' => ['tip' => 'D', 'cod' => ['99401.19', '99401.26'], 'vl' => '1',
+                        'cualquieraDe' => [['edadA' => [18, 75]], ['menor18' => true]],
                         'citaTiene' => ['codEntre' => ['C00', 'C97'], 'vl' => 'NULL', 'rownum' => 1]]],
             ['clave' => 6, 'c1' => 'CONSEJERIA PARA PACIENTES DIAGNOSTICADOS Y CON TRATAMIENTO DE CANCER', 'c3' => 'Personas con dos consejerias',
-             'cond' => ['tip' => 'D', 'cod' => ['99401.19', '99401.26'], 'vl' => '2', 'edadA' => [18, 75],
+             'cond' => ['tip' => 'D', 'cod' => ['99401.19', '99401.26'], 'vl' => '2',
+                        'cualquieraDe' => [['edadA' => [18, 75]], ['menor18' => true]],
                         'citaTiene' => ['codEntre' => ['C00', 'C97'], 'vl' => 'NULL', 'rownum' => 1]]],
             ['clave' => 7, 'c1' => 'CONSEJERIA PARA PACIENTES DIAGNOSTICADOS Y CON TRATAMIENTO DE CANCER', 'c3' => 'Telemedicina, Personas con una consejeria',
-             'cond' => ['tip' => 'D', 'cod' => ['99401.19', '99401.26'], 'vl' => '1', 'edadA' => [18, 75],
+             'cond' => ['tip' => 'D', 'cod' => ['99401.19', '99401.26'], 'vl' => '1',
+                        'cualquieraDe' => [['edadA' => [18, 75]], ['menor18' => true]],
                         'citaTieneTodo' => [
                             ['cod' => '99499.10', 'tip' => 'D', 'vl' => 'NULL'],
                             ['codEntre' => ['C00', 'C97'], 'vl' => 'NULL', 'rownum' => 1],
                         ]]],
             ['clave' => 8, 'c1' => 'CONSEJERIA PARA PACIENTES DIAGNOSTICADOS Y CON TRATAMIENTO DE CANCER', 'c3' => 'Telemedicina, Personas con dos consejerias',
-             'cond' => ['tip' => 'D', 'cod' => ['99401.19', '99401.26'], 'vl' => '2', 'edadA' => [18, 75],
+             'cond' => ['tip' => 'D', 'cod' => ['99401.19', '99401.26'], 'vl' => '2',
+                        'cualquieraDe' => [['edadA' => [18, 75]], ['menor18' => true]],
                         'citaTieneTodo' => [
                             ['cod' => '99499.10', 'tip' => 'D', 'vl' => 'NULL'],
                             ['codEntre' => ['C00', 'C97'], 'vl' => 'NULL', 'rownum' => 1],
