@@ -6,8 +6,15 @@
  * Renderizan las secciones devueltas por maternoEjecutarReporte() con el
  * mismo diseno de la plantilla oficial "Reporte_Actividades_Materno.xlsx":
  *   - eje 'gedad'    : filas = grupos etareos (4 + TOTAL), columnas = categorias
- *   - eje 'categoria': filas = categorias, columnas = TOTAL + grupos etareos
+ *   - eje 'categoria': filas = categorias, columnas = TOTAL (inicio, o al
+ *     final con 'totalPos' 'fin' — VIII. VISITA DOMICILIARIA) + grupos etareos
  * Incluye el panel de auditoria "Condiciones SQL" (ver reporte_materno.php).
+ *
+ * CAMBIO 2026-09-05 r2: mtrRenderSeccionCategoria() soporta la opcion por
+ * seccion 'totalPos' => 'fin' para pintar la columna TOTAL a la derecha del
+ * ultimo grupo etareo (VIII: Total = 12-17 + 18-29 + 30-59). Sin esa opcion
+ * el comportamiento es identico al anterior (TOTAL tras la etiqueta, como
+ * en la seccion IV).
  */
 require_once __DIR__ . '/materno_data.php';
 
@@ -49,7 +56,10 @@ function mtrCelda($n, bool $ceroGris): string {
 /**
  * Renderiza una seccion del reporte con el layout del Excel oficial.
  *   - eje 'gedad'    : filas = grupos etareos (+ TOTAL), columnas = categorias
- *   - eje 'categoria': filas = categorias, columnas = TOTAL + grupos etareos
+ *   - eje 'categoria': filas = categorias, columnas = TOTAL + grupos etareos.
+ *     La columna TOTAL puede ir al inicio (defecto, como la seccion IV y la
+ *     plantilla oficial) o al final con 'totalPos' => 'fin' (VIII. VISITA
+ *     DOMICILIARIA: Total = "12 - 17 a." + "18 - 29 a." + "30 - 59 a.").
  */
 function mtrRenderSeccion(array $sec, bool $mostrarCeros, bool $verSQL): void {
     if (($sec['eje'] ?? 'gedad') === 'gedad') {
@@ -138,12 +148,17 @@ function mtrRenderSeccionCategoria(array $sec, bool $mostrarCeros, bool $verSQL)
     $gedades = $sec['gedades'] ?? [1, 2, 3, 4];
     $soloTotal = !empty($sec['soloTotal']);
     $conTotal = $sec['conTotal'] ?? true;
+    // Posicion de la columna Total: 'inicio' (defecto, tras la etiqueta, como
+    // la seccion IV y la plantilla oficial) o 'fin' (a la derecha del ultimo
+    // grupo etareo; VIII. VISITA DOMICILIARIA: Total = 12-17 + 18-29 + 30-59).
+    $totalFin = ($sec['totalPos'] ?? 'inicio') === 'fin';
 
     echo '<div class="table-responsive"><table class="table table-sm table-hover mtr-table mb-0"><thead><tr>';
     echo '<th class="text-start" style="min-width:230px;">' . htmlspecialchars($sec['columna_label'] ?? 'Categor&iacute;a') . '</th>';
     if (!$soloTotal) {
-        if ($conTotal) echo '<th class="num mtr-col-calc">TOTAL</th>';
+        if ($conTotal && !$totalFin) echo '<th class="num mtr-col-calc">TOTAL</th>';
         foreach ($gedades as $g) echo '<th class="num">' . htmlspecialchars(mtrGedadLabel($g)) . '</th>';
+        if ($conTotal && $totalFin) echo '<th class="num mtr-col-calc">TOTAL</th>';
     } else {
         echo '<th class="num">N&deg;</th>';
     }
@@ -160,12 +175,15 @@ function mtrRenderSeccionCategoria(array $sec, bool $mostrarCeros, bool $verSQL)
     foreach ($filas as $f) {
         echo '<tr><td>' . htmlspecialchars($f['label']) . '</td>';
         if (!$soloTotal) {
-            if ($conTotal) echo '<td class="num fw-bold mtr-col-calc">' . number_format($f['total']) . '</td>';
+            if ($conTotal && !$totalFin) echo '<td class="num fw-bold mtr-col-calc">' . number_format($f['total']) . '</td>';
             foreach ($gedades as $g) {
                 $v = (int)($f['valores'][$g] ?? 0);
                 echo ($v > 0 ? '<td class="num text-primary">' . number_format($v) . '</td>'
                             : '<td class="num ' . (($sec['total'] ?? 0) == 0 ? 'mtr-cero' : '') . '">0</td>');
             }
+            // Total al final = suma de las columnas etareas mostradas a su
+            // izquierda (VIII: 12 - 17 a. + 18 - 29 a. + 30 - 59 a.).
+            if ($conTotal && $totalFin) echo '<td class="num fw-bold mtr-col-calc">' . number_format($f['total']) . '</td>';
         } else {
             echo '<td class="num fw-bold text-primary">' . number_format($f['total']) . '</td>';
         }

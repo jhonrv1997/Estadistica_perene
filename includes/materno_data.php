@@ -19,7 +19,7 @@
  *   V    RPT_05_MORBILIDAD_RN         (7 filas)
  *   VI   RPT_06_ADMIN_MICRONUT        (10 categorias)
  *   VII  RPT_07_PUERPERIO             (3 categorias)
- *   VIII RPT_08_VISITA                (2 filas x 3 grupos etareos)
+ *   VIII RPT_08_VISITA                (2 filas x 3 grupos etareos + Total web)
  *   IX-1 RPT_09_1_TRANSMISION_VERT    (21 categorias)
  *   IX-2 RPT_09_2_TRANSMISION_VERT    (6 categorias)
  *   IX-3 RPT_09_3_TRANSMISION_VERT    (4 categorias; sin zona en la plantilla)
@@ -109,11 +109,21 @@
  *   - Si el catalogo ZSPERENE no esta disponible (tabla vacia o error) no se
  *     restringe nada y se conserva el comportamiento anterior, para no
  *     romper el reporte en instalaciones sin catalogo.
+ *
+ * CAMBIO 2026-09-05 r2 (columna Total en VIII. VISITA DOMICILIARIA):
+ *   - La seccion VIII ahora muestra en la web una columna Total al final de
+ *     cada fila (a la derecha de "30 - 59 a."), calculada como la suma de
+ *     las columnas "12 - 17 a." + "18 - 29 a." + "30 - 59 a.". El valor ya
+ *     existia en el motor (total de fila = suma de los grupos etareos de la
+ *     seccion); solo se activo su render con 'conTotal' + 'totalPos' 'fin'.
+ *   - Solo cambia la vista web: la plantilla oficial de Excel no tiene esa
+ *     columna y el export (maternoCeldasExport) la sigue omitiendo, igual
+ *     que en el flujo ODBC original.
  */
 
 require_once __DIR__ . '/../config.php';
 
-define('MATERNO_DATA_VERSION', '2026-09-05-r1');
+define('MATERNO_DATA_VERSION', '2026-09-05-r2'); // r2: VIII. VISITA DOMICILIARIA gana columna Total web (12-17 + 18-29 + 30-59)
 
 /** Version del motor de reporte de Materno (para el badge del reporte). */
 function maternoDataVersion(): string {
@@ -1110,14 +1120,19 @@ function maternoSecciones(): array {
      * Cat 2 = 99501 D R1 (atencion integral a la puerpera)
      * La plantilla oficial usa una mini-tabla de 2 filas x 3 columnas
      * (12-17 / 18-29 / 30-59), filas 50-51.
+     * CAMBIO 2026-09-05 r2: en la web se agrego la columna Total al final
+     * de cada fila = "12 - 17 a." + "18 - 29 a." + "30 - 59 a." (conTotal
+     * + totalPos 'fin'). La plantilla oficial NO tiene esa columna, por lo
+     * que el export a Excel la omite (xmap sin colTotal, igual que antes).
      * ------------------------------------------------------------ */
     [
         'codigo'   => 'RPT08_VISITA',
         'procedimiento' => 'usp_TRAMA_BASE_MATERNO_2023_RPT_08_VISITA',
         'titulo'   => 'VIII. VISITA DOMICILIARIA',
         'eje'      => 'categoria',
-        'gedades'  => [2, 3, 4],      // 12-17 / 18-29 / 30-59 (sin '<12' ni TOTAL)
-        'conTotal' => false,
+        'gedades'  => [2, 3, 4],      // 12-17 / 18-29 / 30-59 (sin '<12'; el total es columna, no fila)
+        'conTotal' => true,           // columna Total web = suma de las 3 columnas etareas
+        'totalPos' => 'fin',          // Total a la derecha de "30 - 59 a." (IV la usa al inicio)
         'xmap'     => ['colGedad' => [2 => 'S', 3 => 'T', 4 => 'U'], 'filaIni' => 50],
         'filas' => [
             // Cat 1 (#NOMINAL + #VISITA): Z359/Z349 D R1 y la cita tiene C0011 D R1
