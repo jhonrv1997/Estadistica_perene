@@ -128,7 +128,7 @@ include 'includes/header.php';
 
 <div class="page-header-section">
     <h4><i class="fas fa-ribbon me-2 text-danger"></i>Reporte Operacional CANCER</h4>
-    <p class="subtitle">Reporte de Actividades de Prevencion y Control del Cancer - reemplazo web del flujo SQL Server + Excel ODBC (1 click).</p>
+    <p class="subtitle">Reporte de Actividades de Prevencion y Control del Cancer</p>
 </div>
 
 <ul class="nav nav-pills subpage-tabs flex-wrap mb-3">
@@ -295,13 +295,8 @@ include 'includes/header.php';
     <i class="fas fa-info-circle me-3 fa-2x"></i>
     <div>
         <strong>Reporte listo para generar.</strong><br>
-        Configure los filtros (anio, mes, establecimiento) y pulse <em>Generar Reporte</em>.
-        Se ejecutara el motor data-driven (<code>includes/cancer_data.php</code>) que adapta los 9 procedimientos
-        T-SQL del archivo <code>03 Creacion de Procedimientos</code> contra la tabla
-        <code>T_CONSOLIDADO_NUEVA_TRAMA_HISMINSA_DETALLADO</code>.
         <div class="small text-muted mt-1">
-            Ya no es necesario ejecutar los scripts en SQL Server ni refrescar el Excel ODBC:
-            el flujo completo se hace desde aqui en 1 click, con la opcion de exportar a Excel con el mismo layout.
+           Desarrollado por JKRV
         </div>
     </div>
 </div>

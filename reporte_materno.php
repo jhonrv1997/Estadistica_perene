@@ -67,6 +67,33 @@ register_shutdown_function(function () {
 
 $pdo = getDBConnection();
 
+// ==================== AJAX: FILTROS DEPENDIENTES ====================
+// Devuelve las opciones de Anio y Mes recalculadas DENTRO del ambito del
+// establecimiento seleccionado. Con '-- Todos --' el ambito es la lista
+// completa de establecimientos del select (catalogo ZSPERENE), de modo que
+// los demas filtros siempre se basan unicamente en esa lista de EE.SS.
+// Lo usa el JS del formulario para refrescar Año/Mes al cambiar el select
+// de establecimiento (o el año) sin volver a generar el reporte.
+if (($_GET['ajax'] ?? '') === 'filtros') {
+    header('Content-Type: application/json; charset=utf-8');
+    $ajaxAnio = trim($_GET['anio'] ?? '');
+    $ajaxEst  = trim($_GET['establecimiento'] ?? '');
+    try {
+        $aniosAjax = array_map('strval', maternoGetAniosDisponibles($pdo, $ajaxEst));
+        $mesesAjax = array_map(function ($m) {
+            return ['v' => (int)$m, 't' => getNombreMes((int)$m)];
+        }, maternoGetMesesDisponibles($pdo, $ajaxAnio, $ajaxEst));
+        echo json_encode([
+            'ok'    => true,
+            'anios' => $aniosAjax,
+            'meses' => $mesesAjax,
+        ], JSON_UNESCAPED_UNICODE);
+    } catch (Throwable $e) {
+        echo json_encode(['ok' => false, 'anios' => [], 'meses' => []]);
+    }
+    exit; // respuesta JSON: no continuar con el HTML del reporte
+}
+
 // ==================== FILTROS ====================
 $fAnio            = trim($_GET['anio'] ?? '');
 $fMes             = trim($_GET['mes'] ?? '');
@@ -74,13 +101,21 @@ $fEstablecimiento = trim($_GET['establecimiento'] ?? '');
 $fDetalle         = trim($_GET['detalle'] ?? '1'); // 1 = incluir columnas en 0
 $fVerSQL          = trim($_GET['versql'] ?? '0');  // 1 = mostrar panel de condiciones
 
-$anios = maternoGetAniosDisponibles($pdo);
+// Años dentro del ambito del establecimiento: con '-- Todos --' se calculan
+// sobre la lista ZSPERENE (los EE.SS del select), no sobre toda la tabla
+// consolidada; con un EE.SS concreto, sobre los datos de ese establecimiento.
+$anios = maternoGetAniosDisponibles($pdo, $fEstablecimiento);
 if (empty($anios)) $anios = [date('Y')];
 if ($fAnio === '' && !empty($anios)) $fAnio = $anios[0];
 
 $establecimientos = maternoGetEstablecimientosZS($pdo);
 $nombreEstablecimiento = $establecimientos[$fEstablecimiento] ?? '';
 $renaes = $fEstablecimiento !== '' ? $fEstablecimiento : '';
+
+// Meses con datos dentro del mismo ambito (establecimiento + año). Si no hay
+// datos se muestran los 12 para no dejar el select vacío.
+$mesesDisponibles = maternoGetMesesDisponibles($pdo, $fAnio, $fEstablecimiento);
+if (empty($mesesDisponibles)) $mesesDisponibles = range(1, 12);
 
 // Ejecutar SOLO cuando el usuario pulse "Generar Reporte" (como en ESNI/Cancer:
 // evita saturar la base de datos con cada carga de pagina).
@@ -135,7 +170,7 @@ include 'includes/header.php';
 
 <div class="page-header-section">
     <h4><i class="fas fa-baby me-2 text-danger"></i>Reporte Operacional MATERNO</h4>
-    <p class="subtitle">Reporte de Actividades de la Direcci&oacute;n de Salud Sexual y Reproductiva - reemplazo web del flujo SQL Server + Excel ODBC (1 click).</p>
+    <p class="subtitle">Reporte de Actividades de la Direcci&oacute;n de Salud Sexual y Reproductiva</p>
 </div>
 
 <ul class="nav nav-pills subpage-tabs flex-wrap mb-3">
@@ -166,8 +201,8 @@ include 'includes/header.php';
             <input type="hidden" name="generar" value="1">
             <div class="row g-3">
                 <div class="col-lg-2 col-md-4 col-sm-6">
-                    <label class="form-label fw-semibold small"><i class="fas fa-calendar me-1"></i>A&ntilde;o</label>
-                    <select name="anio" class="form-select form-select-sm">
+                    <label class="form-label fw-semibold small" for="selAnio"><i class="fas fa-calendar me-1"></i>A&ntilde;o</label>
+                    <select name="anio" id="selAnio" class="form-select form-select-sm">
                         <option value="">-- Todos --</option>
                         <?php foreach ($anios as $a): ?>
                             <option value="<?= htmlspecialchars($a) ?>" <?= $fAnio === (string)$a ? 'selected' : '' ?>><?= htmlspecialchars($a) ?></option>
@@ -175,22 +210,24 @@ include 'includes/header.php';
                     </select>
                 </div>
                 <div class="col-lg-2 col-md-4 col-sm-6">
-                    <label class="form-label fw-semibold small"><i class="fas fa-calendar-alt me-1"></i>Mes</label>
-                    <select name="mes" class="form-select form-select-sm">
+                    <label class="form-label fw-semibold small" for="selMes"><i class="fas fa-calendar-alt me-1"></i>Mes</label>
+                    <select name="mes" id="selMes" class="form-select form-select-sm">
                         <option value="">-- Todos --</option>
-                        <?php for ($m = 1; $m <= 12; $m++): ?>
+                        <?php foreach ($mesesDisponibles as $m): ?>
                             <option value="<?= $m ?>" <?= $fMes === (string)$m ? 'selected' : '' ?>><?= getNombreMes($m) ?></option>
-                        <?php endfor; ?>
+                        <?php endforeach; ?>
                     </select>
+                   
                 </div>
                 <div class="col-lg-4 col-md-6 col-sm-12">
-                    <label class="form-label fw-semibold small"><i class="fas fa-hospital me-1"></i>Establecimiento (RENAES / IPRESS)</label>
-                    <select name="establecimiento" class="form-select form-select-sm">
+                    <label class="form-label fw-semibold small" for="selEst"><i class="fas fa-hospital me-1"></i>Establecimiento (RENAES / IPRESS)</label>
+                    <select name="establecimiento" id="selEst" class="form-select form-select-sm">
                         <option value="">-- Todos --</option>
                         <?php foreach ($establecimientos as $codUnico => $nombre): ?>
                             <option value="<?= htmlspecialchars($codUnico) ?>" <?= $fEstablecimiento === $codUnico ? 'selected' : '' ?>><?= htmlspecialchars($nombre) ?></option>
                         <?php endforeach; ?>
                     </select>
+                  
                 </div>
                 <div class="col-lg-4 col-md-12 d-flex align-items-end gap-4">
                     <div class="form-check">
@@ -204,6 +241,65 @@ include 'includes/header.php';
                 </div>
             </div>
         </form>
+
+        <!-- Filtros dependientes: Año y Mes se recalculan dentro del ámbito del
+             establecimiento. Con "-- Todos --" el ámbito es la lista completa
+             del catálogo (ZSPERENE). Cambiar EE.SS/año NO genera el reporte. -->
+        <script>
+        (function () {
+            var selAnio = document.getElementById('selAnio');
+            var selMes  = document.getElementById('selMes');
+            var selEst  = document.getElementById('selEst');
+            if (!selAnio || !selMes || !selEst) return;
+
+            function pedir(soloMeses) {
+                var qs = new URLSearchParams();
+                qs.set('ajax', 'filtros');
+                qs.set('anio', selAnio.value);
+                qs.set('establecimiento', selEst.value);
+                fetch('reporte_materno.php?' + qs.toString(), { credentials: 'same-origin' })
+                    .then(function (r) { return r.json(); })
+                    .then(function (d) {
+                        if (!d || !d.ok) return;
+                        if (!soloMeses && d.anios && d.anios.length) {
+                            var anioPrevio = selAnio.value;
+                            reconstruir(selAnio, d.anios.map(String), true);
+                            if (selAnio.value !== anioPrevio) { pedir(true); return; }
+                        }
+                        if (d.meses) reconstruir(selMes, d.meses, false);
+                    })
+                    .catch(function () { /* sin AJAX se conservan las opciones del servidor */ });
+            }
+
+            /* Reconstruye las opciones de un select conservando "-- Todos --"
+               (value='') y la selección actual si sigue disponible. Para el
+               año, si la selección desaparece se toma el primer año disponible
+               (mismo criterio por defecto del servidor); para el mes vuelve a
+               "-- Todos --". */
+            function reconstruir(sel, valores, preferirPrimero) {
+                var previo = sel.value;
+                while (sel.options.length > 1) sel.remove(1);
+                valores.forEach(function (v) {
+                    var o = document.createElement('option');
+                    if (v && typeof v === 'object') {
+                        o.value = String(v.v);
+                        o.textContent = v.t;
+                    } else {
+                        o.value = String(v);
+                        o.textContent = String(v);
+                    }
+                    sel.appendChild(o);
+                });
+                var sigue = Array.prototype.some.call(sel.options, function (o) {
+                    return o.value === previo;
+                });
+                sel.value = sigue ? previo : (preferirPrimero && valores.length ? sel.options[1].value : '');
+            }
+
+            selAnio.addEventListener('change', function () { pedir(true); });
+            selEst.addEventListener('change', function () { pedir(false); });
+        })();
+        </script>
     </div>
 </div>
 
@@ -252,7 +348,7 @@ include 'includes/header.php';
         <strong>REPORTE DE ACTIVIDADES DE LA DIRECCI&Oacute;N DE SALUD SEXUAL Y REPRODUCTIVA <?= htmlspecialchars($fAnio ?: date('Y')) ?></strong><br>
         <small>
             PERIODO: <?= htmlspecialchars($periodoTxt) ?>
-            <?= $renaes ? ' &nbsp;|&nbsp; EE.SS: ' . htmlspecialchars($nombreEstablecimiento) . ' &nbsp;|&nbsp; CODIGO RENAES: ' . htmlspecialchars($renaes) : ' &nbsp;|&nbsp; TODOS LOS ESTABLECIMIENTOS' ?>
+            <?= $renaes ? ' &nbsp;|&nbsp; EE.SS: ' . htmlspecialchars($nombreEstablecimiento) . ' &nbsp;|&nbsp; CODIGO RENAES: ' . htmlspecialchars($renaes) : ' &nbsp;|&nbsp; TODOS LOS ESTABLECIMIENTOS DE LA LISTA (' . count($establecimientos) . ' EE.SS)' ?>
         </small>
     </div>
     <div class="text-end">
@@ -310,13 +406,8 @@ include 'includes/header.php';
     <i class="fas fa-info-circle me-3 fa-2x"></i>
     <div>
         <strong>Reporte listo para generar.</strong><br>
-        Configure los filtros (a&ntilde;o, mes, establecimiento) y pulse <em>Generar Reporte</em>.
-        Se ejecutar&aacute; el motor data-driven (<code>includes/materno_data.php</code>) que adapta los 10 procedimientos
-        T-SQL del archivo <code>03 Creacion de Procedimientos</code> (RPT_01 a RPT_10) contra la tabla
-        <code>T_CONSOLIDADO_NUEVA_TRAMA_HISMINSA_DETALLADO</code>.
         <div class="small text-muted mt-1">
-            Ya no es necesario ejecutar los scripts en SQL Server ni refrescar el Excel ODBC:
-            el flujo completo se hace desde aqu&iacute; en 1 click, con la opci&oacute;n de exportar a Excel con el mismo layout.
+           Desarrollado por JKRV
         </div>
     </div>
 </div>

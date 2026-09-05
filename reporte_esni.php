@@ -108,7 +108,7 @@ include 'includes/header.php';
 
 <div class="page-header-section">
     <h4><i class="fas fa-syringe me-2 text-success"></i>Reporte Operacional ESNI - Inmunizaciones</h4>
-    <p class="subtitle">Informe analitico de inmunizaciones por vacuna, dosis y grupo de edad. Configuracion data-driven.</p>
+    <p class="subtitle">Informe analitico de inmunizaciones por vacuna, dosis y grupo de edad</p>
 </div>
 
 <?php if (!$esquemaOK): ?>
@@ -266,7 +266,9 @@ include 'includes/header.php';
     <i class="fas fa-info-circle me-3 fa-2x"></i>
     <div>
         <strong>Reporte listo para generar.</strong><br>
-        Configure los filtros y pulse <em>Generar Reporte</em>. Se ejecutara el motor de reglas data-driven contra la tabla <code><?= htmlspecialchars($cols['_tabla']) ?></code>.
+        <div class="small text-muted mt-1">
+           Desarrollado por JKRV
+        </div>
     </div>
 </div>
 <?php endif; ?>
