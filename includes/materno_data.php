@@ -93,11 +93,27 @@
  *   - RPT_09_3 (1° prueba rapida VIH en trabajo de parto / aborto) no tiene
  *     zona de datos en la plantilla oficial: se muestra en la web y NO se
  *     exporta al Excel (igual que en el flujo ODBC original, quedaba en 0).
+ *
+ * CAMBIO 2026-09-05 (ambito de establecimientos):
+ *   - El valor '-- Todos --' del filtro establecimiento ya NO significa
+ *     'toda la tabla consolidada': significa 'todos los establecimientos de
+ *     la lista del select' (catalogo ZSPERENE). La consulta del reporte se
+ *     limita a esa lista (TRIM(Codigo_Unico) IN (...ZSPERENE...)) y por lo
+ *     tanto TODOS los demas filtros (anio, mes, codigos de interes) se
+ *     aplican unicamente dentro de esa lista de EE.SS.
+ *   - Los filtros dependientes siguen el mismo ambito: los anios disponibles
+ *     (maternoGetAniosDisponibles) y los meses disponibles (nueva funcion
+ *     maternoGetMesesDisponibles) se calculan sobre los datos de la lista
+ *     completa cuando '-- Todos --' esta seleccionado, o del establecimiento
+ *     concreto cuando se elige uno.
+ *   - Si el catalogo ZSPERENE no esta disponible (tabla vacia o error) no se
+ *     restringe nada y se conserva el comportamiento anterior, para no
+ *     romper el reporte en instalaciones sin catalogo.
  */
 
 require_once __DIR__ . '/../config.php';
 
-define('MATERNO_DATA_VERSION', '2026-09-04-r2');
+define('MATERNO_DATA_VERSION', '2026-09-05-r1');
 
 /** Version del motor de reporte de Materno (para el badge del reporte). */
 function maternoDataVersion(): string {
@@ -1383,11 +1399,24 @@ function maternoSecciones(): array {
  * 4) MOTOR DE EJECUCION DEL REPORTE
  * ============================================================ */
 
-/** Anios disponibles en la tabla consolidada (para el filtro). */
-function maternoGetAniosDisponibles(PDO $pdo): array {
+/**
+ * Anios disponibles en la tabla consolidada DENTRO DEL AMBITO del filtro
+ * establecimiento (para el filtro Anio):
+ *   - establecimiento concreto -> anios con datos de ese EE.SS
+ *   - '-- Todos --'            -> anios con datos de la lista ZSPERENE
+ *     (antes se calculaban sobre TODA la tabla consolidada, mezclando anios
+ *     de establecimientos ajenos a la lista del select)
+ */
+function maternoGetAniosDisponibles(PDO $pdo, string $establecimiento = ''): array {
     try {
-        $stmt = $pdo->query("SELECT DISTINCT Anio FROM T_CONSOLIDADO_NUEVA_TRAMA_HISMINSA_DETALLADO
-                             WHERE Anio IS NOT NULL ORDER BY Anio DESC");
+        $params = [];
+        $whereEst = maternoWhereEstablecimientos($pdo, $establecimiento, $params);
+        $sql = "SELECT DISTINCT Anio FROM T_CONSOLIDADO_NUEVA_TRAMA_HISMINSA_DETALLADO
+                WHERE Anio IS NOT NULL"
+             . ($whereEst !== '' ? " AND {$whereEst}" : "")
+             . " ORDER BY Anio DESC";
+        $stmt = $pdo->prepare($sql);
+        $stmt->execute($params);
         $anios = $stmt->fetchAll(PDO::FETCH_COLUMN);
         return $anios ?: [date('Y')];
     } catch (Throwable $e) {
@@ -1395,8 +1424,43 @@ function maternoGetAniosDisponibles(PDO $pdo): array {
     }
 }
 
-/** Establecimientos del catalogo ZSPERENE (clave = Codigo_Unico / RENAES). */
+/**
+ * Meses (1..12) con datos dentro del ambito del filtro establecimiento y del
+ * anio seleccionado ('' = todos los anios). Da las opciones del filtro Mes
+ * para que tambien se base unicamente en la lista de establecimientos
+ * ('-- Todos --' = catalogo ZSPERENE completo) y no en toda la tabla.
+ * Usa la columna generada Mes_Int si existe (mismo criterio que el reporte).
+ */
+function maternoGetMesesDisponibles(PDO $pdo, string $anio = '', string $establecimiento = ''): array {
+    try {
+        $params = [];
+        $cond = [];
+        if (trim($anio) !== '') {
+            $cond[] = "Anio = :anio";
+            $params[':anio'] = (string)$anio;
+        }
+        $whereEst = maternoWhereEstablecimientos($pdo, $establecimiento, $params);
+        if ($whereEst !== '') $cond[] = $whereEst;
+        $colMes = maternoTieneColumnaMesInt($pdo) ? 'Mes_Int' : "CAST(TRIM(Mes) AS UNSIGNED)";
+        $sql = "SELECT DISTINCT {$colMes} FROM T_CONSOLIDADO_NUEVA_TRAMA_HISMINSA_DETALLADO
+                WHERE {$colMes} BETWEEN 1 AND 12"
+             . ($cond ? " AND " . implode(' AND ', $cond) : "")
+             . " ORDER BY 1";
+        $stmt = $pdo->prepare($sql);
+        $stmt->execute($params);
+        return array_map('intval', $stmt->fetchAll(PDO::FETCH_COLUMN));
+    } catch (Throwable $e) {
+        return [];
+    }
+}
+
+/** Establecimientos del catalogo ZSPERENE (clave = Codigo_Unico / RENAES).
+ *  El resultado se cachea estaticamente: el ambito de establecimientos se
+ *  consulta en varias partes del reporte (filtros anio/mes y consulta
+ *  principal) y no tiene sentido repetir la consulta del catalogo. */
 function maternoGetEstablecimientosZS(PDO $pdo): array {
+    static $cache = null;
+    if ($cache !== null) return $cache;
     try {
         $stmt = $pdo->query("SELECT Codigo_Unico, Nombre_Establecimiento FROM ZSPERENE
                              WHERE Codigo_Unico IS NOT NULL ORDER BY Nombre_Establecimiento");
@@ -1404,10 +1468,51 @@ function maternoGetEstablecimientosZS(PDO $pdo): array {
         while ($r = $stmt->fetch(PDO::FETCH_ASSOC)) {
             $out[trim((string)$r['Codigo_Unico'])] = $r['Nombre_Establecimiento'];
         }
-        return $out;
+        return $cache = $out;
     } catch (Throwable $e) {
-        return [];
+        return $cache = [];
     }
+}
+
+/**
+ * AMBITO DE ESTABLECIMIENTOS compartido por todos los filtros del modulo.
+ *
+ * - Establecimiento concreto: TRIM(Codigo_Unico) = :est (como siempre).
+ * - '-- Todos --' (cadena vacia): TRIM(Codigo_Unico) IN (:estLista_0..N) con
+ *   TODOS los codigos del catalogo ZSPERENE, es decir, la misma lista que se
+ *   muestra en el select de reporte_materno.php. Asi, cuando se selecciona
+ *   '-- Todos --', todos los demas filtros (anio, mes y los codigos de interes
+ *   del reporte) se aplican unicamente dentro de esa lista de EE.SS y nunca
+ *   sobre establecimientos ajenos al catalogo que existan en la tabla
+ *   consolidada.
+ * - Catalogo no disponible (tabla ZSPERENE vacia o con error): devuelve ''
+ *   para NO restringir la consulta (comportamiento anterior, degrada bien).
+ *
+ * @param PDO    $pdo             Conexion activa
+ * @param string $establecimiento Codigo_Unico del EE.SS ('' = '-- Todos --')
+ * @param array  $params          Parametros PDO de la consulta (se completan)
+ * @return string Predicado SQL ('' = sin restriccion de establecimiento)
+ */
+function maternoWhereEstablecimientos(PDO $pdo, string $establecimiento, array &$params): string {
+    $establecimiento = trim($establecimiento);
+    if ($establecimiento !== '') {
+        $params[':est'] = $establecimiento;
+        return "TRIM(Codigo_Unico) = :est";
+    }
+    // '-- Todos --': limitar al universo de la lista del select (ZSPERENE)
+    $lista = maternoGetEstablecimientosZS($pdo);
+    if (empty($lista)) {
+        return ''; // sin catalogo no se puede acotar: no romper el reporte
+    }
+    $ph = [];
+    $i = 0;
+    foreach (array_keys($lista) as $cod) {
+        $k = ':estLista_' . $i;
+        $params[$k] = $cod;
+        $ph[] = $k;
+        $i++;
+    }
+    return "TRIM(Codigo_Unico) IN (" . implode(',', $ph) . ")";
 }
 
 /**
@@ -1791,9 +1896,14 @@ function maternoEjecutarReporte(PDO $pdo, array $filtros): array {
         }
         $params[':mes'] = intval($filtros['mes']);
     }
-    if (!empty($filtros['establecimiento'])) {
-        $where[] = "TRIM(Codigo_Unico) = :est";
-        $params[':est'] = (string)$filtros['establecimiento'];
+    // Ambito de establecimientos: con un EE.SS concreto se filtra por su
+    // Codigo_Unico (como siempre); con '-- Todos --' se limita a la LISTA del
+    // select (catalogo ZSPERENE) en lugar de toda la tabla consolidada, de
+    // modo que el resto de filtros (anio/mes/codigos) se aplica solo a esa
+    // lista de establecimientos.
+    $whereEst = maternoWhereEstablecimientos($pdo, (string)($filtros['establecimiento'] ?? ''), $params);
+    if ($whereEst !== '') {
+        $where[] = $whereEst;
     }
 
     // ---- 2) Codigos de interes del paquete materno ----
