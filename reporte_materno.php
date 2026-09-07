@@ -390,15 +390,7 @@ include 'includes/header.php';
 <!-- Nota sobre equivalencia con el flujo original -->
 <div class="alert alert-info">
     <i class="fas fa-info-circle me-2"></i>
-    <strong>Equivalencia con el flujo manual original:</strong>
-    las secciones I-X replican el dise&ntilde;o de la plantilla oficial <code>Reporte_Actividades_Materno.xlsx</code>
-    (incluye la fila TOTAL por grupos etareos y la mini-tabla de VISITA DOMICILIARIA de 2 filas, que en la web
-    a&ntilde;ade la columna <strong>Total = 12 - 17 a. + 18 - 29 a. + 30 - 59 a.</strong> &mdash; solo vista web,
-    la plantilla oficial no la tiene y no se exporta al Excel).
-    El bloque <em>IX-3 (1&deg; prueba r&aacute;pida para VIH en trabajo de parto / aborto)</em> se muestra solo en la web:
-    la plantilla oficial no tiene zona de datos para &eacute;l (en el flujo ODBC quedaba siempre en 0) y no se exporta.
-    El conteo es por <strong>cita/atenci&oacute;n</strong> (igual que las tablas <code>TRAMA_BASE_MATERNO_*_NOMINAL</code> del archivo 02),
-    con reglas de ocurrencia (1&deg;/2&deg;/3&deg;...), trimestre por FUR y m&iacute;nimos (CONTROLADA &ge; 6 atenciones).
+    <strong>Desarrollado por JKRV</strong>
 </div>
 
 <?php endif; ?>
