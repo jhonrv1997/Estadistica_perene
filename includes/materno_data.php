@@ -599,11 +599,11 @@ function maternoSecciones(): array {
     $consejHepBase = ['cod' => $hepLabs, 'rownum' => 1, 'tip' => ['D', 'R']];
     // Consejeria previa al resultado: valor '1' (1a prueba) / '2' (2a prueba)
     $consejVih1 = ['cod' => '99401.33', 'vl' => '1', 'tip' => 'D'];
-    $consejVih2 = ['cod' => '99401.33', 'vl' => '2', 'tip' => 'D'];
+    $consejVih2 = ['cod' => '99401.33', 'vl' => '2', 'tip' => 'R'];
     $consejSif1 = ['cod' => '99402.05', 'vl' => '1', 'tip' => 'D'];
-    $consejSif2 = ['cod' => '99402.05', 'vl' => '2', 'tip' => 'D'];
+    $consejSif2 = ['cod' => '99402.05', 'vl' => '2', 'tip' => 'R'];
     $consejHep1 = ['cod' => '99402.05', 'vl' => '1', 'tip' => 'D'];
-    $consejHep2 = ['cod' => '99402.05', 'vl' => '2', 'tip' => 'D'];
+    $consejHep2 = ['cod' => '99402.05', 'vl' => '2', 'tip' => 'R'];
 
     // #EMBARAZO del RPT_01: citas con (96150.01/81002/82044/R456/81000.02/81007 D R1)
     // y ademas una fila Z8 D R1 (gestante en atencion prenatal)
