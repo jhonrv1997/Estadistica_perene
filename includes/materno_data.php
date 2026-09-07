@@ -119,11 +119,23 @@
  *   - Solo cambia la vista web: la plantilla oficial de Excel no tiene esa
  *     columna y el export (maternoCeldasExport) la sigue omitiendo, igual
  *     que en el flujo ODBC original.
+ *
+ * CAMBIO 2026-09-07 r3 (export Excel de VIII. VISITA DOMICILIARIA):
+ *   - En la plantilla oficial la seccion VIII ahora exporta UNICAMENTE el
+ *     TOTAL de cada fila en la columna U: U50 = total "A Gestante" y
+ *     U51 = total "A Puérpera" (total de fila = suma de 12-17 + 18-29 +
+ *     30-59, ya calculado por el motor).
+ *   - Las celdas S50/T50/S51/T51 (columnas individuales 12-17 y 18-29)
+ *     ya NO se exportan: el xmap de RPT08_VISITA pierde 'colGedad' y pasa
+ *     a definir solo 'colTotal' => 'U'. maternoCeldasExport tolera xmaps
+ *     sin 'colGedad'.
+ *   - La vista web NO cambia: sigue mostrando 12-17 / 18-29 / 30-59 +
+ *     columna Total (conTotal + totalPos 'fin').
  */
 
 require_once __DIR__ . '/../config.php';
 
-define('MATERNO_DATA_VERSION', '2026-09-05-r2'); // r2: VIII. VISITA DOMICILIARIA gana columna Total web (12-17 + 18-29 + 30-59)
+define('MATERNO_DATA_VERSION', '2026-09-07-r3'); // r3: export Excel VIII. VISITA: solo TOTAL en U50/U51 (S/T no se exportan)
 
 /** Version del motor de reporte de Materno (para el badge del reporte). */
 function maternoDataVersion(): string {
@@ -1122,8 +1134,12 @@ function maternoSecciones(): array {
      * (12-17 / 18-29 / 30-59), filas 50-51.
      * CAMBIO 2026-09-05 r2: en la web se agrego la columna Total al final
      * de cada fila = "12 - 17 a." + "18 - 29 a." + "30 - 59 a." (conTotal
-     * + totalPos 'fin'). La plantilla oficial NO tiene esa columna, por lo
-     * que el export a Excel la omite (xmap sin colTotal, igual que antes).
+     * + totalPos 'fin').
+     * CAMBIO 2026-09-07 r3: el export a Excel de esta seccion escribe SOLO
+     * el TOTAL de cada fila en la columna U (U50 = A Gestante, U51 =
+     * A Puérpera); las celdas S y T ya no se exportan (xmap sin colGedad,
+     * solo colTotal => 'U'). El render web sigue mostrando las 3 columnas
+     * etareas + Total sin cambios.
      * ------------------------------------------------------------ */
     [
         'codigo'   => 'RPT08_VISITA',
@@ -1133,7 +1149,9 @@ function maternoSecciones(): array {
         'gedades'  => [2, 3, 4],      // 12-17 / 18-29 / 30-59 (sin '<12'; el total es columna, no fila)
         'conTotal' => true,           // columna Total web = suma de las 3 columnas etareas
         'totalPos' => 'fin',          // Total a la derecha de "30 - 59 a." (IV la usa al inicio)
-        'xmap'     => ['colGedad' => [2 => 'S', 3 => 'T', 4 => 'U'], 'filaIni' => 50],
+        // Export: SOLO el TOTAL de cada fila en la columna U (U50/U51).
+        // S y T (12-17 / 18-29) NO se escriben en la plantilla (r3).
+        'xmap'     => ['colTotal' => 'U', 'filaIni' => 50],
         'filas' => [
             // Cat 1 (#NOMINAL + #VISITA): Z359/Z349 D R1 y la cita tiene C0011 D R1
             ['key' => 1, 'label' => 'A Gestante',

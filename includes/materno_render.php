@@ -251,7 +251,13 @@ function mtrColNumero(string $letra): int {
  *   - eje 'gedad'    : filas de grupos etareos (1..4 + 'T' TOTAL), columnas
  *                      consecutivas desde xmap['colIni']
  *   - eje 'categoria': filas desde xmap['filaIni'], columnas xmap['colTotal']
- *                      y xmap['colGedad'] (o la unica xmap['colTotal'] en V)
+ *                      y xmap['colGedad'] (o la unica xmap['colTotal'] en V).
+ *                      'colGedad' es OPCIONAL: si la seccion no lo define, se
+ *                      escribe solo la columna colTotal (VIII. VISITA desde
+ *                      r3: TOTAL de cada fila en U50/U51, sin S ni T).
+ *
+ * CAMBIO 2026-09-07 r3: soporte de xmaps de eje 'categoria' sin 'colGedad'
+ * (VIII. VISITA DOMICILIARIA exporta unicamente el TOTAL en la columna U).
  *
  * @param array      $reporte   Reporte ejecutado (['secciones'=>[...], ...])
  * @param string     $periodo  Texto del periodo (celda B6)
@@ -286,7 +292,9 @@ function maternoCeldasExport(array $reporte, string $periodo, string $nombreEst)
                     if (!empty($xmap['colTotal'])) {
                         $cells[$xmap['colTotal'] . $row] = (int)$fila['total'];
                     }
-                    foreach ($xmap['colGedad'] as $g => $letra) {
+                    // 'colGedad' es opcional (VIII. VISITA desde r3 solo define
+                    // colTotal => 'U' y no debe escribir S ni T).
+                    foreach (($xmap['colGedad'] ?? []) as $g => $letra) {
                         if ($letra === null) continue;
                         $cells[$letra . $row] = (int)($fila['valores'][$g] ?? 0);
                     }
