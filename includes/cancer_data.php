@@ -1301,10 +1301,14 @@ function cancerEjecutarReporte(PDO $pdo, array $filtros): array {
         }
         $params[':mes'] = intval($filtros['mes']);
     }
-    if (!empty($filtros['establecimiento'])) {
-        $where[] = "TRIM(Codigo_Unico) = :est";
-        $params[':est'] = (string)$filtros['establecimiento'];
-    }
+	 if (!empty($filtros['establecimiento'])) {
+		$where[] = "TRIM(Codigo_Unico) = :est";
+		$params[':est'] = (string)$filtros['establecimiento'];
+	} else {
+		// "-- Todos --": SOLO establecimientos del catalogo ZSPERENE
+		$where[] = "TRIM(Codigo_Unico) IN (SELECT TRIM(Codigo_Unico) FROM ZSPERENE)";
+	}
+
 
     // ---- 2) Codigo de items de interes (exactos + CIE C%) ----
     $inPh = [];
@@ -1587,10 +1591,15 @@ function cancerSeccion170603DesdeBD(PDO $pdo, array $filtros): array {
             $where[] = cancerTieneColumnaMesInt($pdo) ? "Mes_Int = :mes" : "CAST(TRIM(Mes) AS UNSIGNED) = :mes";
             $params[':mes'] = intval($filtros['mes']);
         }
-        if (!empty($filtros['establecimiento'])) {
-            $where[] = "TRIM(Codigo_Unico) = :est";
-            $params[':est'] = (string)$filtros['establecimiento'];
-        }
+		if (!empty($filtros['establecimiento'])) {
+			$where[] = "TRIM(Codigo_Unico) = :est";
+			$params[':est'] = (string)$filtros['establecimiento'];
+		} else {
+			// "-- Todos --": SOLO establecimientos del catalogo ZSPERENE
+			$where[] = "TRIM(Codigo_Unico) IN (SELECT TRIM(Codigo_Unico) FROM ZSPERENE)";
+		}
+
+		
         $whereF = implode(' AND ', $where);
 
         // UNION de los 8 casos SQL validados (fuente unica de la condicion)
