@@ -795,9 +795,12 @@ function maternoSecciones(): array {
             ['key' => 25, 'niv1' => 'Inmunización a la Gestante', 'niv2' => 'COVID', 'niv3' => 'Protegidas',
              'cond' => array_merge($mujer1059, ['cod' => '90749.01', 'tip' => 'D', 'rownum' => 1], $gestTodo),
              'regla' => $filas],
-            // Cat 25 (Temporal13 + #GEST): D1110 D valor '1' (atencion odontologica)
+            // Cat 25 (regla propia, NO usa #GEST ni Temporal13): la fila D1110
+            // misma identifica la atencion odontologica de la gestante:
+            //   Codigo_item='D1110' + Valor_Lab='2' + Descripcion_Otra_Condicion='GESTANTE'
+            // (antes: D1110 D valor '1' + #GEST por valor_lab='G' en la cita)
             ['key' => 26, 'niv1' => 'Atención Odontológica', 'niv2' => 'Protegidas', 'niv3' => '----------',
-             'cond' => array_merge($mujer1059, ['cod' => 'D1110', 'tip' => 'D', 'vl' => '1'], $gestTodo),
+             'cond' => ['cod' => 'D1110', 'vl' => '2', 'otraCond' => 'GESTANTE'],
              'regla' => $filas],
         ],
     ],
