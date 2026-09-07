@@ -20,7 +20,8 @@
  *   Seccion V   MORBILIDAD RN:                   filas 33-39,  col O (N unica)
  *   Seccion VI  MICRONUTRIENTES:                 filas 53-57,  cols B..K (10)
  *   Seccion VII PUERPERIO:                       filas 53-57,  cols N..P (3)
- *   Seccion VIII VISITA DOMICILIARIA:            filas 50-51,  cols S..U (2 filas x 3 grupos)
+ *   Seccion VIII VISITA DOMICILIARIA:            filas 50-51,  col U (solo TOTAL de
+ *               cada fila: U50/U51; S y T no se escriben desde r3)
  *   Seccion IX-1 TRANSMISION VERTICAL GESTANTES: filas 64-68,  cols B..V (21)
  *   Seccion IX-2 PUERPERAS INMEDIATAS:           filas 75-79,  cols B..G (6)
  *   Seccion IX-3 PRUEBA VIH T.P. / ABORTO:       SIN ZONA en la plantilla (no se exporta;
