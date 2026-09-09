@@ -141,7 +141,7 @@ $esAdmin = esAdmin();
                         <li><a class="dropdown-item <?= $currentpage === 'reporte_operacionales' && $subpage === 'salud_mental' ? 'active' : '' ?>" href="reporte_operacionales.php?sub=salud_mental"><i class="fas fa-brain me-2"></i>Salud Mental</a></li>
                         <li><a class="dropdown-item <?= $currentpage === 'reporte_operacionales' && $subpage === 'salud_ocular' ? 'active' : '' ?>" href="reporte_operacionales.php?sub=salud_ocular"><i class="fas fa-eye me-2"></i>Salud Ocular</a></li>
                         <li><a class="dropdown-item <?= $currentpage === 'reporte_operacionales' && $subpage === 'tbc' ? 'active' : '' ?>" href="reporte_operacionales.php?sub=tbc"><i class="fas fa-lungs me-2"></i>TBC</a></li>
-                        <li><a class="dropdown-item <?= $currentpage === 'reporte_operacionales' && $subpage === 'zoonosis' ? 'active' : '' ?>" href="reporte_operacionales.php?sub=zoonosis"><i class="fas fa-paw me-2"></i>Zoonosis</a></li>
+                        <li><a class="dropdown-item <?= $currentpage === 'reporte_zoonosis' || ($currentpage === 'reporte_operacionales' && $subpage === 'zoonosis') ? 'active' : '' ?>" href="reporte_zoonosis.php"><i class="fas fa-paw me-2"></i>Zoonosis <span class="badge bg-success ms-1" style="font-size:.65em">NUEVO</span><small class="d-block text-muted">Reporte Operacional</small></a></li>
                     </ul>
                 </li>
 
