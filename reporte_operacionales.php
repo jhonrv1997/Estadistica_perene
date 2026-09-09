@@ -144,10 +144,11 @@ include 'includes/header.php';
 <!-- Pagina indice: 17 tarjetas -->
 <div class="row g-3">
     <?php foreach ($estrategias as $key => $est):
-        // ESNI, Cancer y Materno ahora tienen su propio reporte completo data-driven
-        // (reporte_esni.php / reporte_cancer.php / reporte_materno.php) - reemplazan
-        // el flujo manual SQL Server + Excel ODBC de sus respectivos modulos.
-        $esAvanzado = in_array($key, ['esni', 'cancer', 'materno']);
+        // ESNI, Cancer, Materno y Zoonosis ahora tienen su propio reporte completo
+        // data-driven (reporte_esni.php / reporte_cancer.php / reporte_materno.php /
+        // reporte_zoonosis.php) - reemplazan el flujo manual SQL Server + Excel ODBC
+        // de sus respectivos modulos.
+        $esAvanzado = in_array($key, ['esni', 'cancer', 'materno', 'zoonosis']);
         if ($key === 'esni') {
             $href = 'reporte_esni.php';
             $desc = 'Reporte Operacional completo';
@@ -157,6 +158,9 @@ include 'includes/header.php';
         } elseif ($key === 'materno') {
             $href = 'reporte_materno.php';
             $desc = 'Reporte de Actividades de Salud Sexual y Reproductiva';
+        } elseif ($key === 'zoonosis') {
+            $href = 'reporte_zoonosis.php';
+            $desc = 'Informe Mensual de Zoonosis (Ponzoñosos + Rabia Urbana)';
         } else {
             $href = 'reporte_operacionales.php?sub=' . $key;
             $desc = 'Atenciones y atendidos por establecimiento';
@@ -188,6 +192,13 @@ include 'includes/header.php';
 <?php elseif ($sub === 'materno'):
     // Redirigir al reporte completo de Materno (data-driven, 1 click)
     header('Location: reporte_materno.php');
+    exit;
+?>
+
+<?php elseif ($sub === 'zoonosis'):
+    // Redirigir al reporte completo de Zoonosis (data-driven, 1 click):
+    // Informe Mensual de Zoonosis (ponzoñosos + rabia urbana 1-11)
+    header('Location: reporte_zoonosis.php');
     exit;
 ?>
 
