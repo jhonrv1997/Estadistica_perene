@@ -14,6 +14,10 @@
  *   (Opcional) [Exportar Excel] -> llena la plantilla oficial
  *   "uploads/Reporte_Actividades_Zoonosis.xlsx" con los mismos datos
  *   (zoonosis_export.php).
+ *   (Opcional) [Exportar Plano] -> llena la plantilla consolidada
+ *   "uploads/Zoonosis_Plano.xlsx" (zoonosis_export_plano.php): cada celda de
+ *   datos se deposita en la columna indicada por el numero de destino de
+ *   "uploads/Ubicacion Filas.xlsx" (ej: dato D13=2 + destino 288 -> KB14).
  *
  * El motor de reglas (includes/zoonosis_data.php) adapta los 13 procedimientos
  * usp_TRAMA_BASE_ZOONOSIS_2022_* del archivo "03 Creacion de Procedimientos" y
@@ -180,6 +184,12 @@ include 'includes/header.php';
     <div class="card-header bg-white d-flex justify-content-between align-items-center flex-wrap gap-2">
         <h6 class="mb-0 fw-bold"><i class="fas fa-filter me-2 text-primary"></i>Filtros del Reporte</h6>
         <div class="d-flex gap-2">
+            <a href="zoonosis_export_plano.php?<?= http_build_query(array_filter([
+                'anio' => $fAnio, 'mes' => $fMes, 'establecimiento' => $fEstablecimiento,
+                'generar' => $ejecutar ? 1 : null,
+            ])) ?>" class="btn btn-sm btn-warning" title="Exportar el plano consolidado (Zoonosis_Plano.xlsx): cada dato va a la columna indicada por el numero de destino de 'Ubicacion Filas.xlsx' (ej: D13=2 con destino 288 -> KB14)">
+                <i class="fas fa-table me-1"></i> Exportar Plano
+            </a>
             <a href="zoonosis_export.php?<?= http_build_query(array_filter([
                 'anio' => $fAnio, 'mes' => $fMes, 'establecimiento' => $fEstablecimiento,
                 'generar' => $ejecutar ? 1 : null,
@@ -377,7 +387,7 @@ include 'includes/header.php';
     <strong>Equivalencia con el flujo original:</strong> este reporte replica los 13 procedimientos
     <code>usp_TRAMA_BASE_ZOONOSIS_2022_*</code> (archivos 01/02/03) sobre la tabla consolidada MySQL y el
     layout de la plantilla <code>Reporte_Actividades_Zoonosis.xlsx</code>. Ya no necesita SQL Server ni
-    refrescar la conexi&oacute;n ODBC: <strong>1 click y (opcional) Exportar Excel</strong>.<br>
+    refrescar la conexi&oacute;n ODBC: <strong>1 click y (opcional) Exportar Excel / Exportar Plano</strong>.<br>
     <strong>Desarrollado por JKRV</strong>
 </div>
 
