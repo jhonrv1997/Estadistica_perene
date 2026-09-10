@@ -8,7 +8,7 @@
  * Estrategia:
  *   - Un archivo .xlsx es un ZIP con archivos XML internos.
  *   - Para modificar valores de celdas, basta con editar el archivo
- *     xl/worksheets/sheet1.xml dentro del ZIP.
+ *     xl/worksheets/sheetN.xml dentro del ZIP.
  *   - Las celdas vacias tienen la forma <c r="G7" s="4"/>. Se reemplazan
  *     por <c r="G7" s="4"><v>123</v></c> (numericos) o
  *     <c r="C2" s="121" t="inlineStr"><is><t>Texto</t></is></c> (texto).
@@ -16,6 +16,29 @@
  *     sharedStrings.xml (mas simple y robusto).
  *
  * No requiere PhpSpreadsheet ni composer. Solo ZipArchive (incluido en PHP).
+ *
+ * FIX v2 (2026-09-10) — CAUSA RAIZ del "archivo se dana al exportar":
+ *   - BUG CRITICO corregido en buildCellXml(): cuando la plantilla tiene una
+ *     celda de TEXTO, Excel la guarda como:
+ *         <c r="G7" s="4" t="s"><v>5</v></c>
+ *     donde t="s" significa "shared string" y <v>5</v> es el INDICE dentro de
+ *     xl/sharedStrings.xml. Al escribir un NUMERO, la version anterior
+ *     conservaba el atributo t="s" heredado y generaba:
+ *         <c r="G7" s="4" t="s"><v>42</v></c>
+ *     Excel interpreta 42 como INDICE de sharedStrings.xml; como la plantilla
+ *     tiene pocas strings (indices 0..N-1), el indice no existe y el contenido
+ *     es INVALIDO -> Excel muestra "el archivo esta dano" / cuadro de
+ *     reparacion. Solucion: eliminar SIEMPRE el atributo t="..." heredado de
+ *     la plantilla antes de escribir el nuevo valor, y escribir el tipo
+ *     correcto (nada para numeros, t="inlineStr" para texto).
+ *   - Resolucion de la hoja ya no asume sheet1.xml: se lee xl/workbook.xml +
+ *     xl/_rels/workbook.xml.rels para localizar la PRIMERA hoja (compatible
+ *     con plantillas guardadas por LibreOffice/Google Sheets que usan otros
+ *     nombres de parte).
+ *   - download(): se desactiva/neutraliza zlib.output_compression (hostings
+ *     compartidos) para no truncar el binario, y se verifica headers_sent()
+ *     para reportar con claridad si algo escribio salida antes de la descarga
+ *     (echo, warning, BOM de archivo PHP) — eso tambien corrompe el xlsx.
  *
  * Uso:
  *   $filler = new ExcelTemplateFiller('uploads/Plantilla.xlsx');
@@ -89,10 +112,31 @@ class ExcelTemplateFiller
             @ob_end_clean();
         }
 
+        // Si algo ya envio bytes al cliente (echo, warning mostrado, BOM de
+        // un archivo PHP incluido antes), la descarga binaria saldra danoada.
+        // Reportarlo con claridad en lugar de producir un archivo corrupto.
+        if (headers_sent($sentFile, $sentLine)) {
+            @unlink($tmpFile);
+            throw new RuntimeException(
+                'No se puede iniciar la descarga: ya hubo salida en ' . $sentFile . ':' . $sentLine .
+                '. Elimine echo/warnings/BOM antes de llamar download().'
+            );
+        }
+
+        // La compresion de salida del hosting (zlib.output_compression)
+        // re-comprime el binario y rompe Content-Length -> archivo truncado.
+        if (function_exists('ini_set')) {
+            @ini_set('zlib.output_compression', '0');
+        }
+        $zlibOn = in_array(strtolower((string)@ini_get('zlib.output_compression')), ['1', 'on', 'true'], true);
+
         // Headers para descarga
         header('Content-Type: application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
         header('Content-Disposition: attachment; filename="' . str_replace('"', '', $filename) . '"');
-        header('Content-Length: ' . filesize($tmpFile));
+        if (!$zlibOn) {
+            // Solo enviar Content-Length si el hosting no va a recomprimir.
+            header('Content-Length: ' . filesize($tmpFile));
+        }
         header('Cache-Control: max-age=0, no-store');
         header('Pragma: public');
         header('Expires: 0');
@@ -174,7 +218,7 @@ class ExcelTemplateFiller
             );
         }
 
-        // Abrir el ZIP y modificar sheet1.xml.
+        // Abrir el ZIP y modificar el XML de la hoja.
         $zip = new ZipArchive();
         $openRes = $zip->open($tmpFile);
         if ($openRes !== true) {
@@ -186,10 +230,10 @@ class ExcelTemplateFiller
         }
 
         try {
-            // La plantilla tiene una sola hoja llamada Sheet1 -> xl/worksheets/sheet1.xml.
-            // Para soportar plantillas con varias hojas, se podria leer workbook.xml
-            // y mapear r:id a worksheet, pero para esta plantilla basta sheet1.xml.
-            $sheetPath = 'xl/worksheets/sheet1.xml';
+            // Localizar la PRIMERA hoja del workbook leyendo
+            // xl/workbook.xml + xl/_rels/workbook.xml.rels (en vez de asumir
+            // sheet1.xml: LibreOffice/Google Sheets usan otros nombres).
+            $sheetPath = $this->resolveFirstSheetPath($zip);
             $sheetXml = $zip->getFromName($sheetPath);
             if ($sheetXml === false) {
                 $zip->close();
@@ -199,7 +243,7 @@ class ExcelTemplateFiller
 
             $newSheetXml = $this->applyCellValues($sheetXml);
 
-            // Sobrescribir sheet1.xml dentro del ZIP.
+            // Sobrescribir la hoja dentro del ZIP.
             if ($zip->addFromString($sheetPath, $newSheetXml) === false) {
                 $zip->close();
                 @unlink($tmpFile);
@@ -210,6 +254,75 @@ class ExcelTemplateFiller
         }
 
         return $tmpFile;
+    }
+
+    /**
+     * Devuelve la ruta interna (dentro del ZIP) del XML de la primera hoja.
+     *
+     * Lee xl/workbook.xml -> primer <sheet r:id="..."> y resuelve el target
+     * real en xl/_rels/workbook.xml.rels. Si algo falla, hace fallback a
+     * 'xl/worksheets/sheet1.xml' (nombre estandar que usa MS Excel).
+     *
+     * @param ZipArchive $zip ZIP del xlsx ya abierto.
+     * @return string Ruta interna, p.ej. "xl/worksheets/sheet1.xml".
+     */
+    private function resolveFirstSheetPath(ZipArchive $zip): string
+    {
+        $fallback = 'xl/worksheets/sheet1.xml';
+
+        try {
+            $wbXml = $zip->getFromName('xl/workbook.xml');
+            if ($wbXml === false) {
+                return $fallback;
+            }
+            // Primer <sheet .../> del workbook: r:id="rIdN"
+            if (!preg_match('/<sheet\b[^>]*\br:id="([^"]+)"/', $wbXml, $mSheet)) {
+                return $fallback;
+            }
+            $relId = $mSheet[1];
+
+            $relsXml = $zip->getFromName('xl/_rels/workbook.xml.rels');
+            if ($relsXml === false) {
+                return $fallback;
+            }
+            // Relationship con ese Id y tipo worksheet. Se recorren los tags
+            // <Relationship ...> uno a uno porque el orden de los atributos
+            // varia: MS Excel escribe Id primero ("Id=.. Type=.. Target=..")
+            // pero openpyxl/LibreOffice escriben Type primero.
+            $relEsc = preg_quote($relId, '/');
+            $found  = null;
+            if (preg_match_all('/<Relationship\b[^>]*>/', $relsXml, $allRels)) {
+                foreach ($allRels[0] as $relTag) {
+                    $isId   = preg_match('/\bId="' . $relEsc . '"/', $relTag) === 1;
+                    $isType = preg_match('/\bType="[^"]*\/worksheet"/', $relTag) === 1;
+                    if ($isId && $isType) {
+                        if (preg_match('/\bTarget="([^"]+)"/', $relTag, $mTarget)) {
+                            $found = $mTarget[1];
+                        }
+                        break;
+                    }
+                }
+            }
+            if ($found === null) {
+                return $fallback;
+            }
+            $target = $found;
+
+            // Normalizar la ruta: los targets son relativos a xl/
+            if (strpos($target, '/') === 0) {
+                $path = ltrim($target, '/');            // "/xl/worksheets/sheet1.xml"
+            } else {
+                $path = 'xl/' . ltrim($target, '/');    // "worksheets/sheet1.xml"
+            }
+
+            // Verificar que la parte realmente exista en el ZIP.
+            if ($zip->locateName($path) === false) {
+                return $fallback;
+            }
+            return $path;
+        } catch (Throwable $e) {
+            return $fallback;
+        }
     }
 
     /**
@@ -273,7 +386,7 @@ class ExcelTemplateFiller
     /**
      * Aplica todos los valores de $this->cellValues al XML de la hoja.
      *
-     * @param string $sheetXml Contenido original de xl/worksheets/sheet1.xml.
+     * @param string $sheetXml Contenido original de la hoja.
      * @return string Contenido modificado.
      */
     private function applyCellValues(string $sheetXml): string
@@ -288,7 +401,7 @@ class ExcelTemplateFiller
     }
 
     /**
-     * Reemplaza el contenido de una celda vacia en el XML.
+     * Reemplaza el contenido de una celda en el XML.
      *
      * Busca el patron <c r="G7" .../> (celda vacia) y lo reemplaza por:
      *   - Numericos: <c r="G7" ...><v>123</v></c>
@@ -326,7 +439,8 @@ class ExcelTemplateFiller
         }
 
         // Si no se encontro celda vacia, buscar celda ya con contenido y
-        // reemplazar su valor. Patron: <c r="G7" ...>...</c>
+        // reemplazar su valor (incluye <f> formulas: se eliminan al
+        // reemplazar el contenido completo). Patron: <c r="G7" ...>...</c>
         $patternFilled = '/<c r="' . $refEsc . '"([^<>]*?)>(.*?)<\/c>/s';
         if (preg_match($patternFilled, $xml, $m, PREG_OFFSET_CAPTURE)) {
             $matched   = $m[0][0];
@@ -345,6 +459,21 @@ class ExcelTemplateFiller
     /**
      * Construye el XML de una celda con valor.
      *
+     * FIX CRITICO (2026-09-10): se elimina SIEMPRE el atributo t="..."
+     * heredado de la plantilla (t="s", t="str", t="b", t="e", ...).
+     *
+     * ¿Por que? Excel guarda las celdas de texto de una plantilla como
+     *   <c r="G7" s="4" t="s"><v>5</v></c>
+     * donde t="s" = shared string y <v>5</v> es el INDICE en
+     * xl/sharedStrings.xml. Si al escribir un NUMERO se conserva t="s":
+     *   <c r="G7" s="4" t="s"><v>42</v></c>
+     * Excel busca la shared string numero 42; si la plantilla solo tiene 5
+     * (indices 0..4), el contenido es invalido y Excel declara EL ARCHIVO
+     * DANO ("no se puede abrir porque el formato o la extension no son
+     * validos" / cuadro de reparacion). Ademas, si el numero cae dentro del
+     * rango, la celda mostraria un TEXTO ALEATORIO de la plantilla en lugar
+     * del numero.
+     *
      * @param string           $cellRef Referencia ("G7").
      * @param string           $attrs   Atributos existentes (ej: ' s="4"').
      * @param int|string|float $value   Valor.
@@ -352,29 +481,36 @@ class ExcelTemplateFiller
      */
     private function buildCellXml(string $cellRef, string $attrs, $value): string
     {
-        // Si es entero o float, escribir como numero.
+        // 1) Eliminar SIEMPRE el atributo t="..." heredado de la plantilla.
+        //    El estilo (s="...") se conserva intacto; solo el tipo cambia
+        //    segun el valor que se escribe ahora.
+        $cleanAttrs = preg_replace('/\s+t="[^"]*"/', '', $attrs);
+        if ($cleanAttrs === null) {
+            $cleanAttrs = $attrs;
+        }
+
+        // 2) Si es entero o float, escribir como numero (sin t: tipo "n"
+        //    por defecto).
         if (is_int($value) || is_float($value)) {
-            return '<c r="' . $cellRef . '"' . $attrs . '><v>'
+            return '<c r="' . $cellRef . '"' . $cleanAttrs . '><v>'
                  . $this->formatNumber($value)
                  . '</v></c>';
         }
 
-        // Si es una cadena puramente numerica (ej: "2024") sin ceros a la
-        // izquierda, tambien escribirla como numero (asi Excel la trata como
-        // numero y permite formulas). Si tiene ceros a la izquierda o no es
-        // numerica, se escribe como texto.
+        // 3) Si es una cadena puramente numerica (ej: "2024") sin ceros a la
+        //    izquierda, escribirla como numero (asi Excel la trata como
+        //    numero y permite formulas). Si tiene ceros a la izquierda o no
+        //    es numerica, se escribe como texto.
         $strVal = (string)$value;
         $isNumericString = preg_match('/^-?\d+(\.\d+)?$/', $strVal) === 1
                         && $strVal[0] !== '0';
         if ($isNumericString) {
-            return '<c r="' . $cellRef . '"' . $attrs . '><v>'
+            return '<c r="' . $cellRef . '"' . $cleanAttrs . '><v>'
                  . $strVal
                  . '</v></c>';
         }
 
-        // Texto: usar inlineStr para no tocar sharedStrings.xml.
-        // Quitar cualquier atributo t="..." existente (seria erroneo mezclar).
-        $cleanAttrs = preg_replace('/\s+t="[^"]*"/', '', $attrs);
+        // 4) Texto: usar inlineStr para no tocar sharedStrings.xml.
         $textEsc = $this->escapeXml($strVal);
         return '<c r="' . $cellRef . '"' . $cleanAttrs . ' t="inlineStr">'
              . '<is><t xml:space="preserve">' . $textEsc . '</t></is></c>';
@@ -407,6 +543,9 @@ class ExcelTemplateFiller
         // Eliminar caracteres de control invalidos en XML 1.0
         // (excepto tab, newline, carriage return).
         $s = preg_replace('/[\x00-\x08\x0B\x0C\x0E-\x1F]/', '', $s);
+        if ($s === null) {
+            $s = '';
+        }
         return htmlspecialchars($s, ENT_QUOTES | ENT_XML1, 'UTF-8');
     }
 }

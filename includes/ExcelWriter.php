@@ -4,14 +4,23 @@
  * Clase para generar archivos Excel .xlsx nativos
  * Sin dependencias externas — usa ZipArchive + XML
  *
- * FIX v3 (2026-07-26):
- *  - Escritura directa de partes XML en el ZIP (sin archivos temporales intermedios)
- *  - Agrega <dimension> y <autoFilter> a la hoja -> Excel abre sin "reparar archivo"
- *    y habilita los filtros automaticamente sin necesidad de importar nada
- *  - Verifica ZipArchive::open() / close() con excepciones informativas
- *  - ob_end_clean() exhaustivo para evitar HTML contaminante en la descarga
- *  - Strings con ceros a la izquierda (DNI, Lote, NumPag) se conservan como texto
- *  - Caracteres de control XML se eliminan (xml:space=preserve para espacios)
+ * FIX v4 (2026-09-10):
+ *  - (v3) Escritura directa de partes XML en el ZIP, <dimension> y
+ *    <autoFilter> en la hoja, verificacion de ZipArchive open/close,
+ *    ob_end_clean() exhaustivo, strings con ceros a la izquierda como
+ *    texto, caracteres de control XML eliminados.
+ *  - (v4) styles.xml: se agrega <cellStyles> con el estilo "Normal".
+ *    Sin el, algunos lectores (LibreOffice, openpyxl) advertian "Workbook
+ *    contains no default style"; Excel lo tolera, pero incluirlo es lo que
+ *    hace todo generador serio (PhpSpreadsheet incluido).
+ *  - (v4) worksheet: se agrega <sheetViews> (congelar nada, solo la vista
+ *    por defecto) y workbook.xml: <bookViews>. Son partes que MS Excel
+ *    siempre escribe; incluirlas maximiza compatibilidad.
+ *  - (v4) download(): guardas anti-corrupcion — se desactiva
+ *    zlib.output_compression (hostings compartidos que recomprimen el
+ *    binario y truncan el archivo) y se detecta headers_sent() para
+ *    reportar con claridad si hubo salida previa (echo/warning/BOM),
+ *    causa clasica de "archivo dano".
  */
 
 class ExcelWriter {
@@ -40,12 +49,34 @@ class ExcelWriter {
             $this->buildXlsx($zipFile);
             while (ob_get_level() > 0) ob_end_clean();
 
+            // Si algo ya envio bytes al cliente (echo, warning mostrado, BOM
+            // de un archivo PHP incluido antes), la descarga binaria saldra
+            // danoada. Reportarlo con claridad en lugar de corromper.
+            if (headers_sent($sentFile, $sentLine)) {
+                throw new RuntimeException(
+                    'No se puede iniciar la descarga: ya hubo salida en ' . $sentFile . ':' . $sentLine .
+                    '. Elimine echo/warnings/BOM antes de llamar download().'
+                );
+            }
+
+            // La compresion de salida del hosting (zlib.output_compression)
+            // re-comprime el binario y rompe Content-Length -> truncado.
+            if (function_exists('ini_set')) {
+                @ini_set('zlib.output_compression', '0');
+            }
+            $zlibOn = in_array(
+                strtolower((string)@ini_get('zlib.output_compression')),
+                ['1', 'on', 'true'], true
+            );
+
             if (!is_readable($zipFile)) {
                 throw new RuntimeException('Archivo xlsx no legible despues de build.');
             }
             header('Content-Type: application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
             header('Content-Disposition: attachment; filename="' . str_replace('"', '', $filename) . '"');
-            header('Content-Length: ' . filesize($zipFile));
+            if (!$zlibOn) {
+                header('Content-Length: ' . filesize($zipFile));
+            }
             header('Cache-Control: max-age=0, no-store');
             header('Pragma: public');
             header('Expires: 0');
@@ -114,6 +145,9 @@ class ExcelWriter {
     private function renderWorkbook() {
         $xml  = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' . "\n";
         $xml .= '<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">';
+        // <bookViews> antes de <sheets> (orden exigido por el esquema; Excel
+        // siempre lo escribe, y sin el algunos lectores se quejan).
+        $xml .= '<bookViews><workbookView/></bookViews>';
         $xml .= '<sheets>';
         foreach ($this->sheets as $i => $s) {
             $num = $i + 1;
@@ -159,6 +193,11 @@ class ExcelWriter {
         $xml .= '<xf numFmtId="0" fontId="0" fillId="0" borderId="1" xfId="0" applyFont="1" applyFill="1" applyBorder="1"><alignment vertical="center" wrapText="1"/></xf>';
         $xml .= '<xf numFmtId="0" fontId="1" fillId="2" borderId="1" xfId="1" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="center" wrapText="1"/></xf>';
         $xml .= '</cellXfs>';
+        // v4: estilo "Normal" por defecto. Sin esta parte, los lectores
+        // advertian "Workbook contains no default style" (openpyxl) y algunos
+        // visores mostraban estilos raros. Es lo que todo generador serio
+        // escribe.
+        $xml .= '<cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles>';
         $xml .= '</styleSheet>';
         return $xml;
     }
@@ -173,6 +212,8 @@ class ExcelWriter {
         $xml  = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' . "\n";
         $xml .= '<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">';
         $xml .= '<dimension ref="' . $dimRef . '"/>';
+        // v4: sheetViews (orden del esquema: dimension -> sheetViews -> cols)
+        $xml .= '<sheetViews><sheetView workbookViewId="0"/></sheetViews>';
 
         // Columnas
         $xml .= '<cols>';
@@ -234,6 +275,9 @@ class ExcelWriter {
     private function escapeXml(string $s): string {
         // Elimina caracteres de control invalidos en XML 1.0
         $s = preg_replace('/[\x00-\x08\x0B\x0C\x0E-\x1F]/', '', $s);
+        if ($s === null) {
+            $s = '';
+        }
         return htmlspecialchars($s, ENT_QUOTES | ENT_XML1, 'UTF-8');
     }
 
