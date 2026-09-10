@@ -146,7 +146,7 @@ function zooPanelCondiciones(array $sec, string $regla): void {
  *   Encabezado:
  *     D5 = IPRESS (area combinada D5:M5)
  *     R4 = MES    (area combinada R4:U4)
- *     R5 = AÑO    (area combinada R5:U5)
+ *     O5 = AÑO    (escribir en el ancla O5)
  *   Cada fila del reporte escribe:
  *     {colsX.total}{fila}       = Total de la fila
  *     {colsX.etapas[e]}{fila}   = valor del grupo etareo e (si la seccion tiene etapas)
@@ -154,7 +154,7 @@ function zooPanelCondiciones(array $sec, string $regla): void {
  *
  * @param array  $reporte  Reporte ejecutado (['secciones'=>[...], ...])
  * @param string $mesTxt   Texto del mes (celda R4) o '' para todos
- * @param string $anioTxt  Texto del año (celda R5)
+ * @param string $anioTxt  Texto del año (celda O5)
  * @param string $nombreEst Nombre del EE.SS o '' (todos)
  * @return array<string,int|string|float> Mapa [refCelda => valor]
  */
@@ -163,7 +163,7 @@ function zooCeldasExport(array $reporte, string $mesTxt, string $anioTxt, string
     // Cabecera de la plantilla (areas de valor vacias en el flujo ODBC original)
     $cells['D5'] = $nombreEst !== '' ? $nombreEst : 'TODOS LOS ESTABLECIMIENTOS DE LA LISTA';
     $cells['R4'] = $mesTxt !== '' ? $mesTxt : 'TODOS';
-    $cells['R5'] = $anioTxt !== '' ? $anioTxt : 'TODOS';
+    $cells['O5'] = $anioTxt !== '' ? $anioTxt : 'TODOS';
 
     foreach ($reporte['secciones'] as $sec) {
         $colsX = $sec['colsX'] ?? null;
