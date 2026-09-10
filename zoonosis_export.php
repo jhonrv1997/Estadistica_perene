@@ -13,7 +13,7 @@
  *   Encabezado:
  *     D5 = IPRESS  (celda combinada D5:M5 - escribir en el ancla D5)
  *     R4 = MES     (celda combinada R4:U4 - escribir en el ancla R4)
- *     R5 = AÑO     (celda combinada R5:U5 - escribir en el ancla R5)
+ *     O5 = AÑO     (escribir en el ancla O5)
  *   PONZ1  MORBILIDAD PONZOÑOSOS:   filas 12-56,  cols D,E,G,J,L,N,P (Total+5 etapas+GESTANTES)
  *   PONZ2  CON TRATAMIENTO (U310):  filas 59-62,  cols B,D,E,G,J,L,N
  *   RU1    PRE-EXPOSICION:          filas 67-69,  cols E,G,J,L,N,P
