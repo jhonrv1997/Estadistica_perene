@@ -144,11 +144,11 @@ include 'includes/header.php';
 <!-- Pagina indice: 17 tarjetas -->
 <div class="row g-3">
     <?php foreach ($estrategias as $key => $est):
-        // ESNI, Cancer, Materno y Zoonosis ahora tienen su propio reporte completo
-        // data-driven (reporte_esni.php / reporte_cancer.php / reporte_materno.php /
-        // reporte_zoonosis.php) - reemplazan el flujo manual SQL Server + Excel ODBC
-        // de sus respectivos modulos.
-        $esAvanzado = in_array($key, ['esni', 'cancer', 'materno', 'zoonosis']);
+        // ESNI, Cancer, Materno, Zoonosis y No Transmisibles ahora tienen su propio
+        // reporte completo data-driven (reporte_esni.php / reporte_cancer.php /
+        // reporte_materno.php / reporte_zoonosis.php / reporte_no_transmisibles.php)
+        // - reemplazan el flujo manual SQL Server + Excel ODBC de sus modulos.
+        $esAvanzado = in_array($key, ['esni', 'cancer', 'materno', 'zoonosis', 'no_transmisibles']);
         if ($key === 'esni') {
             $href = 'reporte_esni.php';
             $desc = 'Reporte Operacional completo';
@@ -161,6 +161,9 @@ include 'includes/header.php';
         } elseif ($key === 'zoonosis') {
             $href = 'reporte_zoonosis.php';
             $desc = 'Informe Mensual de Zoonosis (Ponzoñosos + Rabia Urbana)';
+        } elseif ($key === 'no_transmisibles') {
+            $href = 'reporte_no_transmisibles.php';
+            $desc = 'Actividades de Enfermedades No Trasmisibles (Valoracion + HTA + DM + Telesalud)';
         } else {
             $href = 'reporte_operacionales.php?sub=' . $key;
             $desc = 'Atenciones y atendidos por establecimiento';
@@ -199,6 +202,13 @@ include 'includes/header.php';
     // Redirigir al reporte completo de Zoonosis (data-driven, 1 click):
     // Informe Mensual de Zoonosis (ponzoñosos + rabia urbana 1-11)
     header('Location: reporte_zoonosis.php');
+    exit;
+?>
+
+<?php elseif ($sub === 'no_transmisibles'):
+    // Redirigir al reporte completo de No Transmisibles (data-driven, 1 click):
+    // Actividades de Enfermedades No Trasmisibles (Valoracion + HTA + DM + Telesalud)
+    header('Location: reporte_no_transmisibles.php');
     exit;
 ?>
 

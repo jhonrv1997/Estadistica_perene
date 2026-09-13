@@ -35,13 +35,14 @@ El sistema soporta dos roles:
 | 09 | **Configurar ESNI** | `esni_config.php` | Solo Admin | Gestion data-driven de vacunas, dosis, grupos de edad, secciones, lineas y reglas de mapeo. Reemplaza los stored procedures T-SQL hard-codeados. |
 | 10 | **Reporte MATERNO (Salud Sexual y Reproductiva)** | `reporte_materno.php` | Todos | **NUEVO** Reporte de Actividades de la Direccion de Salud Sexual y Reproductiva con 10 secciones (I-X), data-driven, 1 click + Excel. Reemplaza el flujo manual SQL Server + Excel ODBC. |
 | 12 | **Reporte ZOONOSIS (Informe Mensual de Zoonosis)** | `reporte_zoonosis.php` | Todos | **NUEVO** Informe Mensual de Zoonosis con 15 bloques (Ponzoñosos + Rabia Urbana 1-11), data-driven, 1 click + Excel. Reemplaza el flujo manual SQL Server + Excel ODBC. |
+| 13 | **Reporte NO TRANSMISIBLES (Actividades de ENT)** | `reporte_no_transmisibles.php` | Todos | **NUEVO** Actividades de Enfermedades No Trasmisibles con 24 secciones en 4 grupos (Valoracion 5 + Hipertension Arterial 7 + Diabetes Mellitus 7 + Telesalud 5), data-driven, 1 click + Excel. Reemplaza el flujo manual SQL Server + Excel ODBC. |
 | 11 | Gestion de Usuarios | `usuarios.php` | Solo Admin | CRUD completo de usuarios: crear, editar, activar/desactivar, resetear clave, eliminar. |
 
 ### Sub-paginas
 
 - **Consulta de Atenciones** (`?sub=general` | `?sub=preventivas`)
 - **Reporte de Atenciones** (`?sub=atendidos` | `?sub=diario` | `?sub=mensual` | `?sub=40a`)
-- **Reportes Operacionales** (`?sub=adolescente`, `?sub=adulto`, `?sub=adulto_mayor`, `?sub=cancer`, `?sub=esni` [redirige a `reporte_esni.php`], `?sub=joven`, `?sub=materno` [redirige a `reporte_materno.php`], `?sub=medicina_alternativa`, `?sub=metaxenicas`, `?sub=nino`, `?sub=no_transmisibles`, `?sub=planificacion_familiar`, `?sub=salud_bucal`, `?sub=salud_mental`, `?sub=salud_ocular`, `?sub=tbc`, `?sub=zoonosis` [redirige a `reporte_zoonosis.php`])
+- **Reportes Operacionales** (`?sub=adolescente`, `?sub=adulto`, `?sub=adulto_mayor`, `?sub=cancer`, `?sub=esni` [redirige a `reporte_esni.php`], `?sub=joven`, `?sub=materno` [redirige a `reporte_materno.php`], `?sub=medicina_alternativa`, `?sub=metaxenicas`, `?sub=nino`, `?sub=no_transmisibles` [redirige a `reporte_no_transmisibles.php`], `?sub=planificacion_familiar`, `?sub=salud_bucal`, `?sub=salud_mental`, `?sub=salud_ocular`, `?sub=tbc`, `?sub=zoonosis` [redirige a `reporte_zoonosis.php`])
 
 ### Otras paginas
 
@@ -78,6 +79,9 @@ El sistema soporta dos roles:
 |-- reporte_zoonosis.php        # Pagina 12: Reporte ZOONOSIS - 15 bloques data-driven [NUEVO]
 |-- zoonosis_export.php         # Exportar reporte ZOONOSIS a la plantilla oficial .xlsx [NUEVO]
 |-- install_zoonosis.php        # Asistente instalacion modulo ZOONOSIS (indices; eliminar despues) [NUEVO]
+|-- reporte_no_transmisibles.php # Pagina 13: Reporte NO TRANSMISIBLES - 24 secciones data-driven [NUEVO]
+|-- nontransmisibles_export.php # Exportar reporte NO TRANSMISIBLES a la plantilla oficial .xlsx [NUEVO]
+|-- install_no_transmisibles.php # Asistente instalacion modulo NO TRANSMISIBLES (indices; eliminar despues) [NUEVO]
 |-- import.php                  # Pagina 08: Importar Datos (admin)
 |-- usuarios.php                # Pagina 11: Gestion de Usuarios (admin)
 |-- log.php                     # Log de auditoria
@@ -89,6 +93,7 @@ El sistema soporta dos roles:
 |-- INSTALL_esni.md             # Documentacion detallada del modulo ESNI [NUEVO]
 |-- INSTALL_materno.md          # Documentacion detallada del modulo MATERNO [NUEVO]
 |-- INSTALL_zoonosis.md         # Documentacion detallada del modulo ZOONOSIS [NUEVO]
+|-- INSTALL_notransmisibles.md # Documentacion detallada del modulo NO TRANSMISIBLES [NUEVO]
 |-- includes/
 |   |-- auth.php                # Autenticacion y verificacion de roles
 |   |-- functions.php           # Funciones comunes (consolidacion, importacion, etc.)
@@ -97,6 +102,8 @@ El sistema soporta dos roles:
 |   |-- materno_render.php      # Render web + mapa de celdas del export MATERNO [NUEVO]
 |   |-- zoonosis_data.php       # Motor de reglas data-driven ZOONOSIS (13 SP adaptados) [NUEVO]
 |   |-- zoonosis_render.php     # Render web + mapa de celdas del export ZOONOSIS [NUEVO]
+|   |-- nontransmisibles_data.php # Motor de reglas data-driven NO TRANSMISIBLES (24 SP adaptados) [NUEVO]
+|   |-- nontransmisibles_render.php # Render web + mapa de celdas del export NO TRANSMISIBLES [NUEVO]
 |   |-- header.php              # Navbar reorganizado con dropdowns
 |   |-- footer.php              # Footer comun
 |   `-- ExcelWriter.php         # Generador de Excel
@@ -181,6 +188,35 @@ Reemplaza el flujo manual anterior (SQL Server + 3 archivos .txt + Excel con con
 
 Ver [INSTALL_zoonosis.md](INSTALL_zoonosis.md) para instrucciones detalladas de instalacion y uso.
 
+## Modulo NO TRANSMISIBLES (v6.0)
+
+Reemplaza el flujo manual anterior (SQL Server + 3 archivos .txt + Excel con conexion ODBC) por una solucion web data-driven, igual que ESNI, Cancer, Materno y Zoonosis.
+
+**Flujo anterior (4 pasos manuales):**
+1. SQL Server: ejecutar `01 Creacion tablas iniciales` (DimNT_*)
+2. SQL Server: ejecutar `02 Creacion tablas consolidacion` (TRAMA_BASE_NT_2025_*)
+3. SQL Server: ejecutar `03 Creacion de Procedimientos` (24 SP usp_TRAMA_BASE_NT_2025_*)
+4. Excel: abrir `Reporte_Actividades_NoTransmisibles.xlsx` y refrescar conexion ODBC
+
+**Flujo nuevo (1 click):**
+- Entrar a IntelHIS -> Reportes Operacionales -> NO TRANSMISIBLES -> Generar Reporte
+- (Opcional) Exportar Excel (llena la plantilla oficial con el mismo layout)
+
+**Ventajas:**
+- No requiere SQL Server (usa la misma tabla consolidada MySQL que ESNI, Cancer, Materno y Zoonosis)
+- No requiere Excel con conexion ODBC (exporta directamente desde la web)
+- 24 secciones en 4 grupos (Valoracion 5 + Hipertension Arterial 7 + Diabetes Mellitus 7 + Telesalud 5)
+  con el mismo layout que el Excel oficial (grupos etareos 6G/8G con columnas M/F)
+- Adaptacion fiel de los 24 procedimientos `usp_TRAMA_BASE_NT_2025_*`: count(distinct id_persona),
+  count(*) y sum(valor_lab) replicados como reglas auditables
+- Filtros por familia CIE (cod_item_f: E10x/E11x/E13x/E14x, I10x-I13x, O24, E06, A15),
+  I_ROWNUM_LAB, valor_lab (rangos numericos), Fg_Tipo CX, Id_Ups y Ficha_Familiar
+- Secciones por categoria de establecimiento (DM03/DM04/DM06/DM07) usando MAESTRO_HIS_
+  ESTABLECIMIENTO, como el #RENAES del T-SQL
+- Modo auditoria "Ver SQL" para comparar con el archivo 03 y ajustar en 1 solo archivo
+
+Ver [INSTALL_notransmisibles.md](INSTALL_notransmisibles.md) para instrucciones detalladas de instalacion y uso.
+
 ## Base de Datos
 
 ### Tablas principales
@@ -250,6 +286,8 @@ define('MAX_FILE_SIZE', 100 * 1024 * 1024);  // 100 MB
 7. **Auditoria:** Revisar `log.php` para auditoria de operaciones.
 
 ## Version
+
+**v6.0.0** - Modulo NO TRANSMISIBLES data-driven: reemplaza el flujo manual SQL Server + Excel ODBC por una solucion web completa. Incluye motor de reglas en PHP con DSL auditable (24 secciones = 24 procedimientos usp_TRAMA_BASE_NT_2025_* en 4 grupos: Valoracion, Hipertension Arterial, Diabetes Mellitus y Telesalud), 3 reglas de conteo (personas distintas por EE.SS+periodo / filas / sesiones con participantes), filtros por categoria de establecimiento (MAESTRO_HIS_ESTABLECIMIENTO como el #RENAES del T-SQL), grupos etareos 6G (05-11..60+) y 8G (menores de 1a..60+) con columnas M/F, pagina de reporte 1 click con panel de auditoria de condiciones, exportacion a la plantilla oficial (Reporte_Actividades_NoTransmisibles.xlsx) y asistente de indices.
 
 **v5.0.0** - Modulo ZOONOSIS data-driven: reemplaza el flujo manual SQL Server + Excel ODBC por una solucion web completa. Incluye motor de reglas en PHP con DSL auditable (15 bloques = 13 procedimientos), 3 reglas de conteo (filas / personas distintas por EE.SS / suma de valor_lab), pagina de reporte 1 click con panel de auditoria de condiciones, exportacion a la plantilla oficial (Informe Mensual de Zoonosis) y asistente de indices.
 
