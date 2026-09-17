@@ -1,28 +1,63 @@
-# Sistema HIS - Configuracion Apache
+# =====================================================
+# Sistema HIS - Reglas para evitar el error SSL de www
+# -----------------------------------------------------
+# El certificado comodin *.gt.tc NO cubre www.hisperene.gt.tc
+# (sub-subdominio). Estas reglas envian todo el trafico a la
+# version canonica: https://hisperene.gt.tc
+#
+# Ubicacion: raiz del sitio (htdocs/.htaccess)
+# Requiere: mod_rewrite habilitado (activo en InfinityFree)
+# =====================================================
 
+RewriteEngine On
+
+# -----------------------------------------------------
+# 1) www -> sin www  (301 permanente)
+#    Cualquier http://www.hisperene.gt.tc/...  o
+#    https://www.hisperene.gt.tc/... (si el navegador
+#    acepto el aviso de seguridad) va a la version buena.
+# -----------------------------------------------------
+RewriteCond %{HTTP_HOST} ^www\. [NC]
+RewriteRule ^ https://hisperene.gt.tc%{REQUEST_URI} [R=301,L]
+
+# -----------------------------------------------------
+# 2) http -> https  (301 permanente)
+#    InfinityFree solo sirve HTTPS correctamente en este
+#    dominio; el puerto 80 responde vacio.
+#    (Regla recomendada por la guia oficial de InfinityFree)
+# -----------------------------------------------------
+RewriteCond %{HTTPS} off
+RewriteRule ^(.*)$ https://%{HTTP_HOST}%{REQUEST_URI} [R=301,L]
+
+# -----------------------------------------------------
+# 3) (OPCIONAL) HSTS - activar SOLO cuando verifiques que
+#    todo funciona bien sin www. Mientras lo pruebas,
+#    dejalo comentado para poder volver atras facil.
+# -----------------------------------------------------
+# Header always set Strict-Transport-Security "max-age=31536000"
+
+
+php_value display_errors Off
+php_value mbstring.http_input auto
+php_value date.timezone America/Lima
+# Sistema HIS - Configuracion Apache
 # Proteger directorios sensibles
 <IfModule mod_rewrite.c>
     RewriteEngine On
-    
     # Bloquear acceso directo a includes
     RewriteRule ^includes/ - [F,L]
-    
     # Bloquear acceso directo a sql
     RewriteRule ^sql/ - [F,L]
-    
     # Bloquear acceso a archivos temporales en uploads
     RewriteRule ^uploads/temp_ - [F,L]
 </IfModule>
-
 # Proteger archivos de configuracion
-<FilesMatch "^(config\.php|functions\.php|auth\.php)$">
+<FilesMatch "^(config.php|functions.php|auth.php)$">
     Order deny,allow
     Deny from all
 </FilesMatch>
-
 # Impedir listado de directorios
 Options -Indexes
-
 # Configuracion PHP recomendada
 <IfModule mod_php.c>
     php_value upload_max_filesize 100M
@@ -31,7 +66,6 @@ Options -Indexes
     php_value max_input_time 600
     php_value memory_limit 512M
 </IfModule>
-
 # Cache de assets
 <IfModule mod_expires.c>
     ExpiresActive On
@@ -40,12 +74,10 @@ Options -Indexes
     ExpiresByType image/png "access plus 1 month"
     ExpiresByType image/jpeg "access plus 1 month"
 </IfModule>
-
 # Compresion
 <IfModule mod_deflate.c>
     AddOutputFilterByType DEFLATE text/html text/css application/javascript application/json
 </IfModule>
-
 # Seguridad
 <IfModule mod_headers.c>
     Header set X-Content-Type-Options "nosniff"
