@@ -1,8 +1,36 @@
 <?php
 /**
  * Sistema de Gestion de Datos HIS
- * Archivo de Configuracion
+ * Archivo de Configuracion (CORREGIDO)
+ *
+ * CAMBIO CLAVE:
+ * El certificado comodin del hosting (*.gt.tc) solo cubre UN nivel de
+ * subdominio:  hisperene.gt.tc  ->  SI esta cubierto.
+ * www.hisperene.gt.tc es un sub-subdominio (dos niveles) y NO esta
+ * cubierto -> el navegador muestra error SSL (ERR_CERT_COMMON_NAME_INVALID).
+ *
+ * Por eso este archivo hace dos cosas:
+ *   1. Redirige automaticamente cualquier entrada por "www." hacia la
+ *      version canonica SIN www (301).
+ *   2. Define APP_URL siempre con https:// y SIN www, para que ninguna
+ *      redireccion o enlace generado por el sistema use "www.".
  */
+
+/* =====================================================================
+ * 1. PROTECCION ANTI-WWW (debe ejecutarse ANTES de todo lo demas)
+ * ---------------------------------------------------------------------
+ * Si alguien llega por www.hisperene.gt.tc (via http, donde el servidor
+ * todavia responde), se le manda a la version sin www con un 301.
+ * Nota: en https://www... el error de certificado aparece ANTES de que
+ * PHP pueda actuar; esta guardia evita que el codigo genere enlaces o
+ * sesiones sobre el host incorrecto.
+ * ===================================================================== */
+if (isset($_SERVER['HTTP_HOST']) && stripos($_SERVER['HTTP_HOST'], 'www.') === 0) {
+    $host_sin_www = preg_replace('/^www\./i', '', $_SERVER['HTTP_HOST']);
+    $uri          = $_SERVER['REQUEST_URI'] ?? '/';
+    header('Location: https://' . $host_sin_www . $uri, true, 301);
+    exit;
+}
 
 // Configuracion de Base de Datos
 define('DB_HOST', 'sql102.infinityfree.com');
@@ -14,14 +42,36 @@ define('DB_CHARSET', 'utf8mb4');
 // Configuracion de la Aplicacion
 define('APP_NAME', 'Sistema HIS - Gestion de Datos');
 define('APP_VERSION', '1.0.0');
-define('APP_URL', 'hisperene.gt.tc'); // URL base del sistema (ej: https://tudominio.com/his)
+// ANTES:  define('APP_URL', 'hisperene.gt.tc');  <- sin esquema, ambiguo
+// AHORA:  URL canonica absoluta, SIEMPRE con https:// y SIN www
+define('APP_URL', 'https://hisperene.gt.tc');
 
 // Configuracion de Sesiones
 define('SESSION_TIMEOUT', 3600); // 1 hora en segundos
 
 // Configuracion de Upload
+// NOTA: InfinityFree (plan gratuito) limita la subida a ~10 MB por archivo.
+// MAX_FILE_SIZE de 100MB sera rechazado por el servidor aunque PHP lo permita.
 define('UPLOAD_DIR', __DIR__ . '/uploads/');
-define('MAX_FILE_SIZE', 100 * 1024 * 1024); // 100MB
+define('MAX_FILE_SIZE', 10 * 1024 * 1024); // 10MB (limite real del hosting)
+
+/* =====================================================================
+ * 2. HELPERS DE URL / REDIRECCION
+ * ---------------------------------------------------------------------
+ * Usar SIEMPRE estas funciones para enlaces y redirecciones internas
+ * en lugar de escribir URLs a mano. Garantizan https + sin www.
+ * Ejemplos:
+ *   echo app_url('login.php');
+ *   app_redirect('index.php?ok=1');
+ * ===================================================================== */
+function app_url($path = '') {
+    return rtrim(APP_URL, '/') . '/' . ltrim($path, '/');
+}
+
+function app_redirect($path = '') {
+    header('Location: ' . app_url($path), true, 302);
+    exit;
+}
 
 // Conexion a Base de Datos
 function getDBConnection() {
