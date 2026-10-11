@@ -29,20 +29,21 @@ El sistema soporta dos roles:
 | 03 | Consulta de Atenciones | `consulta_atenciones.php` | Todos | Busqueda del consolidado HIS con dos sub-paginas: Filtro General y Filtro Preventivas. |
 | 04 | Control de Calidad | `control_calidad.php` | Todos | Reporte de observaciones encontradas en los datos consolidados. |
 | 05 | Reporte de Atenciones | `reporte_atenciones.php` | Todos | 4 sub-reportes: Atenciones y Atendidos, Produccion Diario, Produccion Mensual, Reporte 40A. |
-| 06 | Reportes Operacionales | `reporte_operacionales.php` | Todos | 17 sub-reportes por estrategia: Adolescente, Adulto, Adulto Mayor, Cancer, ESNI, Joven, Materno, Medicina Alternativa, Metaxenicas, Nino, No Transmisibles, Planificacion Familiar, Salud Bucal, Salud Mental, Salud Ocular, TBC, Zoonosis. |
+| 06 | Reportes Operacionales | `reporte_operacionales.php` | Todos | 18 sub-reportes por estrategia: Adolescente, Adulto, Adulto Mayor, Cancer, ESNI, ITS, Joven, Materno, Medicina Alternativa, Metaxenicas, Nino, No Transmisibles, Planificacion Familiar, Salud Bucal, Salud Mental, Salud Ocular, TBC, Zoonosis. |
 | 07 | **Reporte ESNI (Inmunizaciones)** | `reporte_esni.php` | Todos | Reporte Operacional completo de Inmunizaciones con 14 secciones (A-VPH), data-driven, con exportacion a Excel. Reemplaza el flujo manual SQL Server + Excel. |
 | 08 | Importar Datos | `import.php` | Solo Admin | Carga de archivos ZIP (MaestroRegistrador, MaestroPersonal, MaestroPaciente, NominalTrama). |
 | 09 | **Configurar ESNI** | `esni_config.php` | Solo Admin | Gestion data-driven de vacunas, dosis, grupos de edad, secciones, lineas y reglas de mapeo. Reemplaza los stored procedures T-SQL hard-codeados. |
 | 10 | **Reporte MATERNO (Salud Sexual y Reproductiva)** | `reporte_materno.php` | Todos | **NUEVO** Reporte de Actividades de la Direccion de Salud Sexual y Reproductiva con 10 secciones (I-X), data-driven, 1 click + Excel. Reemplaza el flujo manual SQL Server + Excel ODBC. |
 | 12 | **Reporte ZOONOSIS (Informe Mensual de Zoonosis)** | `reporte_zoonosis.php` | Todos | **NUEVO** Informe Mensual de Zoonosis con 15 bloques (Ponzoñosos + Rabia Urbana 1-11), data-driven, 1 click + Excel. Reemplaza el flujo manual SQL Server + Excel ODBC. |
 | 13 | **Reporte NO TRANSMISIBLES (Actividades de ENT)** | `reporte_no_transmisibles.php` | Todos | **NUEVO** Actividades de Enfermedades No Trasmisibles con 24 secciones en 4 grupos (Valoracion 5 + Hipertension Arterial 7 + Diabetes Mellitus 7 + Telesalud 5), data-driven, 1 click + Excel. Reemplaza el flujo manual SQL Server + Excel ODBC. |
+| 14 | **Reporte ITS/VIH (Hoja de Monitoreo Mensual de la ESN Prevencion y Control de ITS, VIH/SIDA y Hepatitis)** | `reporte_its.php` | Todos | **NUEVO** Reporte con 16 bloques (Poblacion General ITS, Hepatitis B/C, Tamizaje VIH, Exposicion, Violencia Sexual, PVV, Gestantes por grupo etareo y trimestre, Recien Nacidos, Poblacion Clave HSH/Trans/TS, ITS en Poblacion Clave, Brigadas MCC/BMA y Telemedicina), data-driven, 1 click + Excel. Reemplaza el flujo manual SQL Server + Excel ODBC. |
 | 11 | Gestion de Usuarios | `usuarios.php` | Solo Admin | CRUD completo de usuarios: crear, editar, activar/desactivar, resetear clave, eliminar. |
 
 ### Sub-paginas
 
 - **Consulta de Atenciones** (`?sub=general` | `?sub=preventivas`)
 - **Reporte de Atenciones** (`?sub=atendidos` | `?sub=diario` | `?sub=mensual` | `?sub=40a`)
-- **Reportes Operacionales** (`?sub=adolescente`, `?sub=adulto`, `?sub=adulto_mayor`, `?sub=cancer`, `?sub=esni` [redirige a `reporte_esni.php`], `?sub=joven`, `?sub=materno` [redirige a `reporte_materno.php`], `?sub=medicina_alternativa`, `?sub=metaxenicas`, `?sub=nino`, `?sub=no_transmisibles` [redirige a `reporte_no_transmisibles.php`], `?sub=planificacion_familiar`, `?sub=salud_bucal`, `?sub=salud_mental`, `?sub=salud_ocular`, `?sub=tbc`, `?sub=zoonosis` [redirige a `reporte_zoonosis.php`])
+- **Reportes Operacionales** (`?sub=adolescente`, `?sub=adulto`, `?sub=adulto_mayor`, `?sub=cancer`, `?sub=esni` [redirige a `reporte_esni.php`], `?sub=its` [redirige a `reporte_its.php`], `?sub=joven`, `?sub=materno` [redirige a `reporte_materno.php`], `?sub=medicina_alternativa`, `?sub=metaxenicas`, `?sub=nino`, `?sub=no_transmisibles` [redirige a `reporte_no_transmisibles.php`], `?sub=planificacion_familiar`, `?sub=salud_bucal`, `?sub=salud_mental`, `?sub=salud_ocular`, `?sub=tbc`, `?sub=zoonosis` [redirige a `reporte_zoonosis.php`])
 
 ### Otras paginas
 
@@ -82,6 +83,9 @@ El sistema soporta dos roles:
 |-- reporte_no_transmisibles.php # Pagina 13: Reporte NO TRANSMISIBLES - 24 secciones data-driven [NUEVO]
 |-- nontransmisibles_export.php # Exportar reporte NO TRANSMISIBLES a la plantilla oficial .xlsx [NUEVO]
 |-- install_no_transmisibles.php # Asistente instalacion modulo NO TRANSMISIBLES (indices; eliminar despues) [NUEVO]
+|-- reporte_its.php              # Pagina 14: Reporte ITS/VIH - 16 bloques data-driven [NUEVO]
+|-- its_export.php               # Exportar reporte ITS a la plantilla oficial .xlsx [NUEVO]
+|-- install_its.php              # Asistente instalacion modulo ITS (indices; eliminar despues) [NUEVO]
 |-- import.php                  # Pagina 08: Importar Datos (admin)
 |-- usuarios.php                # Pagina 11: Gestion de Usuarios (admin)
 |-- log.php                     # Log de auditoria
@@ -94,6 +98,7 @@ El sistema soporta dos roles:
 |-- INSTALL_materno.md          # Documentacion detallada del modulo MATERNO [NUEVO]
 |-- INSTALL_zoonosis.md         # Documentacion detallada del modulo ZOONOSIS [NUEVO]
 |-- INSTALL_notransmisibles.md # Documentacion detallada del modulo NO TRANSMISIBLES [NUEVO]
+|-- INSTALL_its.md               # Documentacion detallada del modulo ITS/VIH [NUEVO]
 |-- includes/
 |   |-- auth.php                # Autenticacion y verificacion de roles
 |   |-- functions.php           # Funciones comunes (consolidacion, importacion, etc.)
@@ -104,6 +109,8 @@ El sistema soporta dos roles:
 |   |-- zoonosis_render.php     # Render web + mapa de celdas del export ZOONOSIS [NUEVO]
 |   |-- nontransmisibles_data.php # Motor de reglas data-driven NO TRANSMISIBLES (24 SP adaptados) [NUEVO]
 |   |-- nontransmisibles_render.php # Render web + mapa de celdas del export NO TRANSMISIBLES [NUEVO]
+|   |-- its_data.php            # Motor de reglas data-driven ITS/VIH (15 SP adaptados) [NUEVO]
+|   |-- its_render.php          # Render web + mapa de celdas del export ITS [NUEVO]
 |   |-- header.php              # Navbar reorganizado con dropdowns
 |   |-- footer.php              # Footer comun
 |   `-- ExcelWriter.php         # Generador de Excel
@@ -217,6 +224,41 @@ Reemplaza el flujo manual anterior (SQL Server + 3 archivos .txt + Excel con con
 
 Ver [INSTALL_notransmisibles.md](INSTALL_notransmisibles.md) para instrucciones detalladas de instalacion y uso.
 
+## Modulo ITS/VIH (v7.0)
+
+Reemplaza el flujo manual anterior (SQL Server + 3 archivos .txt + Excel con conexion ODBC) por una solucion web data-driven, igual que ESNI, Cancer, Materno, Zoonosis y No Transmisibles.
+
+**Flujo anterior (4 pasos manuales):**
+1. SQL Server: ejecutar `01 Creacion tablas iniciales` (DimItsVih2022_*)
+2. SQL Server: ejecutar `02 Creacion tablas consolidacion` (TRAMA_BASE_ITS_VIH_2022_*)
+3. SQL Server: ejecutar `03 Creacion de Procedimientos` (15 SP usp_TRAMA_BASE_ITS_VIH_2022_*)
+4. Excel: abrir `Reporte_Actividades_ITS.xlsx` y refrescar conexion ODBC
+
+**Flujo nuevo (1 click):**
+- Entrar a IntelHIS -> Reportes Operacionales -> ITS -> Generar Reporte
+- (Opcional) Exportar Excel (llena la plantilla oficial con el mismo layout)
+
+**Ventajas:**
+- No requiere SQL Server (usa la misma tabla consolidada MySQL que los otros modulos)
+- No requiere Excel con conexion ODBC (exporta directamente desde la web)
+- 16 bloques con el mismo layout que el Excel oficial (filas 13-203 de la hoja
+  Plantilla): Poblacion General ITS (13 dx x DIAG/TRAT/CONT), Hepatitis B (8),
+  Hepatitis C (6), Tamizaje VIH (9), Exposicion VIH/Hepatitis B (9), Violencia
+  Sexual (5), PVV Atencion Integral (12), Gestantes por grupo etareo (11) y por
+  trimestre (11), Recien Nacidos (10), Poblacion Clave HSH/Trans/TS (12), ITS en
+  Poblacion Clave (11 + 11 contactos), Brigadas MCC (8), Brigadas BMA (8) y
+  Telemedicina (5)
+- Adaptacion fiel de los 15 procedimientos `usp_TRAMA_BASE_ITS_VIH_2022_*`:
+  count(*) y count(distinct id_cita) (rownum=1) replicados como reglas auditables
+- Dimensiones del archivo 01 (Etapa e5/e4/e3, Trimestre, Grupo de poblacion
+  clave HSH/TRANS/TS-FEMENINO/TS-TRANS/TS-H, Brigada BMU/MCC) replicadas en PHP
+- Filtros por valor_lab (TS/HSH/TTS/TRA/HTS, RP/TA/IA/TAR...), I_ROWNUM_LAB,
+  id_etnia (indigena 56-60), nom_lote (brigadas VHM/BMU/MCC/BMA) y
+  id_tipcond_serv (N/R) como las tablas #temp del T-SQL
+- Modo auditoria "Ver condiciones SQL" para comparar con el archivo 03 y ajustar en 1 solo archivo
+
+Ver [INSTALL_its.md](INSTALL_its.md) para instrucciones detalladas de instalacion y uso.
+
 ## Base de Datos
 
 ### Tablas principales
@@ -286,6 +328,8 @@ define('MAX_FILE_SIZE', 100 * 1024 * 1024);  // 100 MB
 7. **Auditoria:** Revisar `log.php` para auditoria de operaciones.
 
 ## Version
+
+**v7.0.0** - Modulo ITS/VIH data-driven: reemplaza el flujo manual SQL Server + Excel ODBC por una solucion web completa. Incluye motor de reglas en PHP con DSL auditable (16 bloques = 15 procedimientos usp_TRAMA_BASE_ITS_VIH_2022_*: Poblacion General ITS, Hepatitis B/C, Tamizaje VIH, Exposicion, Violencia Sexual, PVV, Gestantes por grupo etareo y trimestre, Recien Nacidos, Poblacion Clave, ITS en Poblacion Clave, Brigadas MCC/BMA y Telemedicina), 2 reglas de conteo (count(*) filas / count distinct id_cita para ATENDIDOS/ATENCIONES de brigadas), dimensiones Etapa/Trimestre/Grupo/Brigada con los CASE del T-SQL, pagina de reporte 1 click con panel de auditoria de condiciones, exportacion a la plantilla oficial (Reporte_Actividades_ITS.xlsx) y asistente de indices.
 
 **v6.0.0** - Modulo NO TRANSMISIBLES data-driven: reemplaza el flujo manual SQL Server + Excel ODBC por una solucion web completa. Incluye motor de reglas en PHP con DSL auditable (24 secciones = 24 procedimientos usp_TRAMA_BASE_NT_2025_* en 4 grupos: Valoracion, Hipertension Arterial, Diabetes Mellitus y Telesalud), 3 reglas de conteo (personas distintas por EE.SS+periodo / filas / sesiones con participantes), filtros por categoria de establecimiento (MAESTRO_HIS_ESTABLECIMIENTO como el #RENAES del T-SQL), grupos etareos 6G (05-11..60+) y 8G (menores de 1a..60+) con columnas M/F, pagina de reporte 1 click con panel de auditoria de condiciones, exportacion a la plantilla oficial (Reporte_Actividades_NoTransmisibles.xlsx) y asistente de indices.
 

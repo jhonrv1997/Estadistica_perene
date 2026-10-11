@@ -2,9 +2,9 @@
 /**
  * Sistema de Gestion de Datos HIS
  * Pagina 06: Reportes Operacionales
- * 17 sub-paginas: Adolescente, Adulto, Adulto mayor, Cancer, ESNI, Joven, Materno,
- * Medicina Alternativa, Metaxenicas, Nino, No transmisibles, Planificacion Familiar,
- * Salud bucal, Salud mental, Salud ocular, TBC, Zoonosis.
+ * 18 sub-paginas: Adolescente, Adulto, Adulto mayor, Cancer, ESNI, ITS, Joven,
+ * Materno, Medicina Alternativa, Metaxenicas, Nino, No transmisibles,
+ * Planificacion Familiar, Salud bucal, Salud mental, Salud ocular, TBC, Zoonosis.
  *
  * Cada sub-pagina filtra el consolidado por los UPS / Codigo_Item correspondientes
  * a la estrategia operativa, y muestra volumen de atenciones y atendidos por
@@ -16,13 +16,14 @@ require_once 'includes/functions.php';
 
 $pdo = getDBConnection();
 
-// Definicion de las 17 estrategias operacionales
+// Definicion de las 18 estrategias operacionales
 $estrategias = [
     'adolescente'           => ['nombre' => 'Adolescente',              'icon' => 'fa-user-graduate',     'color' => 'primary',   'ups_patrones' => ['ADOLESCENTE'], 'item_patrones' => ['Z00%', 'Z01%', 'Z02%', 'Z03%', 'Z04%', 'Z05%', 'Z06%', 'Z07%', 'Z08%', 'Z09%', 'Z11%', 'Z12%', 'Z13%', 'Z14%', 'Z15%', 'Z16%', 'Z17%', 'Z18%', 'Z19%', 'Z7%', 'Z8%'], 'grupos_edad' => ['12 a 17 anos']],
     'adulto'                => ['nombre' => 'Adulto',                   'icon' => 'fa-user',              'color' => 'info',      'ups_patrones' => ['ADULTO', 'ADULTO MAYOR', 'MEDICINA GENERAL'], 'item_patrones' => ['Z00%', 'Z01%', 'I1%', 'I2%', 'E1%', 'E0%', 'E7%', 'E8%', 'E9%'], 'grupos_edad' => ['18 a 29 anos', '30 a 59 anos']],
     'adulto_mayor'          => ['nombre' => 'Adulto Mayor',             'icon' => 'fa-user-tie',          'color' => 'warning',   'ups_patrones' => ['ADULTO MAYOR'], 'item_patrones' => ['Z00%', 'I5%', 'I6%', 'I7%', 'I8%', 'I9%', 'E7%', 'E8%', 'E9%'], 'grupos_edad' => ['60 anos a mas']],
     'cancer'                => ['nombre' => 'Cancer',                   'icon' => 'fa-ribbon',            'color' => 'pink',      'ups_patrones' => ['CANCER', 'ONCOLOGIA'], 'item_patrones' => ['C%', 'D0%', 'D1%', 'D2%', 'D3%', 'D4%', 'Z12%', 'Z80%'], 'grupos_edad' => []],
     'esni'                  => ['nombre' => 'ESNI',                     'icon' => 'fa-syringe',           'color' => 'success',   'ups_patrones' => ['INMUNIZACIONES', 'VACUNACION'], 'item_patrones' => ['Z24%', 'Z25%', 'Z26%', 'Z27%', 'U%', 'J0%', 'J1%'], 'grupos_edad' => ['01 a 29 dias', '01 a 11 meses', '01 a 04 anos']],
+    'its'                   => ['nombre' => 'ITS',                      'icon' => 'fa-vial-virus',        'color' => 'info',      'ups_patrones' => ['ITS', 'VIH'], 'item_patrones' => ['A5%', 'A6%', 'B1%', 'B2%', 'Z2%', 'Z5%', 'O9%'], 'grupos_edad' => []],
     'joven'                 => ['nombre' => 'Joven',                    'icon' => 'fa-walking',           'color' => 'info',      'ups_patrones' => ['JOVEN', 'ADOLESCENTE'], 'item_patrones' => ['Z00%', 'Z01%', 'Z02%', 'Z7%', 'Z8%', 'Z9%'], 'grupos_edad' => ['12 a 17 anos', '18 a 29 anos']],
     'materno'               => ['nombre' => 'Materno',                  'icon' => 'fa-baby',              'color' => 'danger',    'ups_patrones' => ['OBSTETRICIA', 'MATERNO', 'GINECOLOGIA', 'PARTO'], 'item_patrones' => ['O0%', 'O1%', 'O2%', 'O3%', 'O4%', 'O5%', 'O6%', 'O7%', 'O8%', 'O9%', 'Z32%', 'Z33%', 'Z34%', 'Z35%', 'Z36%', 'Z37%'], 'grupos_edad' => []],
     'medicina_alternativa'  => ['nombre' => 'Medicina Alternativa',     'icon' => 'fa-leaf',              'color' => 'success',   'ups_patrones' => ['MEDICINA ALTERNATIVA', 'MEDICINA TRADICIONAL', 'ACUPUNTURA'], 'item_patrones' => [], 'grupos_edad' => []],
@@ -144,11 +145,11 @@ include 'includes/header.php';
 <!-- Pagina indice: 17 tarjetas -->
 <div class="row g-3">
     <?php foreach ($estrategias as $key => $est):
-        // ESNI, Cancer, Materno, Zoonosis y No Transmisibles ahora tienen su propio
-        // reporte completo data-driven (reporte_esni.php / reporte_cancer.php /
-        // reporte_materno.php / reporte_zoonosis.php / reporte_no_transmisibles.php)
-        // - reemplazan el flujo manual SQL Server + Excel ODBC de sus modulos.
-        $esAvanzado = in_array($key, ['esni', 'cancer', 'materno', 'zoonosis', 'no_transmisibles']);
+        // ESNI, Cancer, Materno, Zoonosis, No Transmisibles e ITS ahora tienen su
+        // propio reporte completo data-driven (reporte_esni.php / reporte_cancer.php /
+        // reporte_materno.php / reporte_zoonosis.php / reporte_no_transmisibles.php /
+        // reporte_its.php) - reemplazan el flujo manual SQL Server + Excel ODBC.
+        $esAvanzado = in_array($key, ['esni', 'cancer', 'materno', 'zoonosis', 'no_transmisibles', 'its']);
         if ($key === 'esni') {
             $href = 'reporte_esni.php';
             $desc = 'Reporte Operacional completo';
@@ -164,6 +165,9 @@ include 'includes/header.php';
         } elseif ($key === 'no_transmisibles') {
             $href = 'reporte_no_transmisibles.php';
             $desc = 'Actividades de Enfermedades No Trasmisibles (Valoracion + HTA + DM + Telesalud)';
+        } elseif ($key === 'its') {
+            $href = 'reporte_its.php';
+            $desc = 'Hoja de Monitoreo Mensual ITS, VIH/SIDA y Hepatitis (16 bloques)';
         } else {
             $href = 'reporte_operacionales.php?sub=' . $key;
             $desc = 'Atenciones y atendidos por establecimiento';
@@ -209,6 +213,14 @@ include 'includes/header.php';
     // Redirigir al reporte completo de No Transmisibles (data-driven, 1 click):
     // Actividades de Enfermedades No Trasmisibles (Valoracion + HTA + DM + Telesalud)
     header('Location: reporte_no_transmisibles.php');
+    exit;
+?>
+
+<?php elseif ($sub === 'its'):
+    // Redirigir al reporte completo de ITS/VIH (data-driven, 1 click):
+    // Hoja de Monitoreo Mensual de la ESN Prevencion y Control de ITS, VIH/SIDA
+    // y Hepatitis (16 bloques)
+    header('Location: reporte_its.php');
     exit;
 ?>
 
