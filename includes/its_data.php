@@ -87,15 +87,31 @@
  *     especifica (#TEMP/#ATENCION/#DX_VIH) - la diferencia es despreciable.
  *   - SP 07_3 dx8/dx10: el CASE exige id_tipedad_reg='D' (la rama M+edad=1 del
  *     OR interno nunca aplica por el AND externo) - se replica D + edad>=2.
+ *   - SP 07_3 seccion 7A filas 123-125 (item 99199.15 sucedaneos de leche
+ *     materna): la edad se rige por regla de negocio con la edad calculada
+ *     del paciente (Anio_Actual_Paciente / Mes_Actual_Paciente; NULL no
+ *     cumple), en lugar de las condiciones (id_tipedad_reg ...) del SP:
+ *     fila 123 INICIAN  : Anio_Actual_Paciente = 0 Y Mes_Actual_Paciente <= 1,
+ *                         valor_lab 'IA'.
+ *     fila 124 RECIBEN  : Anio_Actual_Paciente BETWEEN 0 AND 1, valor_lab
+ *                         numerico 2-11 (el BETWEEN '2' AND '11' del T-SQL
+ *                         compara texto y su rango lexicografico es vacio:
+ *                         codigo muerto en SQL Server -> se interpreta
+ *                         NUMERICO, vlNum 2-11).
+ *     fila 125 COMPLETAN: Anio_Actual_Paciente = 1, valor_lab 'TA'.
  *   - SP 01 dx12: union de Temporal1 (con exclusion #POBLACION_CLAVE y R1) y
  *     Temporal2 (sin exclusion y sin R1) -> se simplifica al union fiel.
+ *   - SP 01 fila 10 TRATADO: el CASE de Temporal3 pide id_tipitem IN ('D','R')
+ *     para sifilis, pero el WHERE externo (id_tipitem='D') anulaba la rama R;
+ *     se corrige para que los diagnosticos repetidos (R, p.ej. A510) cuenten
+ *     como TRATADO cuando la cita registra 99199.11 + valor_lab='TA'.
  *   - Sexo: los SP exigen "sexo is not null" y agrupan M/F; las filas con sexo
  *     distinto de M/F quedan fuera de las secciones con eje sexo.
  */
 
 require_once __DIR__ . '/../config.php';
 
-define('ITS_DATA_VERSION', '2026-10-12-r1');
+define('ITS_DATA_VERSION', '2026-10-14-r2');
 
 /** Version del motor de reporte de ITS/VIH (badge del reporte). */
 function itsDataVersion(): string {
@@ -129,6 +145,10 @@ function itsFila(array $r): array {
         'sexo'    => $r['Id_Genero'] !== null ? strtoupper(trim((string)$r['Id_Genero'])) : '',
         'edad'    => $r['Edad_Reg'] !== null ? (int)$r['Edad_Reg'] : null,
         'tipEdad' => $r['Tipo_Edad'] !== null ? strtoupper(trim((string)$r['Tipo_Edad'])) : '',
+        'anioAct' => isset($r['Anio_Actual_Paciente']) && $r['Anio_Actual_Paciente'] !== null
+                        ? (int)$r['Anio_Actual_Paciente'] : null,
+        'mesAct'  => isset($r['Mes_Actual_Paciente']) && $r['Mes_Actual_Paciente'] !== null
+                        ? (int)$r['Mes_Actual_Paciente'] : null,
         'etnia'   => $etnia,
         'lote'    => isset($r['Lote']) && $r['Lote'] !== null ? strtoupper(trim((string)$r['Lote'])) : '',
         'tipcond' => isset($r['Id_Condicion_Servicio']) && $r['Id_Condicion_Servicio'] !== null
@@ -157,6 +177,12 @@ function itsFila(array $r): array {
  *   'edad'        => 1 | [2, null]                      Edad_Reg igual / en rango
  *   'edadA'       => [12, null]                         Tipo_Edad='A' y Edad_Reg
  *                                                    en rango [min, max]
+ *   'anioAct'     => [0, 1]                             Anio_Actual_Paciente en rango
+ *                                                    [min, max] (edad calculada en
+ *                                                    anios del paciente; NULL no cumple)
+ *   'mesAct'      => [0, 1]                             Mes_Actual_Paciente en rango
+ *                                                    [min, max] (mes de la edad
+ *                                                    calculada; NULL no cumple)
  *   'etniaIn'     => ['56'..'60']                       Id_Etnia IN
  *   'etniaNo'     => ['56'..'60']                       Id_Etnia NOT IN
  *   'lote'        => ['BMU','MCC'] | 'BMA'              Lote IN (nom_lote)
@@ -243,6 +269,18 @@ function itsCumple(array $f, array $cond, array $ctx): bool {
         if ($f['tipEdad'] !== 'A' || $f['edad'] === null) return false;
         if ($min !== null && $f['edad'] < $min) return false;
         if ($max !== null && $f['edad'] > $max) return false;
+    }
+    if (isset($cond['anioAct'])) {
+        if ($f['anioAct'] === null) return false;
+        [$min, $max] = $cond['anioAct'];
+        if ($min !== null && $f['anioAct'] < $min) return false;
+        if ($max !== null && $f['anioAct'] > $max) return false;
+    }
+    if (isset($cond['mesAct'])) {
+        if ($f['mesAct'] === null) return false;
+        [$min, $max] = $cond['mesAct'];
+        if ($min !== null && $f['mesAct'] < $min) return false;
+        if ($max !== null && $f['mesAct'] > $max) return false;
     }
     if (isset($cond['etniaIn'])) {
         $ets = array_map(fn($e) => str_pad(strtoupper(trim((string)$e)), 2, '0', STR_PAD_LEFT),
@@ -375,6 +413,12 @@ function itsCondicionSQL(array $cond, int $nivel = 0): string {
                 break;
             case 'edadA':
                 $partes[] = "id_tipedad_reg = 'A' AND edad_reg BETWEEN {$v[0]} AND " . ($v[1] ?? 'NULL');
+                break;
+            case 'anioAct':
+                $partes[] = "Anio_Actual_Paciente BETWEEN {$v[0]} AND " . ($v[1] ?? 'NULL');
+                break;
+            case 'mesAct':
+                $partes[] = "Mes_Actual_Paciente BETWEEN {$v[0]} AND " . ($v[1] ?? 'NULL');
                 break;
             case 'etniaIn':
                 $lista = is_array($v) ? $v : [$v];
@@ -675,7 +719,14 @@ function itsSecciones(): array {
         } elseif (isset($dxS[$dx])) {
             $base = $dxS[$dx];
             $conds[1] = $base + ['tip' => 'D', 'rownum' => 1] + $pcSin;
-            $conds[2] = $base + ['tip' => 'D', 'rownum' => 1] + $tratTA + $pcSin;
+            // TRATADO fila 10 (CASOS DE SIFILIS): el CASE de Temporal3 del T-SQL
+            // admite id_tipitem IN ('D','R') para sifilis (A528/A529/A530/A539 o
+            // familia A51, p.ej. A510), pero el WHERE externo del SP
+            // (id_tipitem='D') anulaba la rama R y descartaba los diagnosticos
+            // repetidos. Ajuste 2026-10: la fila 10 cuenta D y R cuando la cita
+            // registra 99199.11 con valor_lab='TA' y no es poblacion clave.
+            $tipTrat = ($dx === 10) ? ['D', 'R'] : 'D';
+            $conds[2] = $base + ['tip' => $tipTrat, 'rownum' => 1] + $tratTA + $pcSin;
             if ($dx <= 7) {
                 // CONTACTO: Temporal5 (case sin tip, sin sexo, sin valor_lab)
                 $conds[3] = ['cod' => $base['cod'], 'rownum' => 1] + $contacto + $pcSin;
@@ -936,7 +987,6 @@ function itsSecciones(): array {
      * SECCION 7A - usp_..._07_3_GESTANTES_RN RECIEN NACIDOS (filas 121-130)
      * ------------------------------------------------------------ */
     $rnDM   = ['cualquieraDe' => [ ['tipEdad' => 'D'], ['tipEdad' => 'M', 'edad' => 1] ]];
-    $rnDMA1 = ['cualquieraDe' => [ ['tipEdad' => 'D'], ['tipEdad' => 'M', 'edad' => 1], ['tipEdad' => 'A', 'edad' => 1] ]];
     $trat73 = ['citaTiene' => ['cualquieraDe' => [
         ['cod' => '99199.11', 'vl' => 'TA'],
         ['cod' => '99199.14', 'vl' => 'IA'],
@@ -948,12 +998,16 @@ function itsSecciones(): array {
         ['dx' => 'D2', 'label' => 'RN EXPUESTOS A VIH QUE RECIBEN ARV',
          'cond' => ['cod' => 'Z2061', 'tip' => ['R', 'D'], 'rownum' => 1] + $rnDM
                  + ['citaTiene' => ['cod' => '99199.14', 'vl' => 'IA']], 'fila' => 122],
+        // D3-D5: regla de negocio con edad calculada del paciente (null no cumple):
+        //   D3 INICIAN  : Anio_Actual = 0 y Mes_Actual <= 1  + valor_lab 'IA'
+        //   D4 RECIBEN  : Anio_Actual BETWEEN 0 AND 1 + entregas mensuales 2-11
+        //   D5 COMPLETAN: Anio_Actual = 1                    + valor_lab 'TA'
         ['dx' => 'D3', 'label' => 'RN EXPUESTOS A VIH QUE INICIAN SUCEDANEOS DE LECHE MATERNA',
-         'cond' => ['cod' => '99199.15', 'vl' => 'IA'] + $rnDM, 'fila' => 123],
+         'cond' => ['cod' => '99199.15', 'vl' => 'IA', 'anioAct' => [0, 0], 'mesAct' => [0, 1]], 'fila' => 123],
         ['dx' => 'D4', 'label' => 'RN EXPUESTOS A VIH QUE RECIBEN SUCEDANEOS DE LECHE MATERNA',
-         'cond' => ['cod' => '99199.15', 'vlNum' => ['bt', 2, 11]] + $rnDMA1, 'fila' => 124],
+         'cond' => ['cod' => '99199.15', 'vlNum' => ['bt', 2, 11], 'anioAct' => [0, 1]], 'fila' => 124],
         ['dx' => 'D5', 'label' => 'RN EXPUESTOS A VIH QUE COMPLETAN SUCEDANEOS DE LECHE MATERNA',
-         'cond' => ['cod' => '99199.15', 'vl' => 'TA', 'tipEdad' => 'A', 'edad' => 1], 'fila' => 125],
+         'cond' => ['cod' => '99199.15', 'vl' => 'TA', 'anioAct' => [1, 1]], 'fila' => 125],
         ['dx' => 'D6', 'label' => 'RN EXPUESTOS A HEPATITIS B',
          'cond' => ['cod' => 'Z205', 'rownum' => 1] + $rnDM, 'fila' => 126],
         ['dx' => 'D7', 'label' => 'RN EXPUESTOS CON VACUNA DE HEPATITIS B EN ATENCION DE PARTO ANTES DE LAS 24HRS',
@@ -1627,6 +1681,7 @@ function itsEjecutarReporte(PDO $pdo, array $filtros): array {
     $whereCod = itsWhereCodigos($params);
 
     $sql = "SELECT Id_Cita, Id_Paciente, Id_Genero, Edad_Reg, Tipo_Edad,
+                   Anio_Actual_Paciente, Mes_Actual_Paciente,
                    Codigo_Item, Tipo_Diagnostico, Valor_Lab,
                    Id_Correlativo_Lab, Codigo_Unico,
                    Lote, Id_Etnia, Id_Condicion_Servicio, Anio, Mes
