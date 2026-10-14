@@ -16,6 +16,10 @@
  *   (Opcional) [Exportar Excel] -> llena la plantilla oficial
  *   "uploads/Reporte_Actividades_ITS.xlsx" con los mismos datos
  *   (its_export.php).
+ *   (Opcional) [Exportar Plano] -> llena la plantilla consolidada
+ *   "uploads/ITS_Plano.xlsx" (its_export_plano.php): cada dato va a la
+ *   columna indicada por el numero de destino de "Ubicacion_Filas_ITS.xlsx"
+ *   (ej: espejo B5=4 con dato en B13 -> plano D13).
  *
  * El motor de reglas (includes/its_data.php) adapta los 15 procedimientos
  * usp_TRAMA_BASE_ITS_VIH_2022_* del archivo "03 Creacion de Procedimientos"
@@ -191,6 +195,12 @@ include 'includes/header.php';
     <div class="card-header bg-white d-flex justify-content-between align-items-center flex-wrap gap-2">
         <h6 class="mb-0 fw-bold"><i class="fas fa-filter me-2 text-primary"></i>Filtros del Reporte</h6>
         <div class="d-flex gap-2">
+            <a href="its_export_plano.php?<?= http_build_query(array_filter([
+                'anio' => $fAnio, 'mes' => $fMes, 'establecimiento' => $fEstablecimiento,
+                'generar' => $ejecutar ? 1 : null,
+            ])) ?>" class="btn btn-sm btn-warning" title="Exportar el plano consolidado (ITS_Plano.xlsx): cada dato va a la columna indicada por el numero de destino de 'Ubicacion_Filas_ITS.xlsx' (ej: espejo B5=4 con dato en B13 -> plano D13)">
+                <i class="fas fa-table me-1"></i> Exportar Plano
+            </a>
             <a href="its_export.php?<?= http_build_query(array_filter([
                 'anio' => $fAnio, 'mes' => $fMes, 'establecimiento' => $fEstablecimiento,
                 'generar' => $ejecutar ? 1 : null,
@@ -417,7 +427,7 @@ foreach ($secciones as $sec):
     layout de la plantilla <code>Reporte_Actividades_ITS.xlsx</code> (16 bloques: Poblaci&oacute;n General, Hepatitis B/C,
     Tamizaje VIH, Exposici&oacute;n, Violencia Sexual, PVV, Gestantes, Reci&eacute;n Nacidos, Poblaci&oacute;n Clave,
     Brigadas MCC/BMA y Telemedicina). Ya no necesita SQL Server ni refrescar la
-    conexi&oacute;n ODBC: <strong>1 click y (opcional) Exportar Excel</strong>.<br>
+    conexi&oacute;n ODBC: <strong>1 click y (opcional) Exportar Excel / Exportar Plano</strong>.<br>
     <strong>Desarrollado por JKRV</strong>
 </div>
 
