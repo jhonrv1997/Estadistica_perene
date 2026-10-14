@@ -451,9 +451,139 @@ class ExcelTemplateFiller
             return $xml;
         }
 
-        // No se encontro la celda: log de warning, no fatal.
-        error_log("[ExcelTemplateFiller] Celda {$cellRef} no encontrada en la plantilla.");
-        return $xml;
+        // No se encontro la celda en la plantilla: intentar INSERTARLA.
+        // Necesario para plantillas cuya fila de datos esta completamente
+        // vacia en el XML (ej: "ITS_Plano.xlsx", dimension A1:CBN12 y fila de
+        // datos 13). Antes solo se registraba un warning y la celda se
+        // omitia, con lo que el plano salia sin datos. Si la insercion no es
+        // posible (XML anomalo), se conserva el comportamiento anterior.
+        return $this->insertCell($xml, $cellRef, $value);
+    }
+
+    /**
+     * Inserta una celda NUEVA en el XML cuando la plantilla no la trae
+     * (complemento de replaceCell() para el caso "celda no encontrada").
+     *
+     * Dos casos:
+     *   1) La fila <row r="N"> existe: la celda se inserta dentro de esa
+     *      fila respetando el orden de columnas (Excel las espera
+     *      ascendentes). Si la fila esta autocerrada (<row r="N"/>), se
+     *      convierte en abierta para poder albergar la celda.
+     *   2) La fila no existe: se crea <row r="N">...</row> dentro de
+     *      <sheetData> respetando el orden de filas (antes de la primera
+     *      fila con numero mayor; si no hay ninguna, justo antes de
+     *      </sheetData>). Si <sheetData/> esta autocerrada, se abre.
+     *
+     * La celda insertada no lleva estilo (sin s=""), igual que el
+     * comportamiento del filler para celdas nuevas; el valor se construye
+     * con buildCellXml() para respetar el tipo (numero/texto).
+     *
+     * @param string           $xml     Contenido XML de la hoja.
+     * @param string           $cellRef Referencia de celda (ej: "D13").
+     * @param int|string|float $value   Valor a asignar.
+     * @return string XML con la celda insertada (o sin cambios si no fue posible).
+     */
+    private function insertCell(string $xml, string $cellRef, $value): string
+    {
+        if (preg_match('/^([A-Z]+)([0-9]+)$/', $cellRef, $mRef) !== 1) {
+            error_log("[ExcelTemplateFiller] Celda {$cellRef} no encontrada en la plantilla.");
+            return $xml;
+        }
+        $columna = $mRef[1];
+        $fila    = (int)$mRef[2];
+        $colIdx  = $this->colLetterToIndex($columna);
+
+        // ---- Caso 1: la fila existe -> insertar la celda en orden de columna ----
+        // La etiqueta de apertura de fila es literal (<row r="N"...), asi que
+        // strpos() la localiza mucho mas rapido que una expresion regular.
+        $posTag = strpos($xml, '<row r="' . $fila . '"');
+        if ($posTag !== false) {
+            $posGt = strpos($xml, '>', $posTag);
+            if ($posGt === false) {
+                error_log("[ExcelTemplateFiller] Celda {$cellRef} no insertada: fila {$fila} sin cierre de etiqueta.");
+                return $xml;
+            }
+            $tagTexto = substr($xml, $posTag, $posGt - $posTag + 1);
+
+            // Fila autocerrada <row r="N"/>: convertirla en abierta.
+            if (substr($tagTexto, -2) === '/>') {
+                $rowOpen = substr($tagTexto, 0, -2) . '>';
+                $newCell = $this->buildCellXml($cellRef, '', $value);
+                return substr($xml, 0, $posTag) . $rowOpen . $newCell . '</row>' . substr($xml, $posGt + 1);
+            }
+
+            $rowStart = $posGt + 1;
+            $rowEnd   = strpos($xml, '</row>', $rowStart);
+            if ($rowEnd === false) {
+                error_log("[ExcelTemplateFiller] Celda {$cellRef} no insertada: fila {$fila} sin cierre </row>.");
+                return $xml;
+            }
+            $segmento  = substr($xml, $rowStart, $rowEnd - $rowStart);
+            $posInsert = $rowEnd; // por defecto, al final de la fila
+            if (preg_match_all('/<c\\s+r="([A-Z]+)[0-9]+"/', $segmento, $mCeldas, PREG_SET_ORDER | PREG_OFFSET_CAPTURE) !== false) {
+                foreach ($mCeldas as $mC) {
+                    if ($this->colLetterToIndex($mC[1][0]) > $colIdx) {
+                        $posInsert = $rowStart + $mC[0][1];
+                        break;
+                    }
+                }
+            }
+            $newCell = $this->buildCellXml($cellRef, '', $value);
+            return substr($xml, 0, $posInsert) . $newCell . substr($xml, $posInsert);
+        }
+
+        // ---- Caso 2: la fila no existe -> crear <row> dentro de <sheetData> ----
+        $newRow = '<row r="' . $fila . '">' . $this->buildCellXml($cellRef, '', $value) . '</row>';
+
+        // <sheetData/> autocerrada (hoja sin filas): abrirla con la fila nueva.
+        $posSdAuto = strpos($xml, '<sheetData/>');
+        if ($posSdAuto !== false) {
+            return substr($xml, 0, $posSdAuto) . '<sheetData>' . $newRow . '</sheetData>' . substr($xml, $posSdAuto + strlen('<sheetData/>'));
+        }
+
+        $posSheetData = strpos($xml, '<sheetData>');
+        if ($posSheetData === false) {
+            error_log("[ExcelTemplateFiller] Celda {$cellRef} no encontrada en la plantilla.");
+            return $xml;
+        }
+        $posCierre = strpos($xml, '</sheetData>', $posSheetData);
+        if ($posCierre === false) {
+            error_log("[ExcelTemplateFiller] Celda {$cellRef} no insertada: <sheetData> sin cierre.");
+            return $xml;
+        }
+        // Punto de insercion por defecto: justo antes de </sheetData> (orden
+        // ascendente cuando la fila nueva es la ultima).
+        $insertAt = $posCierre;
+        // Si existe una fila con numero mayor, insertar ANTES de esa fila.
+        if (preg_match_all('/<row\\b[^>]*?\\br="([0-9]+)"/', $xml, $mFilas, PREG_SET_ORDER | PREG_OFFSET_CAPTURE) !== false) {
+            foreach ($mFilas as $mF) {
+                if ((int)$mF[1][0] > $fila) {
+                    $insertAt = $mF[0][1];
+                    break;
+                }
+            }
+        }
+        return substr($xml, 0, $insertAt) . $newRow . substr($xml, $insertAt);
+    }
+
+    /**
+     * Convierte una letra de columna Excel a indice 1-based (ej: 'D' -> 4,
+     * 'CBM' -> 2093). Misma logica que ExcelTemplateReader::colLetterToIndex;
+     * se replica aqui para mantener al filler autocontenido (no requiere al
+     * lector de plantillas).
+     *
+     * @param string $letra Letra(s) de columna.
+     * @return int Indice 1-based.
+     */
+    private function colLetterToIndex(string $letra): int
+    {
+        $indice = 0;
+        $letra  = strtoupper(preg_replace('/[^A-Za-z]/', '', $letra));
+        $largo  = strlen($letra);
+        for ($i = 0; $i < $largo; $i++) {
+            $indice = $indice * 26 + (ord($letra[$i]) - 64);
+        }
+        return $indice;
     }
 
     /**
