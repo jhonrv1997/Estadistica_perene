@@ -10,12 +10,14 @@
  *
  * itsCeldasExport() construye el mapa [celda => valor] para llenar la
  * plantilla oficial con el mismo layout que el flujo ODBC original:
- *   Encabezado: K6 = AÑO, K8 = MES (K8:L8 combinada), C8 = ESTABLECIMIENTO
- *   (C8:G8 combinada), I6 = IPRESS.
+ *   Encabezado: K6 = AÑO, K8 = MES en TEXTO (nombre del mes, ej: 'FEBRERO';
+ *   K8:L8 combinada), C8 = ESTABLECIMIENTO (C8:G8 combinada), I6 = CODIGO
+ *   UNICO del establecimiento SIN ceros a la izquierda (etiqueta I5 'IPRESS').
  *   Datos: por cada fila de reporte, celdas segun el layout de su seccion
  *   (el campo 'fila' de cada fila + el mapa de columnas por layout).
  */
 require_once __DIR__ . '/its_data.php';
+require_once __DIR__ . '/functions.php';   // getNombreMes(): K8 escribe el mes en TEXTO
 
 /* ============================================================
  * UTILIDADES DE RENDER
@@ -318,18 +320,29 @@ function itsPanelCondiciones(array $sec, string $regla): void {
  *
  * @param array  $reporte  Reporte ejecutado (itsEjecutarReporte)
  * @param string $anioTxt  Año (K6)
- * @param int    $mesTxt   Mes numerico (K8) o '' (todos)
+ * @param string|int $mesTxt   Mes (K8): numerico ('2') o ya en texto
+ *                ('FEBRERO'); SIEMPRE se escribe como TEXTO, nunca numero
  * @param string $estTxt   Nombre del establecimiento (C8) o ''
- * @param string $ipressTxt Nombre del IPRESS (I6) o ''
+ * @param string $ipressTxt Codigo_Unico del EE.SS SIN ceros a la izquierda
+ *                (I6, etiqueta 'IPRESS') o ''
  * @return array<string,int|string|float> Mapa [refCelda => valor]
  */
 function itsCeldasExport(array $reporte, string $anioTxt, string $mesTxt, string $estTxt, string $ipressTxt): array {
     $cells = [];
     // Cabecera de la plantilla
     if ($anioTxt !== '' && is_numeric($anioTxt)) $cells['K6'] = (int)$anioTxt;
-    if ($mesTxt !== '') $cells['K8'] = (int)$mesTxt;
+    // K8 = MES en TEXTO, nunca numero: '2' -> 'FEBRERO' (mayusculas, como la
+    // cabecera de la plantilla). Si ya llega como texto, se respeta tal cual.
+    if ($mesTxt !== '') {
+        $cells['K8'] = is_numeric($mesTxt)
+            ? strtoupper((string)getNombreMes((int)$mesTxt))
+            : (string)$mesTxt;
+    }
     if ($estTxt !== '') $cells['C8'] = $estTxt;
-    if ($ipressTxt !== '') $cells['I6'] = $ipressTxt;
+    // I6 = CODIGO UNICO sin ceros a la izquierda. Salvaguarda: si por error
+    // llegara un valor NO numerico (ej: el nombre del EE.SS 'VILLA PERENE'),
+    // NO se escribe en I6; la celda queda vacia antes que mostrar el nombre.
+    if ($ipressTxt !== '' && ctype_digit($ipressTxt)) $cells['I6'] = $ipressTxt;
 
     foreach ($reporte['secciones'] as $sec) {
         $layout = $sec['layout'];
