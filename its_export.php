@@ -11,8 +11,10 @@
  *
  * MAPA DE CELDAS (hoja "Plantilla", igual que el flujo ODBC original):
  *   Encabezado:
- *     K6 = AÑO (etiqueta K5)          K8 = MES (K8:L8 combinada, etiqueta K7)
- *     C8 = ESTABLECIMIENTO (C8:G8)    I6 = IPRESS (etiqueta I5)
+ *     K6 = AÑO (etiqueta K5)          K8 = MES en TEXTO, nombre del mes
+ *                                    (ej: 'FEBRERO'; K8:L8 combinada, et. K7)
+ *     C8 = ESTABLECIMIENTO (C8:G8)    I6 = CODIGO UNICO del EE.SS SIN ceros
+ *                                    a la izquierda (etiqueta I5 'IPRESS')
  *     A6 = JUNIN, C6 = PERENE, A8 = CHANCHAMAYO (ya vienen en la plantilla)
  *   1.- POBLACION GENERAL: ITS (filas 13-25):
  *     F: B/C/D + E/F/G + H/I/J + K/L/M + N/O/P (etapa x DIAG/TRAT/CONT)
@@ -88,14 +90,30 @@ if (!is_readable($templatePath)) {
 }
 
 // ==================== MAPA DE CELDAS ====================
+// Cabecera: K6 = AÑO, K8 = MES (texto), C8 = ESTABLECIMIENTO (nombre),
+// I6 = CODIGO UNICO sin ceros a la izquierda ('00000318' -> '318').
+//
+// El <select> de reporte_its.php envia el Codigo_Unico (ej: '00000318');
+// por COMPATIBILIDAD, si llegara el NOMBRE del EE.SS (ej: 'VILLA PERENE')
+// se recupera el codigo desde ZSPERENE. En I6 NUNCA se escribe el nombre:
+// si no se logra resolver un codigo valido, I6 queda vacia.
 $nombreEst = 'TODOS LOS ESTABLECIMIENTOS';
+$ipressI6  = '';
 if ($fEstablecimiento !== '') {
-    $est = itsGetEstablecimientosZS(getDBConnection());
-    $nombreEst = $est[$fEstablecimiento] ?? $fEstablecimiento;
-}
+    $est = itsGetEstablecimientosZS(getDBConnection()); // [codigo => nombre]
+    $codigoI6 = isset($est[$fEstablecimiento])
+        ? $fEstablecimiento                                     // llego el codigo
+        : (string)array_search($fEstablecimiento, $est, true);  // llego el nombre -> codigo
+    $nombreEst = $codigoI6 !== ''
+        ? ($est[$codigoI6] ?? $fEstablecimiento)
+        : $fEstablecimiento;
 
-// Cabecera: K6 = AÑO, K8 = MES, C8 = ESTABLECIMIENTO, I6 = IPRESS
-$cells = itsCeldasExport($reporte, $fAnio, $fMes, $fEstablecimiento !== '' ? $nombreEst : '', $fEstablecimiento !== '' ? $nombreEst : '');
+    if ($codigoI6 !== '' && ctype_digit($codigoI6)) {
+        $ipressI6 = ltrim($codigoI6, '0');   // '00000318' -> '318'
+        if ($ipressI6 === '') $ipressI6 = '0';   // codigo '000..0' -> 0
+    }
+}
+$cells = itsCeldasExport($reporte, $fAnio, $fMes, $fEstablecimiento !== '' ? $nombreEst : '', $ipressI6);
 
 // ==================== GENERAR DESCARGA ====================
 $filler = new ExcelTemplateFiller($templatePath);
