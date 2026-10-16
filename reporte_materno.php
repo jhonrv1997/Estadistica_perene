@@ -193,6 +193,11 @@ include 'includes/header.php';
             ])) ?>" class="btn btn-sm btn-success" title="Exportar Excel con el layout de la plantilla oficial">
                 <i class="fas fa-file-excel me-1"></i> Exportar Excel
             </a>
+            <a href="materno_export_plano.php?<?= http_build_query(array_filter([
+                'anio' => $fAnio, 'mes' => $fMes, 'establecimiento' => $fEstablecimiento,
+            ])) ?>" class="btn btn-sm btn-outline-success" title="Exportar al plano consolidado Materno_Plano.xlsx (numeros de destino de Ubicacion_Filas_Materno.xlsx)">
+                <i class="fas fa-table me-1"></i> Exportar Plano
+            </a>
             <button type="submit" form="filterForm" class="btn btn-sm btn-his"><i class="fas fa-play me-1"></i> Generar Reporte</button>
         </div>
     </div>

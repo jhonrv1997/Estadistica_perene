@@ -14,6 +14,10 @@ Modulo data-driven de IntelHIS que **reemplaza el flujo manual del Modulo de Mat
 - Entrar a IntelHIS -> **Reportes Operacionales -> MATERNO -> Generar Reporte**
 - (Opcional) **Exportar Excel**: llena la plantilla oficial
   `uploads/Reporte_Actividades_Materno.xlsx` con el mismo layout (10 secciones I-X).
+- (Opcional) **Exportar Plano**: llena el plano consolidado horizontal
+  `uploads/Materno_Plano.xlsx` usando los numeros de destino de
+  `uploads/Ubicacion_Filas_Materno.xlsx` (misma data del reporte, destino plano:
+  fila 12 = numeracion 1..516, fila 13 = datos).
 
 ## Archivos del modulo
 
@@ -23,8 +27,12 @@ Modulo data-driven de IntelHIS que **reemplaza el flujo manual del Modulo de Mat
 | `includes/materno_render.php` | Funciones de render web (layout tipo Excel) y mapa de celdas para el export (`maternoCeldasExport`) |
 | `reporte_materno.php` | Pagina del reporte (1 click): filtros anio/mes/EE.SS., proteccion anti HTTP 500, panel "Ver condiciones SQL" (auditoria) |
 | `materno_export.php` | Exportacion a la plantilla oficial .xlsx (preserva formato: merges, estilos) |
+| `materno_export_plano.php` | NUEVO: exportacion al plano consolidado `Materno_Plano.xlsx` (boton "Exportar Plano") |
+| `includes/materno_plano.php` | NUEVO: logica de mapeo del plano (espejo -> plantilla oficial -> plano, cache en `cache/plano/`) |
 | `install_materno.php` | Asistente de indices de la tabla consolidada (eliminar tras usar) |
 | `uploads/Reporte_Actividades_Materno.xlsx` | Plantilla oficial (base del export) |
+| `uploads/Materno_Plano.xlsx` | NUEVO: plantilla del plano consolidado (fila 12 = numeros 1..516 en A12:SV12, fila 13 = datos) |
+| `uploads/Ubicacion_Filas_Materno.xlsx` | NUEVO: espejo del reporte con el numero de destino de cada celda (513 numeros, 4..516) |
 
 ## Estructura del reporte (10 secciones = 12 bloques)
 
@@ -48,11 +56,14 @@ Grupos etareos (DimMaterno2023_Gedad): `<12 a.`, `12 - 17 a.`, `18 - 29 a.`, `30
 ## Instalacion
 
 1. Copiar los archivos del modulo a la raiz del sistema (junto a `reporte_cancer.php`):
-   `reporte_materno.php`, `materno_export.php`, `install_materno.php`, `includes/materno_data.php`, `includes/materno_render.php`.
+   `reporte_materno.php`, `materno_export.php`, `materno_export_plano.php`, `install_materno.php`,
+   `includes/materno_data.php`, `includes/materno_render.php`, `includes/materno_plano.php`.
 2. Copiar la plantilla oficial `Reporte_Actividades_Materno.xlsx` a `uploads/`.
-3. (Recomendado, una sola vez) Abrir como admin `install_materno.php` para crear/verificar
+3. Para el plano consolidado, copiar a `uploads/`: `Materno_Plano.xlsx` y
+   `Ubicacion_Filas_Materno.xlsx` (la carpeta `cache/plano/` se crea sola al primer uso).
+4. (Recomendado, una sola vez) Abrir como admin `install_materno.php` para crear/verificar
    los indices de la tabla consolidada. Luego **eliminar** ese archivo.
-4. Entrar a **Reportes Operacionales -> MATERNO -> Generar Reporte**.
+5. Entrar a **Reportes Operacionales -> MATERNO -> Generar Reporte**.
 
 No requiere tablas nuevas: el motor consulta la misma tabla consolidada MySQL que ya usan
 ESNI y Cancer (`T_CONSOLIDADO_NUEVA_TRAMA_HISMINSA_DETALLADO`).
