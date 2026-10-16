@@ -54,6 +54,9 @@ $fMes = trim($_GET['mes'] ?? date('m'));
 $fZonaSanitaria = trim($_GET['zona_sanitaria'] ?? 'Perene');
 $fEstablecimiento = trim($_GET['establecimiento'] ?? '');
 $fGrupoEdad = trim($_GET['grupo_edad'] ?? '');
+// MEJORA: Edad personalizada ("Otro grupo de Edad") -> filtra por Anio_Actual_Paciente
+$fEdadMin = trim($_GET['edad_min'] ?? '');
+$fEdadMax = trim($_GET['edad_max'] ?? '');
 $fIdGenero = trim($_GET['id_genero'] ?? '');
 $fOtraCondicion = trim($_GET['otra_condicion'] ?? '');
 $fCodigoItem = trim($_GET['codigo_item'] ?? '');
@@ -67,6 +70,30 @@ $fDocPersonal = trim($_GET['doc_personal'] ?? '');
 $fDocRegistrador = trim($_GET['doc_registrador'] ?? '');
 $fUps = trim($_GET['ups'] ?? '');
 $fDepartamento = trim($_GET['departamento'] ?? '');
+
+// ============================================================
+// MEJORA: Validacion del filtro "Otro grupo de Edad"
+// ------------------------------------------------------------
+// Cuando grupo_edad = '__OTRO__', el filtro se aplica sobre el
+// rango del campo Anio_Actual_Paciente (edad en anios) y ambos
+// limites son OBLIGATORIOS. Se valida en servidor (defensa en
+// profundidad, ademas de la validacion JS del formulario).
+// ============================================================
+$grupoEdadOtro = ($fGrupoEdad === '__OTRO__');
+$errorFiltroEdad = '';
+if ($grupoEdadOtro) {
+    if ($fEdadMin === '' && $fEdadMax === '') {
+        $errorFiltroEdad = 'Debe completar los campos "Edad Minima" y "Edad Maxima".';
+    } elseif ($fEdadMin === '' || $fEdadMax === '') {
+        $errorFiltroEdad = 'Debe completar ambos campos: "Edad Minima" y "Edad Maxima".';
+    } elseif (!preg_match('/^\d+$/', $fEdadMin) || !preg_match('/^\d+$/', $fEdadMax)) {
+        $errorFiltroEdad = 'Las edades deben ser numeros enteros positivos (solo digitos).';
+    } elseif (intval($fEdadMin) > intval($fEdadMax)) {
+        $errorFiltroEdad = 'La "Edad Minima" no puede ser mayor que la "Edad Maxima".';
+    } elseif (intval($fEdadMin) > 130 || intval($fEdadMax) > 130) {
+        $errorFiltroEdad = 'Las edades no pueden superar los 130 anios.';
+    }
+}
 
 // ============================================================
 // CACHE DE OPCIONES DE FILTROS (Session-based)
@@ -196,7 +223,11 @@ $hayFiltrosAdicionales = ($fEstablecimiento !== '' || $fGrupoEdad !== ''
     || $fIdGenero !== '' || $fOtraCondicion !== '' || $fTipoDiagnostico !== '' || $fValorLab !== '' || $fCodigoItem !== ''
     || $fLote !== '' || $fNumPag !== '' || $fNumReg !== '' || $fDocPaciente !== ''
     || $fDocPersonal !== '' || $fDocRegistrador !== '' || $fUps !== '' || $fDepartamento !== '');
-$mostrarResultados = ($sub === 'preventivas') ? true : ($buscar || $hayFiltrosAdicionales);
+// MEJORA: si el filtro "Otro grupo de Edad" no pasa la validacion,
+// no se ejecuta la consulta y se muestra el mensaje de error.
+$mostrarResultados = ($sub === 'preventivas')
+    ? true
+    : (($buscar || $hayFiltrosAdicionales) && $errorFiltroEdad === '');
 
 // ============================================================
 // CONSTRUCCION DE WHERE (OPTIMIZADO)
@@ -237,7 +268,14 @@ if ($fZonaSanitaria !== '' && !empty($codigosUnicoZona)) {
 if ($fEstablecimiento !== '') {
     $where .= " AND Codigo_Unico = :est"; $params[':est'] = $fEstablecimiento;
 }
-if ($fGrupoEdad !== '') {
+// MEJORA: Filtro de Grupo Edad extendido
+//   - '__OTRO__' -> rango personalizado sobre Anio_Actual_Paciente
+//   - valor normal -> igualdad exacta sobre Grupo_Edad
+if ($grupoEdadOtro && $errorFiltroEdad === '') {
+    $where .= " AND Anio_Actual_Paciente BETWEEN :edad_min AND :edad_max";
+    $params[':edad_min'] = intval($fEdadMin);
+    $params[':edad_max'] = intval($fEdadMax);
+} elseif ($fGrupoEdad !== '' && !$grupoEdadOtro) {
     $where .= " AND Grupo_Edad = :gedad"; $params[':gedad'] = $fGrupoEdad;
 }
 if ($fIdGenero !== '') {
@@ -676,11 +714,13 @@ include 'includes/header.php';
             <div class="row g-2 filtro-compacto mb-2">
                 <div class="col-lg-2 col-md-4 col-sm-6">
                     <label class="form-label">Grupo Edad</label>
-                    <select name="grupo_edad" class="form-select form-select-sm">
+                    <select name="grupo_edad" id="grupoEdad" class="form-select form-select-sm">
                         <option value="">- Todos -</option>
                         <?php foreach ($gruposEdad as $ge): ?>
                             <option value="<?= htmlspecialchars($ge) ?>" <?= $fGrupoEdad === $ge ? 'selected' : '' ?>><?= htmlspecialchars($ge) ?></option>
                         <?php endforeach; ?>
+                        <!-- MEJORA: opcion de rango de edad personalizado -->
+                        <option value="__OTRO__" <?= $grupoEdadOtro ? 'selected' : '' ?>>Otro grupo de Edad</option>
                     </select>
                 </div>
                 <div class="col-lg-2 col-md-4 col-sm-6">
@@ -717,6 +757,30 @@ include 'includes/header.php';
                 <div class="col-lg-2 col-md-4 col-sm-6">
                     <label class="form-label">Valor Lab</label>
                     <input type="text" name="valor_lab" class="form-control form-control-sm" placeholder="Ej: 1,4 (pareado con codigo_item)" value="<?= htmlspecialchars($fValorLab) ?>">
+                </div>
+            </div>
+
+            <!-- MEJORA: Fila de rango de edad personalizado (visible solo con "Otro grupo de Edad") -->
+            <div class="row g-2 filtro-compacto mb-2" id="filaEdadPersonalizada" style="<?= $grupoEdadOtro ? '' : 'display: none;' ?>">
+                <div class="col-lg-2 col-md-3 col-sm-6">
+                    <label class="form-label">Edad M&iacute;nima (a&ntilde;os) <span class="text-danger">*</span></label>
+                    <input type="text" inputmode="numeric" maxlength="3" name="edad_min" id="edadMin"
+                           class="form-control form-control-sm" placeholder="Ej: 18"
+                           value="<?= htmlspecialchars($fEdadMin) ?>" <?= $grupoEdadOtro ? '' : 'disabled' ?>>
+                    <div class="small text-danger mt-1 d-none" id="errEdadMin"></div>
+                </div>
+                <div class="col-lg-2 col-md-3 col-sm-6">
+                    <label class="form-label">Edad M&aacute;xima (a&ntilde;os) <span class="text-danger">*</span></label>
+                    <input type="text" inputmode="numeric" maxlength="3" name="edad_max" id="edadMax"
+                           class="form-control form-control-sm" placeholder="Ej: 59"
+                           value="<?= htmlspecialchars($fEdadMax) ?>" <?= $grupoEdadOtro ? '' : 'disabled' ?>>
+                    <div class="small text-danger mt-1 d-none" id="errEdadMax"></div>
+                </div>
+                <div class="col-lg-8 col-md-6">
+                    <div class="small text-muted pt-4 d-none d-md-block">
+                        <i class="fas fa-info-circle me-1"></i>
+                        Filtro por rango de edad actual del paciente (campo Anio_Actual_Paciente). Ambos campos son obligatorios.
+                    </div>
                 </div>
             </div>
 
@@ -834,6 +898,15 @@ include 'includes/header.php';
         </form>
     </div>
 </div>
+
+<?php if ($errorFiltroEdad !== '' && $sub === 'general'): ?>
+<!-- MEJORA: alerta de validacion server-side del filtro de edad personalizado -->
+<div class="alert alert-danger py-2 mb-3" role="alert">
+    <i class="fas fa-exclamation-triangle me-2"></i>
+    <strong>Filtro de Edad:</strong> <?= htmlspecialchars($errorFiltroEdad) ?>
+    Seleccione "Otro grupo de Edad", complete ambos campos y vuelva a hacer clic en <strong>Buscar</strong>.
+</div>
+<?php endif; ?>
 
 <?php if ($sub === 'preventivas'): ?>
 <div class="alert alert-info py-2 mb-3">
@@ -1046,6 +1119,147 @@ document.addEventListener('DOMContentLoaded', function() {
                     estaSelect.innerHTML = '<option value="">-- Error al cargar --</option>';
                 });
         });
+    }
+});
+</script>
+
+<!-- MEJORA: Logica y validaciones del filtro "Otro grupo de Edad" -->
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    var form = document.getElementById('filterForm');
+    var grupoEdadSelect = document.getElementById('grupoEdad');
+    var filaEdad = document.getElementById('filaEdadPersonalizada');
+    var edadMin = document.getElementById('edadMin');
+    var edadMax = document.getElementById('edadMax');
+    var errEdadMin = document.getElementById('errEdadMin');
+    var errEdadMax = document.getElementById('errEdadMax');
+
+    var VALOR_OTRO = '__OTRO__';
+    var EDAD_TOPE = 130; // tope razonable de edad en anios
+
+    function otroGrupoEdadActivo() {
+        return grupoEdadSelect && grupoEdadSelect.value === VALOR_OTRO;
+    }
+
+    function limpiarError(input, divErr) {
+        if (input) input.classList.remove('is-invalid');
+        if (divErr) {
+            divErr.textContent = '';
+            divErr.classList.add('d-none');
+        }
+    }
+
+    function marcarError(input, divErr, mensaje) {
+        if (input) input.classList.add('is-invalid');
+        if (divErr) {
+            divErr.textContent = mensaje;
+            divErr.classList.remove('d-none');
+        }
+    }
+
+    function limpiarErroresEdad() {
+        limpiarError(edadMin, errEdadMin);
+        limpiarError(edadMax, errEdadMax);
+    }
+
+    // Muestra/oculta los inputs de edad segun la seleccion del select.
+    // Los inputs deshabilitados NO se envian con el formulario,
+    // por lo que no ensucian la URL cuando el filtro no esta activo.
+    function toggleFilaEdad() {
+        if (!filaEdad || !edadMin || !edadMax) return;
+        var activo = otroGrupoEdadActivo();
+        filaEdad.style.display = activo ? '' : 'none';
+        edadMin.disabled = !activo;
+        edadMax.disabled = !activo;
+        if (!activo) limpiarErroresEdad();
+    }
+
+    // Validaciones al hacer clic en Buscar (submit del formulario):
+    //   1) Los campos activos no deben estar vacios
+    //   2) Deben ser numeros enteros positivos (solo digitos)
+    //   3) Tope maximo de 130 anios
+    //   4) Edad Minima no puede ser mayor que Edad Maxima
+    function validarFiltroEdad() {
+        limpiarErroresEdad();
+        if (!otroGrupoEdadActivo()) return true; // filtro no activo: nada que validar
+
+        var ok = true;
+        var vMin = edadMin ? edadMin.value.trim() : '';
+        var vMax = edadMax ? edadMax.value.trim() : '';
+
+        // 1) Campos obligatorios
+        if (vMin === '') {
+            marcarError(edadMin, errEdadMin, 'La Edad Minima es obligatoria.');
+            ok = false;
+        }
+        if (vMax === '') {
+            marcarError(edadMax, errEdadMax, 'La Edad Maxima es obligatoria.');
+            ok = false;
+        }
+        if (!ok) return false;
+
+        // 2) Solo numeros enteros positivos
+        var esEntero = /^\d+$/;
+        if (!esEntero.test(vMin)) {
+            marcarError(edadMin, errEdadMin, 'Debe ser un numero entero positivo.');
+            ok = false;
+        }
+        if (!esEntero.test(vMax)) {
+            marcarError(edadMax, errEdadMax, 'Debe ser un numero entero positivo.');
+            ok = false;
+        }
+        if (!ok) return false;
+
+        var nMin = parseInt(vMin, 10);
+        var nMax = parseInt(vMax, 10);
+
+        // 3) Tope maximo razonable
+        if (nMin > EDAD_TOPE) {
+            marcarError(edadMin, errEdadMin, 'No puede superar ' + EDAD_TOPE + ' anios.');
+            ok = false;
+        }
+        if (nMax > EDAD_TOPE) {
+            marcarError(edadMax, errEdadMax, 'No puede superar ' + EDAD_TOPE + ' anios.');
+            ok = false;
+        }
+        if (!ok) return false;
+
+        // 4) Coherencia del rango
+        if (nMin > nMax) {
+            marcarError(edadMin, errEdadMin, 'No puede ser mayor que la Edad Maxima.');
+            marcarError(edadMax, errEdadMax, 'No puede ser menor que la Edad Minima.');
+            return false;
+        }
+        return true;
+    }
+
+    if (grupoEdadSelect && filaEdad) {
+        grupoEdadSelect.addEventListener('change', toggleFilaEdad);
+
+        // Solo permite digitos mientras se escribe (maximo 3 cifras)
+        // y limpia el error del campo cuando el usuario corrige.
+        [edadMin, edadMax].forEach(function(inp) {
+            if (!inp) return;
+            inp.addEventListener('input', function() {
+                var limpio = this.value.replace(/[^0-9]/g, '').slice(0, 3);
+                if (this.value !== limpio) this.value = limpio;
+                limpiarError(this, (this === edadMin) ? errEdadMin : errEdadMax);
+            });
+        });
+
+        // Bloquea el envio del formulario si la validacion falla
+        if (form) {
+            form.addEventListener('submit', function(e) {
+                if (!validarFiltroEdad()) {
+                    e.preventDefault();
+                    var foco = document.querySelector('#filaEdadPersonalizada .is-invalid');
+                    if (foco) foco.focus();
+                }
+            });
+        }
+
+        // Estado inicial (mantiene la seleccion tras un submit con GET)
+        toggleFilaEdad();
     }
 });
 </script>

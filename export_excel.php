@@ -57,6 +57,9 @@ $fDepartamento    = $g('filter_departamento');
 $fUps             = $g('filter_ups');
 $fEstablecimiento = $g('filter_establecimiento');
 $fGrupoEdad       = $g('filter_grupo_edad');
+// MEJORA: rango de edad personalizado ("Otro grupo de Edad") -> Anio_Actual_Paciente
+$fEdadMin         = $g('filter_edad_min');
+$fEdadMax         = $g('filter_edad_max');
 $fIdGenero        = $g('filter_id_genero');
 $fOtraCondicion   = $g('filter_otra_condicion');
 $fCodigoItem      = $g('filter_codigo_item');
@@ -96,7 +99,18 @@ if ($fEstablecimiento !== '') {
         $params[':est'] = $fEstablecimiento;
     }
 }
-if ($fGrupoEdad !== '') {
+// MEJORA: Filtro de Grupo Edad extendido (coherente con consulta_atenciones.php)
+//   - '__OTRO__' -> rango personalizado sobre Anio_Actual_Paciente
+//   - valor normal -> igualdad exacta sobre Grupo_Edad
+if ($fGrupoEdad === '__OTRO__') {
+    if (preg_match('/^\d+$/', $fEdadMin) && preg_match('/^\d+$/', $fEdadMax)
+        && intval($fEdadMin) <= intval($fEdadMax)) {
+        $where .= " AND Anio_Actual_Paciente BETWEEN :edad_min AND :edad_max";
+        $params[':edad_min'] = intval($fEdadMin);
+        $params[':edad_max'] = intval($fEdadMax);
+    }
+    // Si los limites son invalidos u omitidos, no se aplica filtro de edad
+} elseif ($fGrupoEdad !== '') {
     $where .= " AND Grupo_Edad = :gedad";
     $params[':gedad'] = $fGrupoEdad;
 }
