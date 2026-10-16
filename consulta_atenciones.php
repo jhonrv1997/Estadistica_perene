@@ -645,6 +645,94 @@ include 'includes/header.php';
     .tabla-resultados thead {
         background-color: #d6e9f8;
     }
+    /* ============================================================
+       MEJORA: Lupa de detalle de cita (columna #) + Popup modal
+       ============================================================ */
+    .celda-num-fila {
+        white-space: nowrap;
+    }
+    .celda-num-fila .num-fila {
+        margin-right: 0.35rem;
+    }
+    .btn-lupa-cita {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 22px;
+        height: 22px;
+        padding: 0;
+        border: 1px solid #b6d4ea;
+        border-radius: 50%;
+        background-color: #eaf4fc;
+        color: #1d6fa5;
+        font-size: 0.68rem;
+        line-height: 1;
+        cursor: pointer;
+        vertical-align: middle;
+        transition: background-color 0.15s ease, color 0.15s ease, transform 0.15s ease;
+    }
+    .btn-lupa-cita:hover {
+        background-color: #1d6fa5;
+        border-color: #1d6fa5;
+        color: #ffffff;
+        transform: scale(1.12);
+    }
+    .btn-lupa-cita:active {
+        transform: scale(0.95);
+    }
+    .btn-lupa-cita:focus-visible {
+        outline: 2px solid #1d6fa5;
+        outline-offset: 1px;
+    }
+    /* Tarjetas de datos clinicos dentro del modal */
+    .dato-clinico {
+        border: 1px solid #dce9f5;
+        border-radius: 0.5rem;
+        background-color: #f8fbfe;
+        padding: 0.55rem 0.6rem;
+        text-align: center;
+        height: 100%;
+    }
+    .dato-clinico .dato-etiqueta {
+        font-size: 0.68rem;
+        font-weight: 600;
+        color: #5f7d95;
+        text-transform: uppercase;
+        letter-spacing: 0.03em;
+        margin-bottom: 0.15rem;
+    }
+    .dato-clinico .dato-valor {
+        font-size: 1.02rem;
+        font-weight: 700;
+        color: #17425f;
+        line-height: 1.2;
+    }
+    .dato-clinico .dato-unidad {
+        font-size: 0.68rem;
+        color: #8aa2b5;
+        font-weight: 500;
+    }
+    /* Tabla de items del modal */
+    #tablaItemsCita thead th {
+        background-color: #d6e9f8;
+        color: #2c3e50;
+        font-weight: 600;
+        text-align: center;
+        font-size: 0.75rem;
+        white-space: nowrap;
+    }
+    #tablaItemsCita tbody td {
+        font-size: 0.76rem;
+        vertical-align: middle;
+    }
+    #tablaItemsCita tbody td.td-descripcion {
+        white-space: normal;
+        word-break: break-word;
+    }
+    /* Contenedor del modal ligeramente mas ancho para la tabla de items */
+    #modalDetalleCita .modal-dialog {
+        max-width: 720px;
+    }
 </style>
 
 <!-- Encabezado -->
@@ -993,7 +1081,23 @@ include 'includes/header.php';
                     <tbody>
                         <?php foreach ($datos as $i => $row): ?>
                         <tr>
-                            <td class="text-muted"><?= $offset + $i + 1 ?></td>
+                            <?php
+                            // MEJORA: Id_Cita se mantiene OCULTA (atributo data-id-cita del boton lupa).
+                            // Al hacer clic en la lupa se abre un popup modal con todos los
+                            // registros que comparten la misma Id_Cita.
+                            $rowIdCita = (string)($row['Id_Cita'] ?? '');
+                            ?>
+                            <td class="text-center text-muted celda-num-fila">
+                                <span class="num-fila"><?= $offset + $i + 1 ?></span>
+                                <button type="button"
+                                        class="btn-lupa-cita"
+                                        data-id-cita="<?= htmlspecialchars($rowIdCita, ENT_QUOTES, 'UTF-8') ?>"
+                                        data-num-reg="<?= clean($row['Lote']) ?>-<?= clean($row['Num_Pag']) ?>-<?= clean($row['Num_Reg']) ?>"
+                                        title="Ver detalle completo de la cita"
+                                        aria-label="Ver detalle completo de la cita">
+                                    <i class="fas fa-search"></i>
+                                </button>
+                            </td>
                             <td class="tabla-col-atencion"><?= formatDate($row['Fecha_Atencion']) ?></td>
                             <td class="tabla-col-atencion" title="<?= clean($row['Nombre_Establecimiento']) ?>">
                                 <?= clean(mb_strimwidth($row['Nombre_Establecimiento'] ?? '', 0, 25, '...')) ?>
@@ -1090,6 +1194,296 @@ include 'includes/header.php';
     <?php endif; ?>
 </div>
 <?php endif; ?>
+
+<!-- ============================================================
+     MEJORA: Popup modal de Detalle de Cita
+     Muestra los datos de TODOS los registros que comparten la
+     MISMA Id_Cita (Peso, Talla, Hemoglobina, Fecha_Ultima_Regla)
+     y una tabla de items (Codigo_Item, Descripcion_Item,
+     Tipo_Diagnostico, Valor_Lab) ordenada por Id_Correlativo_Item.
+     La Id_Cita viaja oculta en el atributo data-id-cita del boton lupa.
+     ============================================================ -->
+<div class="modal fade" id="modalDetalleCita" tabindex="-1" aria-labelledby="modalDetalleCitaLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header py-2">
+                <h6 class="modal-title fw-bold" id="modalDetalleCitaLabel">
+                    <i class="fas fa-search me-2 text-primary"></i>Detalle de la Atenci&oacute;n
+                </h6>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+            </div>
+            <div class="modal-body">
+
+                <!-- Estado: cargando -->
+                <div id="citaCargando" class="text-center py-4 d-none">
+                    <div class="spinner-border text-primary spinner-border-sm me-2" role="status">
+                        <span class="visually-hidden">Cargando...</span>
+                    </div>
+                    <span class="text-muted small">Cargando detalle de la cita...</span>
+                </div>
+
+                <!-- Estado: error -->
+                <div id="citaError" class="alert alert-danger py-2 mb-0 d-none" role="alert">
+                    <i class="fas fa-exclamation-triangle me-2"></i>
+                    <span id="citaErrorMessage">Ocurrio un error al cargar el detalle.</span>
+                </div>
+
+                <!-- Estado: contenido -->
+                <div id="citaContenido" class="d-none">
+
+                    <!-- Contexto de la atencion (paciente / fecha / establecimiento) -->
+                    <div class="alert alert-light border py-2 px-3 mb-3">
+                        <div class="fw-bold small text-truncate" title="">
+                            <i class="fas fa-user me-1 text-secondary"></i>
+                            <span id="citaPacienteNombre">&nbsp;</span>
+                        </div>
+                        <div class="small text-muted d-flex flex-wrap gap-3">
+                            <span><i class="fas fa-id-card me-1"></i><span id="citaPacienteDoc">-</span></span>
+                            <span><i class="fas fa-calendar-day me-1"></i><span id="citaFechaAtencion">-</span></span>
+                            <span><i class="fas fa-hospital me-1"></i><span id="citaEstablecimiento">-</span></span>
+                        </div>
+                    </div>
+
+                    <!-- Datos clinicos de la cita (misma Id_Cita) -->
+                    <div class="row g-2 mb-3">
+                        <div class="col-6 col-md-3">
+                            <div class="dato-clinico">
+                                <div class="dato-etiqueta">Peso</div>
+                                <div class="dato-valor" id="citaPeso">-</div>
+                                <div class="dato-unidad">kg</div>
+                            </div>
+                        </div>
+                        <div class="col-6 col-md-3">
+                            <div class="dato-clinico">
+                                <div class="dato-etiqueta">Talla</div>
+                                <div class="dato-valor" id="citaTalla">-</div>
+                                <div class="dato-unidad">m</div>
+                            </div>
+                        </div>
+                        <div class="col-6 col-md-3">
+                            <div class="dato-clinico">
+                                <div class="dato-etiqueta">Hemoglobina</div>
+                                <div class="dato-valor" id="citaHemoglobina">-</div>
+                                <div class="dato-unidad">g/dL</div>
+                            </div>
+                        </div>
+                        <div class="col-6 col-md-3">
+                            <div class="dato-clinico">
+                                <div class="dato-etiqueta">F. Ultima Regla</div>
+                                <div class="dato-valor" id="citaFechaUltimaRegla">-</div>
+                                <div class="dato-unidad">dd/mm/aaaa</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Items de la cita: Codigo | Descripcion | Diag | Lab -->
+                    <h6 class="fw-bold small text-secondary mb-1">
+                        <i class="fas fa-list-ul me-1"></i>Items de la Atenci&oacute;n
+                        <span class="badge bg-secondary ms-1" id="citaItemsContador" style="font-size:.65em">0</span>
+                    </h6>
+                    <div class="table-responsive" style="max-height: 32vh; overflow: auto;">
+                        <table class="table table-sm table-bordered table-hover mb-0" id="tablaItemsCita">
+                            <thead style="position: sticky; top: 0; z-index: 2;">
+                                <tr>
+                                    <th>Codigo</th>
+                                    <th>Descripcion</th>
+                                    <th>Diag</th>
+                                    <th>Lab</th>
+                                </tr>
+                            </thead>
+                            <tbody id="tablaItemsCitaBody">
+                                <!-- Filas generadas por JS -->
+                            </tbody>
+                        </table>
+                    </div>
+
+                </div>
+            </div>
+            <div class="modal-footer py-1">
+                <small class="text-muted me-auto" id="citaPieInfo"></small>
+                <button type="button" class="btn btn-sm btn-outline-secondary" data-bs-dismiss="modal">
+                    <i class="fas fa-times me-1"></i> Cerrar
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ============================================================
+     MEJORA: Logica del Popup modal de Detalle de Cita
+     Al hacer clic en la lupa (columna #) se consulta
+     api_detalle_cita.php?id_cita=... y se muestran los datos de
+     todos los registros con la MISMA Id_Cita.
+     ============================================================ -->
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    var modalEl = document.getElementById('modalDetalleCita');
+    if (!modalEl) return;
+
+    // ---------- Referencias a elementos del modal ----------
+    var elCargando     = document.getElementById('citaCargando');
+    var elError        = document.getElementById('citaError');
+    var elErrorMessage = document.getElementById('citaErrorMessage');
+    var elContenido    = document.getElementById('citaContenido');
+    var elPacienteNombre  = document.getElementById('citaPacienteNombre');
+    var elPacienteDoc     = document.getElementById('citaPacienteDoc');
+    var elFechaAtencion   = document.getElementById('citaFechaAtencion');
+    var elEstablecimiento = document.getElementById('citaEstablecimiento');
+    var elPeso            = document.getElementById('citaPeso');
+    var elTalla           = document.getElementById('citaTalla');
+    var elHemoglobina     = document.getElementById('citaHemoglobina');
+    var elFechaUltimaRegla = document.getElementById('citaFechaUltimaRegla');
+    var elItemsContador   = document.getElementById('citaItemsContador');
+    var elTablaBody       = document.getElementById('tablaItemsCitaBody');
+    var elPieInfo         = document.getElementById('citaPieInfo');
+
+    // ---------- Utilidades ----------
+    function oANull(valor) {
+        return (valor === null || valor === undefined || String(valor).trim() === '') ? '-' : String(valor);
+    }
+
+    function mostrarEstado(estado) {
+        // estado: 'cargando' | 'error' | 'contenido'
+        elCargando.classList.toggle('d-none', estado !== 'cargando');
+        elError.classList.toggle('d-none', estado !== 'error');
+        elContenido.classList.toggle('d-none', estado !== 'contenido');
+    }
+
+    // ---------- Carga del detalle por Id_Cita ----------
+    var peticionActiva = null;
+
+    function cargarDetalleCita(idCita, numReg) {
+        mostrarEstado('cargando');
+        elPieInfo.textContent = numReg ? ('Atenci\u00f3n: ' + numReg) : '';
+
+        // Cancelar una peticion previa en curso (si existe)
+        if (peticionActiva && typeof peticionActiva.abort === 'function') {
+            peticionActiva.abort();
+        }
+
+        peticionActiva = fetch('api_detalle_cita.php?id_cita=' + encodeURIComponent(idCita), {
+            method: 'GET',
+            headers: { 'X-Requested-With': 'XMLHttpRequest' },
+            credentials: 'same-origin'
+        });
+
+        peticionActiva
+            .then(function(response) {
+                if (!response.ok) {
+                    return response.json().catch(function() { return null; }).then(function(json) {
+                        var msg = (json && json.message) ? json.message : 'Error HTTP ' + response.status + ' al consultar el detalle.';
+                        throw new Error(msg);
+                    });
+                }
+                return response.json();
+            })
+            .then(function(data) {
+                if (!data || !data.success) {
+                    throw new Error((data && data.message) ? data.message : 'Respuesta invalida del servidor.');
+                }
+                pintarDetalle(data, numReg);
+                mostrarEstado('contenido');
+            })
+            .catch(function(err) {
+                // Ignorar abortos por doble clic
+                if (err && err.name === 'AbortError') return;
+                elErrorMessage.textContent = (err && err.message) ? err.message : 'Ocurrio un error al cargar el detalle.';
+                mostrarEstado('error');
+            })
+            .finally(function() {
+                peticionActiva = null;
+            });
+    }
+
+    function pintarDetalle(data, numReg) {
+        var paciente = data.paciente || {};
+        var datos    = data.datos || {};
+        var items    = data.items || [];
+
+        // --- Contexto de la atencion ---
+        var nombre = oANull(paciente.nombre);
+        elPacienteNombre.textContent = nombre;
+        elPacienteNombre.parentElement.title = nombre === '-' ? '' : nombre;
+        elPacienteDoc.textContent     = oANull(paciente.documento);
+        elFechaAtencion.textContent   = oANull(paciente.fecha_atencion);
+        elEstablecimiento.textContent = oANull(paciente.establecimiento);
+
+        // --- Datos clinicos (misma Id_Cita) ---
+        elPeso.textContent            = oANull(datos.peso);
+        elTalla.textContent           = oANull(datos.talla);
+        elHemoglobina.textContent     = oANull(datos.hemoglobina);
+        elFechaUltimaRegla.textContent = oANull(datos.fecha_ultima_regla);
+
+        // --- Tabla de items (ordenada por Id_Correlativo_Item en el servidor) ---
+        elTablaBody.innerHTML = '';
+        if (!items.length) {
+            var trVacio = document.createElement('tr');
+            var tdVacio = document.createElement('td');
+            tdVacio.colSpan = 4;
+            tdVacio.className = 'text-center text-muted';
+            tdVacio.textContent = 'Sin items registrados para esta cita.';
+            trVacio.appendChild(tdVacio);
+            elTablaBody.appendChild(trVacio);
+        } else {
+            items.forEach(function(it) {
+                var tr = document.createElement('tr');
+
+                var tdCod = document.createElement('td');
+                tdCod.className = 'text-nowrap';
+                var code = document.createElement('code');
+                code.textContent = it.codigo || '';
+                tdCod.appendChild(code);
+
+                var tdDesc = document.createElement('td');
+                tdDesc.className = 'td-descripcion';
+                tdDesc.textContent = it.descripcion || '';
+
+                var tdDiag = document.createElement('td');
+                tdDiag.className = 'text-center';
+                tdDiag.textContent = it.diag || '';
+
+                var tdLab = document.createElement('td');
+                tdLab.className = 'text-center';
+                tdLab.textContent = (it.lab === '' || it.lab === null || it.lab === undefined) ? '-' : it.lab;
+
+                tr.appendChild(tdCod);
+                tr.appendChild(tdDesc);
+                tr.appendChild(tdDiag);
+                tr.appendChild(tdLab);
+                elTablaBody.appendChild(tr);
+            });
+        }
+
+        elItemsContador.textContent = items.length;
+        elPieInfo.textContent = (numReg ? ('Atenci\u00f3n: ' + numReg + '  \u2022  ') : '')
+            + items.length + (items.length === 1 ? ' item' : ' items');
+    }
+
+    // ---------- Delegacion de eventos (clic en la lupa) ----------
+    // Se usa delegacion sobre document para que funcione aunque la
+    // tabla se regenere al cambiar de pagina.
+    document.addEventListener('click', function(e) {
+        var btn = e.target.closest ? e.target.closest('.btn-lupa-cita') : null;
+        if (!btn) return;
+        e.preventDefault();
+
+        var idCita = btn.getAttribute('data-id-cita');
+        if (!idCita) return;
+
+        var numReg = btn.getAttribute('data-num-reg') || '';
+
+        // Abrir popup modal y cargar datos
+        var instancia = bootstrap.Modal.getOrCreateInstance(modalEl);
+        instancia.show();
+        cargarDetalleCita(idCita, numReg);
+    });
+
+    // Al cerrar el modal, volver al estado inicial
+    modalEl.addEventListener('hidden.bs.modal', function() {
+        mostrarEstado('cargando');
+    });
+});
+</script>
 
 <!-- Script para cascada Zona Sanitaria -> Establecimiento -->
 <script>
