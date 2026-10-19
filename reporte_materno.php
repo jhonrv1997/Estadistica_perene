@@ -187,16 +187,16 @@ include 'includes/header.php';
     <div class="card-header bg-white d-flex justify-content-between align-items-center flex-wrap gap-2">
         <h6 class="mb-0 fw-bold"><i class="fas fa-filter me-2 text-primary"></i>Filtros del Reporte</h6>
         <div class="d-flex gap-2">
+            <a href="materno_export_plano.php?<?= http_build_query(array_filter([
+                'anio' => $fAnio, 'mes' => $fMes, 'establecimiento' => $fEstablecimiento,
+            ])) ?>" class="btn btn-sm btn-warning" title="Exportar al plano consolidado Materno_Plano.xlsx (numeros de destino de Ubicacion_Filas_Materno.xlsx)">
+                <i class="fas fa-table me-1"></i> Exportar Plano
+            </a>
             <a href="materno_export.php?<?= http_build_query(array_filter([
                 'anio' => $fAnio, 'mes' => $fMes, 'establecimiento' => $fEstablecimiento,
                 'generar' => $ejecutar ? 1 : null,
             ])) ?>" class="btn btn-sm btn-success" title="Exportar Excel con el layout de la plantilla oficial">
                 <i class="fas fa-file-excel me-1"></i> Exportar Excel
-            </a>
-            <a href="materno_export_plano.php?<?= http_build_query(array_filter([
-                'anio' => $fAnio, 'mes' => $fMes, 'establecimiento' => $fEstablecimiento,
-            ])) ?>" class="btn btn-sm btn-outline-success" title="Exportar al plano consolidado Materno_Plano.xlsx (numeros de destino de Ubicacion_Filas_Materno.xlsx)">
-                <i class="fas fa-table me-1"></i> Exportar Plano
             </a>
             <button type="submit" form="filterForm" class="btn btn-sm btn-his"><i class="fas fa-play me-1"></i> Generar Reporte</button>
         </div>
