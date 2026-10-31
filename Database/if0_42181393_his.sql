@@ -461,6 +461,9 @@ INSERT INTO `ESNI_LINEA_REPORTE` (`id_linea`, `id_seccion`, `orden`, `etiqueta`,
 (257, 22, 3, '30 a 49 años', 24, 5, 33, 'F', 1),
 (258, 22, 4, '50 + años', 24, 5, 34, 'F', 1),
 (259, 1, 27, 'Anticuerpo Monoclonal', 25, 5, 3, 'A', 1);
+(260, 15, 67, 'Neumococo sin Comorbilidad', 10, 3, 14, 'A', 1),
+(261, 1, 28, 'SPR dosis Cero', 12, 5, 3, 'A', 1);
+
 -- --------------------------------------------------------
 
 --
@@ -995,6 +998,9 @@ INSERT INTO `ESNI_REGLA` (`id_regla`, `id_linea`, `cod_item`, `valor_lab`, `id_g
 (523, 257, '90678', 'DU', 33, 'F', NULL, NULL, 0, 0, 0, 0, 1, 'G', NULL, NULL),
 (524, 258, '90678', 'DU', 34, 'F', NULL, NULL, 0, 0, 0, 0, 1, 'G', NULL, NULL),
 (526, 259, '90380', 'DU', NULL, 'A', NULL, NULL, 0, 0, 0, 0, 1, NULL, NULL, NULL);
+(527, 260, '90670', '3', 14, 'A', NULL, NULL, 0, 0, 0, 1, 1, NULL, NULL, NULL),
+(528, 260, '90670', 'D3', 14, 'A', NULL, NULL, 0, 0, 0, 1, 1, NULL, NULL, NULL),
+(529, 261, '90707', '0', 3, 'A', NULL, NULL, 0, 0, 0, 0, 1, NULL, NULL, NULL);
 -- --------------------------------------------------------
 
 --
