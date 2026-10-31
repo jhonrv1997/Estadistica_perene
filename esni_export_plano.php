@@ -61,6 +61,9 @@
  *     AN28 = INFLUENZA - 06 Y 07 MESES - 1RA DOSIS         (Casos)
  *     AO28 = INFLUENZA - 06 Y 07 MESES - 2RA DOSIS         (Casos)
  *
+ *   SPR DOSIS CERO (dosis unica):
+ *     AE28 = SPR dosis Cero                                (Casos)
+ *
  *   ANTICUERPO MONOCLONAL (VSR - dosis unica):
  *     UD28 = ANTICUERPO MONOCLONAL                         (Casos)
  *
@@ -118,6 +121,7 @@
  *   Seccion D - fila 28 (Casos por vacuna/dosis, Seccion D):
  *
  *     DS28 = Neumococo con Comorbilidad                    (Casos)
+ *     DV28 = Neumococo sin Comorbilidad                    (Casos)
  *     EE28 = Pentavalente No vacunado D1                   (Casos)
  *     EF28 = Pentavalente No vacunado D2                   (Casos)
  *     EG28 = Pentavalente No vacunado D3                   (Casos)
@@ -808,6 +812,8 @@ $cellMapA = [
     // INFLUENZA
     'AN28' => 'INFLUENZA - 06 Y 07 MESES - 1RA DOSIS',
     'AO28' => 'INFLUENZA - 06 Y 07 MESES - 2DA DOSIS',
+    // SPR DOSIS CERO (dosis unica)
+    'AE28' => 'SPR dosis Cero',
     // ANTICUERPO MONOCLONAL (VSR - dosis unica)
     'UD28' => 'Anticuerpo Monoclonal',
 ];
@@ -872,6 +878,8 @@ $cellMapC = [
 $cellMapD = [
     // NEUMOCOCO CON COMORBILIDAD
     'DS28' => 'Neumococo con Comorbilidad',
+    // NEUMOCOCO SIN COMORBILIDAD
+    'DV28' => 'Neumococo sin Comorbilidad',
     // PENTAVALENTE NO VACUNADO
     'EE28' => 'Pentavalente No vacunado D1',
     'EF28' => 'Pentavalente No vacunado D2',

@@ -59,6 +59,10 @@
  *     G18 = ANTICUERPO MONOCLONAL (Casos)
  *     J18 = ANTICUERPO MONOCLONAL (Total = G18)
  *
+ *   SPR DOSIS CERO (dosis unica -> G=Casos, J=Total=Casos):
+ *     G19 = SPR dosis Cero (Casos)
+ *     J19 = SPR dosis Cero (Total = G19)
+ *
  *   SECCION B - MENORES DE 01 ANIO (celdas I28..J41):
  *     I28/J28 = 1A 11M 29D - NEUMOCOCO - 01 ANIO - 3RA DOSIS  (I=Casos, J=I)
  *     G29/J29 = 1A 11M 29D - SPR - 01 ANIO - 1RA DOSIS        (G=Casos, J=G)
@@ -94,6 +98,7 @@
  *     J50/M50 = INFLUENZA CON COMORBILIDAD - 1RA DOSIS  (J=Casos, M=J)
  *     J51/M51 = INFLUENZA SIN COMORBILIDAD - 1RA DOSIS  (J=Casos, M=J)
  *     J52/M52 = NEUMOCOCO CON COMORBILIDAD              (J=Casos, M=J)
+ *     L53/M53 = NEUMOCOCO SIN COMORBILIDAD              (L=Casos, M=L)
  *     J55/M55 = ANTIAMARILICA                            (J=Casos, M=J)
  *     J58     = Pentavalente No vacunado D1               (J=Casos)
  *     K58     = Pentavalente No vacunado D2               (K=Casos)
@@ -1142,6 +1147,9 @@ $inf_d2     = esniGetCasos($casosPorEtiqueta, 'INFLUENZA - 06 Y 07 MESES - 2DA D
 
 $anticuerpo_monoclonal = esniGetCasos($casosPorEtiqueta, 'ANTICUERPO MONOCLONAL');
 
+// SPR dosis Cero (dosis unica -> total J = G)
+$spr_dosis_cero = esniGetCasos($casosPorEtiqueta, 'SPR dosis Cero');
+
 // 4.3 Calcular totales por vacuna (celdas J) - Seccion A
 $ipv_total     = $ipv_d1   + $ipv_d2   + $ipv_d3;
 $penta_total   = $penta_d1 + $penta_d2 + $penta_d3;
@@ -1199,6 +1207,7 @@ $c_vno_spr_total   = $c_vno_spr_d1 + $c_vno_spr_d2;
 $d_inf_comorb_d1     = esniGetCasos($casosPorEtiquetaD, 'INFLUENZA CON COMORBILIDAD - 1RA DOSIS');
 $d_inf_sincom_d1     = esniGetCasos($casosPorEtiquetaD, 'INFLUENZA SIN COMORBILIDAD - 1RA DOSIS');
 $d_neumo_com         = esniGetCasos($casosPorEtiquetaD, 'Neumococo con Comorbilidad');
+$d_neumo_sincom      = esniGetCasos($casosPorEtiquetaD, 'Neumococo sin Comorbilidad');
 $d_amarilica         = esniGetCasos($casosPorEtiquetaD, 'ANTIAMARILICA');
 $d_penta_nv_d1       = esniGetCasos($casosPorEtiquetaD, 'Pentavalente No vacunado D1');
 $d_penta_nv_d2       = esniGetCasos($casosPorEtiquetaD, 'Pentavalente No vacunado D2');
@@ -1737,6 +1746,9 @@ $cellValues = [
     // Anticuerpo Monoclonal (dosis unica -> G = J = Casos)
     'G18' => $anticuerpo_monoclonal, 'J18' => $anticuerpo_monoclonal,
 
+    // SPR dosis Cero (dosis unica -> G = J = Casos)
+    'G19' => $spr_dosis_cero, 'J19' => $spr_dosis_cero,
+
     // --- Seccion B: MENORES DE 01 ANIO (celdas I28..J41) ---
     // NEUMOCOCO 3ra dosis (celda I=Casos, total J=I)
     'I28' => $b_neumo_3ra,    'J28' => $b_neumo_3ra,
@@ -1795,6 +1807,9 @@ $cellValues = [
     'J51' => $d_inf_sincom_d1,    'M51' => $d_inf_sincom_d1,
     // NEUMOCOCO CON COMORBILIDAD (J=M=Casos)
     'J52' => $d_neumo_com,        'M52' => $d_neumo_com,
+    // NEUMOCOCO SIN COMORBILIDAD (L=M=Casos; fila 53 "Neumococo (Solo no
+    // vacunado anteriormente)" de la plantilla oficial)
+    'L53' => $d_neumo_sincom,     'M53' => $d_neumo_sincom,
     // ANTIAMARILICA (J=M=Casos)
     'J55' => $d_amarilica,        'M55' => $d_amarilica,
     // Pentavalente No vacunado D1/D2/D3 y total M = J+K+L

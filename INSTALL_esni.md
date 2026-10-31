@@ -168,6 +168,8 @@ SECCION A (filas 7-22,  Cols G/H/I/J):
   HEPATITIS B  -> G10..J11   (dosis unica -> G=J=Casos)
   IPV          -> G13..J13   (3 dosis + total: J=G+H+I)
   PENTAVALENTE -> G15..J15   (3 dosis + total)
+  ANTICUERPO MONOCLONAL -> G18/J18  (dosis unica -> G=J=Casos)
+  SPR DOSIS CERO -> G19/J19  (dosis unica -> G=J=Casos)
   ROTAVIRUS    -> G20..J20   (2 dosis + total)
   NEUMOCOCO    -> G21..J21   (2 dosis + total)
   INFLUENZA    -> G22..J22   (2 dosis + total)
@@ -188,6 +190,10 @@ SECCION C (filas 50-66, Cols F/G/H/I):
   REF. IPV 1ra (F65/I65), REF. PENTAVALENTE 1ra (F66/I66)
 
 SECCION D (filas 50-66, Cols J/K/L/M): mismo patron que C pero desplazado a la derecha
+  INFLUENZA comorb/sin comorb (J50/J51=M50/M51),
+  NEUMOCOCO con comorb (J52/M52),
+  NEUMOCOCO sin comorb -> L53/M53 (fila 53 "Neumococo (Solo no vacunado
+  anteriormente)"; L=Casos, M=L)
 SECCION E1 (filas 71-86, Cols F/G/H/I): mismo patron que C
 SECCION E2 (filas 71-86, Cols J/K/L/M): subset de D (solo Pentavalente y REF DPT)
 
