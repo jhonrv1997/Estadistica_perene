@@ -31,18 +31,19 @@ CREATE TABLE `CONTROL_CALIDAD_OBSERVACIONES` (
 -- Estructura de tabla para la tabla `CONVENIO_FED_AVANCE`
 --
 
-CREATE TABLE `CONVENIO_FED_AVANCE` (
+CREATE TABLE `CONVENIO_FED_AVANCES` (
   `id_avance` int(11) NOT NULL,
   `id_indicador` int(11) NOT NULL,
+  `renipress` varchar(10) NOT NULL,
+  `establecimiento` varchar(50) NOT NULL,
   `anio` varchar(4) NOT NULL,
   `trimestre` varchar(2) DEFAULT NULL,
   `mes` varchar(2) DEFAULT NULL,
-  `valor_numerador` decimal(12,2) DEFAULT NULL,
-  `valor_denominador` decimal(12,2) DEFAULT NULL,
-  `valor_resultado` decimal(10,2) DEFAULT NULL,
-  `porcentaje_avance` decimal(5,2) DEFAULT NULL,
+  `valor_numerador` decimal(12,2) NOT NULL,
+  `valor_denominador` decimal(12,2) NOT NULL,
+  `porcentaje_avance` decimal(5,2) NOT NULL,
   `observaciones` text DEFAULT NULL,
-  `fecha_registro` datetime DEFAULT current_timestamp(),
+  `fecha_registro` datetime DEFAULT NULL,
   `usuario` varchar(100) DEFAULT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='Avance periodico de indicadores FED';
 
