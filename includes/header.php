@@ -153,7 +153,7 @@ $esAdmin = esAdmin();
                 <?php if ($esAdmin): ?>
                 <!-- Administracion (dropdown) - solo admin -->
                 <li class="nav-item dropdown">
-                    <a class="nav-link dropdown-toggle <?= in_array($currentpage, ['import', 'usuarios', 'log', 'esni_config']) ? 'active' : '' ?>"
+                    <a class="nav-link dropdown-toggle <?= (in_array($currentpage, ['import', 'usuarios', 'log', 'esni_config']) || ($currentpage === 'convenio_fed' && in_array(($_GET['tab'] ?? ''), ['gestion', 'importar'], true))) ? 'active' : '' ?>"
                        href="#" role="button" data-bs-toggle="dropdown" aria-expanded="false">
                         <i class="fas fa-cog me-1"></i> Admin
                     </a>
@@ -162,6 +162,18 @@ $esAdmin = esAdmin();
                             <a class="dropdown-item <?= $currentpage === 'import' ? 'active' : '' ?>" href="import.php">
                                 <i class="fas fa-file-import me-2 text-primary"></i>Importar Datos
                                 <small class="d-block text-muted">Carga de archivos ZIP</small>
+                            </a>
+                        </li>
+                        <li>
+                            <a class="dropdown-item <?= $currentpage === 'convenio_fed' && ($_GET['tab'] ?? '') === 'importar' ? 'active' : '' ?>" href="convenio_fed.php?tab=importar">
+                                <i class="fas fa-medal me-2 text-warning"></i>FED: Importar Avances
+                                <small class="d-block text-muted">Carga del archivo Resultados.txt</small>
+                            </a>
+                        </li>
+                        <li>
+                            <a class="dropdown-item <?= $currentpage === 'convenio_fed' && ($_GET['tab'] ?? '') === 'gestion' ? 'active' : '' ?>" href="convenio_fed.php?tab=gestion">
+                                <i class="fas fa-tasks me-2 text-warning"></i>FED: Gestion de Indicadores
+                                <small class="d-block text-muted">Agregar, modificar, desactivar</small>
                             </a>
                         </li>
                         <li>
