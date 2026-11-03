@@ -3,6 +3,13 @@
  * Sistema de Gestion de Datos HIS
  * Pagina: FED - Gestion de Indicadores (solo rol Administrador)
  *
+ * v4.1 - Correccion del boton Editar (2026-11-04):
+ *  El boton "Editar" rellenaba el formulario del modal pero nunca lo abria
+ *  (el boton "Nuevo Indicador" abre via data-bs-toggle, pero "Editar" no tenia
+ *  ese mecanismo ni una llamada a bootstrap.Modal.show()). Ahora el modal se
+ *  abre por JavaScript justo despues de rellenar los campos, con respaldo
+ *  manual por si el bundle de Bootstrap (CDN) no carga.
+ *
  * v4 - Separacion del modulo (2026-11-04):
  *  Antes esta funcionalidad era la pestaña "Gestion de Indicadores" del panel
  *  de admin de convenio_fed.php. Ahora es una pagina independiente y ligera.
@@ -388,11 +395,76 @@ include 'includes/header.php';
  * ============================================================ */
 document.addEventListener('DOMContentLoaded', function () {
 
-    /* ---- 1) Modal de indicadores: rellenar al editar / limpiar al crear ---- */
+    /* ---- 1) Modal de indicadores: rellenar al editar / limpiar al crear ----
+       v4.1: se añade la APERTURA del modal por JavaScript (antes el boton
+       Editar rellenaba los campos pero el modal nunca se mostraba).          */
+    var modalIndicadorEl = document.getElementById('modalIndicador');
+
+    /* Abre el modal con Bootstrap; si el bundle de Bootstrap no cargo (CDN
+       bloqueado, sin internet en la red del hospital, etc.), usa un respaldo
+       manual que muestra el modal con clases CSS propias de Bootstrap.       */
+    function abrirModalIndicador() {
+        if (!modalIndicadorEl) return;
+        if (window.bootstrap && window.bootstrap.Modal) {
+            window.bootstrap.Modal.getOrCreateInstance(modalIndicadorEl).show();
+            return;
+        }
+        modalIndicadorEl.classList.add('show');
+        modalIndicadorEl.style.display = 'block';
+        modalIndicadorEl.removeAttribute('aria-hidden');
+        modalIndicadorEl.setAttribute('aria-modal', 'true');
+        modalIndicadorEl.setAttribute('role', 'dialog');
+        document.body.classList.add('modal-open');
+        if (!document.querySelector('.modal-backdrop[data-fed-manual]')) {
+            var bd = document.createElement('div');
+            bd.className = 'modal-backdrop fade show';
+            bd.setAttribute('data-fed-manual', '1');
+            document.body.appendChild(bd);
+        }
+    }
+
+    function cerrarModalIndicador() {
+        if (!modalIndicadorEl) return;
+        if (window.bootstrap && window.bootstrap.Modal) {
+            window.bootstrap.Modal.getOrCreateInstance(modalIndicadorEl).hide();
+            return;
+        }
+        modalIndicadorEl.classList.remove('show');
+        modalIndicadorEl.style.display = 'none';
+        modalIndicadorEl.setAttribute('aria-hidden', 'true');
+        modalIndicadorEl.removeAttribute('aria-modal');
+        modalIndicadorEl.removeAttribute('role');
+        document.body.classList.remove('modal-open');
+        var bd = document.querySelector('.modal-backdrop[data-fed-manual]');
+        if (bd && bd.parentNode) bd.parentNode.removeChild(bd);
+    }
+
+    /* Respaldo manual: cierre con Cancelar/X (data-bs-dismiss), tecla Escape
+       o clic en el fondo oscuro. Con Bootstrap cargado no interviene.        */
+    document.addEventListener('click', function (e) {
+        if (!modalIndicadorEl || !modalIndicadorEl.classList.contains('show')) return;
+        if (window.bootstrap && window.bootstrap.Modal) return;
+        var dismiss = e.target.closest ? e.target.closest('[data-bs-dismiss="modal"]') : null;
+        if (dismiss && modalIndicadorEl.contains(dismiss)) { cerrarModalIndicador(); return; }
+        if (e.target === modalIndicadorEl) { cerrarModalIndicador(); return; }
+        if (e.target.closest && e.target.closest('.modal-backdrop[data-fed-manual]')) cerrarModalIndicador();
+    });
+    document.addEventListener('keydown', function (e) {
+        if (e.key === 'Escape' && !(window.bootstrap && window.bootstrap.Modal) &&
+            modalIndicadorEl && modalIndicadorEl.classList.contains('show')) {
+            cerrarModalIndicador();
+        }
+    });
+
     document.querySelectorAll('.btn-editar-indicador').forEach(function (b) {
         b.addEventListener('click', function () {
-            var d;
-            try { d = JSON.parse(b.getAttribute('data-indicador')); } catch (e) { return; }
+            if (!modalIndicadorEl) return;
+            var d = null;
+            try { d = JSON.parse(b.getAttribute('data-indicador')); } catch (e) { d = null; }
+            if (!d || !d.id_indicador) {
+                alert('No se pudieron leer los datos de este indicador. Recargue la pagina (F5) e intente nuevamente.');
+                return;
+            }
             document.getElementById('tituloModalIndicador').textContent = 'Modificar Indicador: ' + d.codigo;
             document.getElementById('f_id').value = d.id_indicador;
             document.getElementById('f_codigo').value = d.codigo || '';
@@ -405,6 +477,7 @@ document.addEventListener('DOMContentLoaded', function () {
             document.getElementById('f_responsable').value = d.responsable || '';
             document.getElementById('f_orden').value = (d.orden !== null && d.orden !== undefined) ? d.orden : 0;
             document.getElementById('f_estado').checked = parseInt(d.estado, 10) === 1;
+            abrirModalIndicador(); /* v4.1: abre el modal (antes faltaba esta llamada) */
         });
     });
     var btnNuevo = document.getElementById('btnNuevoIndicador');
@@ -415,6 +488,7 @@ document.addEventListener('DOMContentLoaded', function () {
             document.getElementById('f_id').value = '0';
             document.getElementById('f_orden').value = '0';
             document.getElementById('f_estado').checked = true;
+            abrirModalIndicador(); /* respaldo si el bundle de Bootstrap no cargo */
         });
     }
 
