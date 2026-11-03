@@ -44,6 +44,7 @@ CREATE TABLE `CONVENIO_FED_AVANCES` (
   `porcentaje_avance` decimal(5,2) NOT NULL,
   `observaciones` text DEFAULT NULL,
   `fecha_registro` datetime DEFAULT NULL,
+  `fecha_importacion` DATETIME NULL DEFAULT NULL,
   `usuario` varchar(100) DEFAULT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='Avance periodico de indicadores FED';
 
