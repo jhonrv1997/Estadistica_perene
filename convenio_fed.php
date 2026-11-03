@@ -13,6 +13,20 @@
  *     renipress, establecimiento, anio, mes, valor_numerador, valor_denominador,
  *     porcentaje_avance, observaciones (+ Indicador y Fecha/Hora de importacion).
  *
+ * v3.2 - Importacion del Resultados.txt REAL (2026-11-04):
+ *  - El export actual del SQL Server trae 8 COLUMNAS separadas por ";" y el
+ *    indicador se identifica por su CODIGO (ej. FED-04), no por su id numerico:
+ *      codigo; renipress; establecimiento; anio; mes; valor_numerador;
+ *      valor_denominador; porcentaje_avance
+ *      Ej: FED-04;319;BAJO MARANKIARI;2026;01;1;1;100
+ *  - El importador ahora DETECTA AUTOMATICAMENTE el formato de cada linea:
+ *      * 8 columnas (o 7, sin porcentaje) -> formato nuevo, resuelve el
+ *        id_indicador buscandolo por codigo en CONVENIO_FED_INDICADORES.
+ *      * 13 columnas -> formato antiguo (id_indicador numerico), igual que v3.
+ *  - Si el codigo del archivo no esta registrado en la Gestion de Indicadores,
+ *    la linea se omite y se informa con el codigo exacto (ej. FED-99).
+ *  - Compatible con archivos con BOM UTF-8, codificacion ANSI y salto Windows.
+ *
  * v3.1 - Correccion del ERROR 500 (2026-11-04):
  *  - fedTablaExiste() y fedTieneColumna() ya no usan prepare("SHOW ... LIKE ?").
  *    Con PDO::ATTR_EMULATE_PREPARES => false (config.php), el protocolo de
@@ -189,11 +203,22 @@ $sistemaOK      = $tablaIndicadores !== null && $tablaAvances !== null;
 $tieneFechaImportacion = $tablaAvances !== null ? fedTieneColumna($pdo, $tablaAvances, 'fecha_importacion') : false;
 
 /* ============================================================================
- * 2. PARSER DEL ARCHIVO Resultados.txt (13 columnas separadas por ;)
- *    Formato exportado del SQL Server:
- *    id_avance; id_indicador; renipress; establecimiento; anio; trimestre; mes;
- *    valor_numerador; valor_denominador; porcentaje_avance; observaciones;
- *    fecha_registro; usuario
+ * 2. PARSER DEL ARCHIVO Resultados.txt
+ *    El importador detecta AUTOMATICAMENTE uno de los dos formatos soportados
+ *    (linea por linea, segun el numero de columnas separadas por ";"):
+ *
+ *    FORMATO NUEVO - 8 columnas (export actual del SQL Server):
+ *      codigo; renipress; establecimiento; anio; mes; valor_numerador;
+ *      valor_denominador; porcentaje_avance
+ *      Ej: FED-04;319;BAJO MARANKIARI;2026;01;1;1;100
+ *      (tambien se aceptan 7 columnas, sin porcentaje_avance: se recalcula)
+ *      El indicador se resuelve por CODIGO contra CONVENIO_FED_INDICADORES.
+ *
+ *    FORMATO ANTIGUO - 13 columnas (export anterior):
+ *      id_avance; id_indicador; renipress; establecimiento; anio; trimestre; mes;
+ *      valor_numerador; valor_denominador; porcentaje_avance; observaciones;
+ *      fecha_registro; usuario
+ *
  *    (Los textos "NULL" y los campos vacios se convierten en NULL de PHP)
  * ========================================================================== */
 
@@ -203,8 +228,11 @@ function fedParseLineaAvance($linea) {
         return [null, 'Linea vacia'];
     }
     $campos = explode(';', $linea);
-    if (count($campos) !== 13) {
-        return [null, 'Se esperaban 13 columnas separadas por ";" y hay ' . count($campos)];
+    $nCol = count($campos);
+    if ($nCol !== 7 && $nCol !== 8 && $nCol !== 13) {
+        return [null, 'Numero de columnas invalido (' . $nCol . '). Se esperaban 8 columnas '
+            . '(codigo; renipress; establecimiento; anio; mes; numerador; denominador; porcentaje) '
+            . 'o 13 columnas (formato antiguo), separadas por ";"'];
     }
     $c = [];
     foreach ($campos as $v) {
@@ -212,25 +240,55 @@ function fedParseLineaAvance($linea) {
         $c[] = ($v === '' || strcasecmp($v, 'NULL') === 0) ? null : $v;
     }
 
-    $d = [
-        // [0] id_avance del SQL Server se IGNORA: la web asigna el suyo (AUTO_INCREMENT)
-        'id_indicador'     => $c[1],
-        'renipress'        => $c[2],
-        'establecimiento'  => $c[3],
-        'anio'             => $c[4],
-        'trimestre'        => $c[5],
-        'mes'              => $c[6],
-        'valor_numerador'  => $c[7],
-        'valor_denominador'=> $c[8],
-        'porcentaje_avance'=> $c[9],
-        'observaciones'    => $c[10],
-        'fecha_registro'   => $c[11] !== null ? substr($c[11], 0, 19) : null,
-        'usuario'          => $c[12],
-    ];
+    if ($nCol <= 8) {
+        /* -------- FORMATO NUEVO: 8 columnas (o 7, sin porcentaje) -------- */
+        $d = [
+            'id_indicador'     => null,      // se resuelve por CODIGO en el importador
+            'codigo_indicador' => $c[0],     // ej. FED-04
+            'renipress'        => $c[1],
+            'establecimiento'  => $c[2],
+            'anio'             => $c[3],
+            'trimestre'        => null,
+            'mes'              => $c[4],
+            'valor_numerador'  => $c[5],
+            'valor_denominador'=> $c[6],
+            'porcentaje_avance'=> $nCol === 8 ? $c[7] : null,
+            'observaciones'    => null,
+            'fecha_registro'   => null,
+            'usuario'          => null,
+        ];
+    } else {
+        /* -------- FORMATO ANTIGUO: 13 columnas -------- */
+        $d = [
+            // [0] id_avance del SQL Server se IGNORA: la web asigna el suyo (AUTO_INCREMENT)
+            'id_indicador'     => $c[1],
+            'codigo_indicador' => null,
+            'renipress'        => $c[2],
+            'establecimiento'  => $c[3],
+            'anio'             => $c[4],
+            'trimestre'        => $c[5],
+            'mes'              => $c[6],
+            'valor_numerador'  => $c[7],
+            'valor_denominador'=> $c[8],
+            'porcentaje_avance'=> $c[9],
+            'observaciones'    => $c[10],
+            'fecha_registro'   => $c[11] !== null ? substr($c[11], 0, 19) : null,
+            'usuario'          => $c[12],
+        ];
+    }
 
     // --- Validaciones ---
-    if (!ctype_digit((string)$d['id_indicador'])) {
+    if ($d['id_indicador'] === null && $d['codigo_indicador'] === null) {
+        return [null, 'la linea no trae ni id_indicador ni codigo de indicador'];
+    }
+    if ($d['id_indicador'] !== null && !ctype_digit((string)$d['id_indicador'])) {
         return [null, "id_indicador invalido ('{$d['id_indicador']}')"];
+    }
+    if ($d['codigo_indicador'] !== null) {
+        $d['codigo_indicador'] = strtoupper((string)$d['codigo_indicador']);
+        if (mb_strlen($d['codigo_indicador']) > 20) {
+            return [null, "codigo de indicador invalido: '{$d['codigo_indicador']}' supera los 20 caracteres"];
+        }
     }
     if ($d['renipress'] === null || $d['renipress'] === '') {
         return [null, 'renipress vacio'];
@@ -442,19 +500,46 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
                 // --- Parsear todas las lineas ---
                 $lineas = preg_split('/\R/', $contenido);
-                $idsValidos = array_map('intval', $pdo->query("SELECT id_indicador FROM `{$tablaIndicadores}`")->fetchAll(PDO::FETCH_COLUMN));
+
+                // Indicadores registrados, indexados por CODIGO (formato nuevo de
+                // 8 columnas, ej. "FED-04" => id) y lista de ids validos (formato
+                // antiguo de 13 columnas). Mismo conjunto, dos accesos.
+                $mapCodigoAId = [];
+                foreach ($pdo->query("SELECT id_indicador, codigo FROM `{$tablaIndicadores}`")->fetchAll(PDO::FETCH_ASSOC) as $indReg) {
+                    $codigoReg = strtoupper(trim((string)$indReg['codigo']));
+                    if ($codigoReg !== '') {
+                        $mapCodigoAId[$codigoReg] = (int)$indReg['id_indicador'];
+                    }
+                }
+                $idsValidos = array_values($mapCodigoAId);
+
                 $registros = [];
                 $errores = [];
                 $nLinea = 0;
                 foreach ($lineas as $linea) {
                     $nLinea++;
                     if (trim($linea) === '') continue;
-                    // Saltar una posible linea de cabecera
-                    if (stripos($linea, 'renipress') !== false && stripos($linea, 'indicador') !== false) continue;
+                    // Saltar una posible linea de cabecera (contiene nombres de columna)
+                    if (stripos($linea, 'renipress') !== false
+                        || (stripos($linea, 'indicador') !== false && stripos($linea, 'establecimiento') !== false)) {
+                        continue;
+                    }
                     [$fila, $err] = fedParseLineaAvance($linea);
                     if ($fila === null) {
                         $errores[] = "Linea {$nLinea}: {$err}";
                         continue;
+                    }
+                    // Resolver el indicador:
+                    //  - Formato nuevo (8 col): busca el CODIGO (ej. FED-04) en la
+                    //    Gestion de Indicadores y obtiene su id_indicador.
+                    //  - Formato antiguo (13 col): valida el id_indicador numerico.
+                    if ($fila['codigo_indicador'] !== null) {
+                        $codigoBusq = strtoupper(trim((string)$fila['codigo_indicador']));
+                        if (!isset($mapCodigoAId[$codigoBusq])) {
+                            $errores[] = "Linea {$nLinea}: el codigo de indicador {$codigoBusq} no esta registrado en la Gestion de Indicadores. Registrelo primero (con ese codigo) y vuelva a importar.";
+                            continue;
+                        }
+                        $fila['id_indicador'] = $mapCodigoAId[$codigoBusq];
                     }
                     if (!in_array((int)$fila['id_indicador'], $idsValidos, true)) {
                         $errores[] = "Linea {$nLinea}: el id_indicador {$fila['id_indicador']} no esta registrado en la Gestion de Indicadores. Registrelo primero.";
@@ -1445,6 +1530,8 @@ $avClasifProm = clasificarAvanceFED($pctPromedioGeneral);
                         <h6 class="fw-bold mb-2"><i class="fas fa-cloud-upload-alt me-2 text-primary"></i>Importar archivo de avances</h6>
                         <p class="small text-muted mb-3">
                             Importe el archivo <code>Resultados.txt</code> exportado de su base SQL Server local.
+                            El sistema detecta automaticamente el formato: <strong>8 columnas con codigo de indicador</strong>
+                            (export actual, ej. <code>FED-04;319;...</code>) o el antiguo de 13 columnas.
                             Si un registro ya existe (mismo indicador + renipress + anio + mes) se <strong>actualiza</strong>;
                             si es nuevo se <strong>agrega</strong>. El sistema registra la fecha y hora de cada importacion.
                         </p>
@@ -1482,15 +1569,18 @@ $avClasifProm = clasificarAvanceFED($pctPromedioGeneral);
                     <div class="col-lg-5">
                         <h6 class="fw-bold mb-2"><i class="fas fa-code me-2 text-primary"></i>Formato esperado del archivo</h6>
                         <div class="fed-formato p-3 mb-3">
-                            <div class="mb-2">13 columnas separadas por <code>;</code> (punto y coma):</div>
+                            <div class="mb-2"><strong>Formato actual: 8 columnas</strong> separadas por <code>;</code> (punto y coma). El indicador se identifica por su <strong>codigo</strong>:</div>
                             <code class="d-block mb-2" style="font-size:.72rem; word-break:break-all;">
-                                id_avance; id_indicador; renipress; establecimiento; anio; trimestre; mes; valor_numerador; valor_denominador; porcentaje_avance; observaciones; fecha_registro; usuario
+                                codigo; renipress; establecimiento; anio; mes; valor_numerador; valor_denominador; porcentaje_avance
                             </code>
-                            <div class="mb-1"><i class="fas fa-check text-success me-1"></i>La columna <code>id_avance</code> se ignora: la web asigna su propio ID.</div>
-                            <div class="mb-1"><i class="fas fa-check text-success me-1"></i><code>id_indicador</code> debe existir en la Gestion de Indicadores.</div>
-                            <div class="mb-1"><i class="fas fa-check text-success me-1"></i>El texto <code>NULL</code> o vacio se guarda como NULL.</div>
-                            <div class="mb-1"><i class="fas fa-check text-success me-1"></i>Fecha en formato <code>YYYY-MM-DD HH:MM:SS</code> (los milisegundos se ignoran).</div>
-                            <div><i class="fas fa-check text-success me-1"></i>Codificacion UTF-8 o ANSI. Si no trae <code>porcentaje_avance</code> se recalcula (num/den*100).</div>
+                            <code class="d-block mb-2 text-success" style="font-size:.72rem; word-break:break-all;">
+                                Ej: FED-04;319;BAJO MARANKIARI;2026;01;1;1;100
+                            </code>
+                            <div class="mb-1"><i class="fas fa-check text-success me-1"></i>El <code>codigo</code> (ej. <code>FED-04</code>) debe estar registrado en la Gestion de Indicadores.</div>
+                            <div class="mb-1"><i class="fas fa-check text-success me-1"></i>Si el archivo trae 7 columnas (sin <code>porcentaje_avance</code>) se recalcula: num/den*100.</div>
+                            <div class="mb-1"><i class="fas fa-check text-success me-1"></i>Codificacion UTF-8 (con o sin BOM) o ANSI; saltos de linea Windows o Unix.</div>
+                            <div class="mb-1"><i class="fas fa-check text-success me-1"></i>Si la primera linea es una cabecera de columnas, se detecta y se omite.</div>
+                            <div><i class="fas fa-info-circle text-secondary me-1"></i>Tambien se acepta el formato antiguo de 13 columnas (<code>id_avance; id_indicador; renipress; ...; usuario</code>): se detecta automaticamente linea por linea.</div>
                         </div>
 
                         <div class="fed-info-import px-3 py-2 mb-3">

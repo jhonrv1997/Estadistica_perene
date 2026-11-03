@@ -1,8 +1,18 @@
-# Módulo Convenio FED v3.1 — IntelHIS
+# Módulo Convenio FED v3.2 — IntelHIS
 
 **Convenio FED - Fondo de Estimulo al Desempeno (Red de Salud Perené)**
 
-Versión 3.1 del módulo: agrega **gestión de indicadores**, **importación del archivo `Resultados.txt`** (exportado del SQL Server local) y una **visualización interactiva** con filtros por establecimiento, año, mes (con opción "todos los meses") e indicador. **La v3.1 corrige el error 500 al entrar a la página** (ver sección al final).
+Versión 3.2 del módulo: **el importador ahora acepta el `Resultados.txt` REAL del SQL Server (8 columnas, indicador identificado por su código, ej. `FED-04`)**, manteniendo además la gestión de indicadores, la visualización interactiva con filtros por establecimiento, año, mes (con opción "todos los meses") e indicador de la v3, y la corrección del error 500 de la v3.1.
+
+## Novedades de la v3.2 (2026-11-04)
+
+- **Importación del formato real de 8 columnas**: el export actual del SQL Server trae
+  `codigo; renipress; establecimiento; anio; mes; valor_numerador; valor_denominador; porcentaje_avance`
+  (ejemplo: `FED-04;319;BAJO MARANKIARI;2026;01;1;1;100`). El importador busca el
+  `id_indicador` automáticamente por **código** en la *Gestión de Indicadores*.
+- **Detección automática de formato, línea por línea**: 8 columnas (o 7, sin porcentaje → se recalcula) = formato nuevo; 13 columnas = formato antiguo (id numérico). Pueden mezclarse.
+- Si el código del archivo no está registrado, la línea se omite y el mensaje indica el código exacto (ej. `FED-99`), para registrarlo y volver a importar.
+- Compatible con **UTF-8 con BOM** (como trae el archivo), UTF-8 sin BOM y ANSI; saltos Windows o Unix; cabecera detectada y omitida.
 
 ## Novedades de la v3.1 (2026-11-04)
 
@@ -13,15 +23,15 @@ Versión 3.1 del módulo: agrega **gestión de indicadores**, **importación del
 
 ## Flujo de trabajo (informático ↔ establecimientos)
 
-1. **Informático**: evalúa los indicadores en su base local **SQL Server** y exporta los resultados a `Resultados.txt` (13 columnas separadas por `;`).
-2. **Informático (rol Admin)**: entra a *Convenios → Convenio FED → Importar Resultados.txt* y sube el archivo. El sistema inserta/actualiza los registros y guarda la **fecha y hora de importación**.
+1. **Informático**: evalúa los indicadores en su base local **SQL Server** y exporta los resultados a `Resultados.txt` (8 columnas separadas por `;`, con el **código** del indicador).
+2. **Informático (rol Admin)**: entra a *Convenios → Convenio FED → Importar Avances* y sube el archivo. El sistema resuelve el código del indicador, inserta/actualiza los registros y guarda la **fecha y hora de importación**.
 3. **Personal de los 12 establecimientos**: entra a *Convenios → Convenio FED* cualquier día y revisa con filtros cómo va el avance de los indicadores de su establecimiento.
 
-## Archivos del módulo (v3.1)
+## Archivos del módulo (v3.2)
 
 | Archivo | Rol |
 |---------|-----|
-| `convenio_fed.php` | Página completa del módulo: visualización interactiva + panel admin (gestión de indicadores + importación). **v3.1: corrige el error 500** |
+| `convenio_fed.php` | Página completa del módulo: visualización interactiva + panel admin (gestión de indicadores + importación). **v3.2: importa el Resultados.txt real de 8 columnas** |
 | `includes/header.php` | Menú: agrega accesos directos en **Admin** → "FED: Importar Avances" y "FED: Gestion de Indicadores" |
 | `Database/update_fed_v3.sql` | SQL de actualización (columna `fecha_importacion`, índices, PK/AUTO_INCREMENT y creación de tablas si faltan) |
 | `diagnostico_fed.php` | **Nuevo (v3.1)**: diagnóstico del servidor en un clic (solo Administrador) |
@@ -34,13 +44,13 @@ Versión 3.1 del módulo: agrega **gestión de indicadores**, **importación del
 Suba por FTP/File Manager (o `git push`) los 4 archivos, respetando las rutas:
 
 ```
-convenio_fed.php            (reemplaza el existente — versión v3.1)
+convenio_fed.php            (reemplaza el existente — versión v3.2)
 includes/header.php         (reemplaza el existente)
 Database/update_fed_v3.sql  (nuevo)
 diagnostico_fed.php         (nuevo, opcional pero recomendado)
 ```
 
-> **IMPORTANTE (actualización desde la v3):** si ya había subido la v3 y le apareció "500 Internal Server Error" al entrar a Convenio FED, basta con reemplazar `convenio_fed.php` por esta versión v3.1. No hace falta tocar nada más: la causa estaba dentro del archivo (uso de placeholders en sentencias SHOW incompatible con la configuración PDO del sitio).
+> **IMPORTANTE (actualización desde la v3 / v3.1):** la v3.2 solo reemplaza `convenio_fed.php`; no hay cambios de base de datos. La v3.1 corregía el "500 Internal Server Error" al entrar a Convenio FED (uso de placeholders `?` en sentencias SHOW incompatible con `PDO::ATTR_EMULATE_PREPARES => false`).
 
 ### Paso 2 — Aplicar el SQL (recomendado, una sola vez)
 
@@ -61,7 +71,30 @@ diagnostico_fed.php         (nuevo, opcional pero recomendado)
 
 ## Formato del archivo Resultados.txt
 
-13 columnas separadas por `;` (igual que su export actual del SQL Server):
+### Formato actual — 8 columnas separadas por `;` (el que genera su SQL Server)
+
+```
+codigo; renipress; establecimiento; anio; mes; valor_numerador; valor_denominador; porcentaje_avance
+```
+
+Ejemplo real (archivo de noviembre 2026, año 2026, indicador FED-04):
+
+```
+FED-04;319;BAJO MARANKIARI;2026;01;1;1;100
+FED-04;318;VILLA PERENE;2026;02;12;14;85.71
+FED-04;319;BAJO MARANKIARI;2026;04;0;1;0
+```
+
+Reglas que aplica el importador al formato nuevo:
+
+- El **código** de la primera columna (ej. `FED-04`) se busca en *Gestión de Indicadores*; de ahí sale el `id_indicador` interno. Si no está registrado, la línea se omite con error informado.
+- Si el archivo trae **7 columnas** (sin `porcentaje_avance`), se recalcula: `numerador / denominador * 100`.
+- `fecha_registro` y `usuario` no vienen en este formato: se guarda como fecha del registro la **fecha y hora de la importación** y como usuario quien importó.
+- `trimestre` y `observaciones` quedan NULL (este export no los trae).
+- Codificación **UTF-8** (con o sin BOM, como el archivo real) o **ANSI/ISO-8859-1**; saltos de línea Windows o Unix.
+- Si la primera línea es una cabecera de columnas, se detecta y se omite.
+
+### Formato antiguo — 13 columnas (se acepta como alternativa)
 
 ```
 id_avance; id_indicador; renipress; establecimiento; anio; trimestre; mes;
@@ -69,21 +102,18 @@ valor_numerador; valor_denominador; porcentaje_avance; observaciones;
 fecha_registro; usuario
 ```
 
-Ejemplo real:
+Ejemplo:
 
 ```
 1;3;319;BAJO MARANKIARI;2026;NULL;01;1.00;1.00;100.00;NULL;2026-11-03 10:57:51.017;NULL
 ```
 
-Reglas que aplica el importador:
-
-- El `id_avance` del archivo **se ignora** (la web asigna el suyo: evita colisiones de clave).
-- `id_indicador` debe estar **registrado en "Gestion de Indicadores"**; si no, la línea se omite con error informado.
+- El `id_avance` del archivo **se ignora** (la web asigna el suyo).
+- El `id_indicador` numérico debe existir en *Gestión de Indicadores*.
 - Texto `NULL` o campo vacío → se guarda como NULL.
-- `fecha_registro`: se acepta con milisegundos (`2026-11-03 10:57:51.017`); se guarda sin milisegundos.
+- `fecha_registro` se acepta con milisegundos; se guarda sin milisegundos.
 - Si `porcentaje_avance` viene `NULL`, se recalcula como `numerador / denominador * 100`.
-- Codificación **UTF-8** (con o sin BOM) o **ANSI/ISO-8859-1**; saltos de línea Windows o Unix.
-- Si la primera línea es una cabecera de columnas, se detecta y se omite.
+- Ambos formatos pueden mezclarse en el mismo archivo: la detección es **línea por línea**.
 
 ## Modos de importación
 
@@ -118,16 +148,19 @@ Reglas que aplica el importador:
 
 **¿Me sale "500 Internal Server Error" al entrar a convenio_fed.php?**
 
-Ese fue un defecto de la versión v3, ya corregido en la v3.1: con la configuración `PDO::ATTR_EMULATE_PREPARES => false` de `config.php`, MySQL/MariaDB rechaza los placeholders `?` en sentencias `SHOW` (error 1064), y la página fallaba nada más entrar. **Solución: suba el `convenio_fed.php` de esta versión (v3.1).** Si después de eso volviera a ver un error, la página ahora mostrará un **panel rojo con el motivo técnico exacto** (en vez del 500 en blanco); además puede subir `diagnostico_fed.php` a la raíz y abrirlo como Administrador para un reporte completo del servidor.
+Ese fue un defecto de la versión v3, ya corregido en la v3.1: con la configuración `PDO::ATTR_EMULATE_PREPARES => false` de `config.php`, MySQL/MariaDB rechaza los placeholders `?` en sentencias `SHOW` (error 1064), y la página fallaba nada más entrar. **Solución: suba el `convenio_fed.php` de esta versión (v3.2).** Si después de eso volviera a ver un error, la página ahora mostrará un **panel rojo con el motivo técnico exacto** (en vez del 500 en blanco); además puede subir `diagnostico_fed.php` a la raíz y abrirlo como Administrador para un reporte completo del servidor.
 
 **¿Puedo importar varios indicadores en el mismo archivo?**
-Sí. El archivo puede mezclar `id_indicador` distintos; cada línea se procesa de forma independiente. El archivo de ejemplo trae solo el indicador 3.
+Sí. El archivo puede mezclar códigos (`FED-04`, `FED-05`, ...) o ids distintos; cada línea se procesa de forma independiente. El archivo real de ejemplo trae solo `FED-04`.
+
+**Mi archivo trae un código (ej. FED-99) que no está registrado.**
+El mensaje de importación lo indica línea por línea con el código exacto (ej. *"el codigo de indicador FED-99 no esta registrado en la Gestion de Indicadores"*). Registre el indicador en *Gestion de Indicadores* con **exactamente ese código** y vuelva a importar; mientras tanto esa línea queda reportada como error y el resto del archivo sí se importa.
 
 **Importé y no aparece nada en la vista.**
-Verifique que el **año del filtro** coincida con el año de los datos (por defecto se muestra el más reciente con datos) y que los `id_indicador` del archivo existan en "Gestion de Indicadores".
+Verifique que el **año del filtro** coincida con el año de los datos (por defecto se muestra el más reciente con datos) y que los códigos del archivo existan en *Gestion de Indicadores*.
 
 **¿Se duplican los registros si importo dos veces el mismo archivo?**
 No. El modo "Actualizar" reconoce la misma clave (indicador + renipress + año + mes) y actualiza en lugar de duplicar.
 
-**El archivo trae un indicador con id 99 que no existe.**
-Regístrelo primero en "Gestion de Indicadores" (con su código FED-XX) y vuelva a importar; esa línea quedó reportada como error en el mensaje de importación.
+**¿Y si mi archivo usa el formato antiguo de 13 columnas con id numérico?**
+Tampoco hay problema: la detección es automática y por línea. Incluso puede mezclar ambos formatos en el mismo archivo.
