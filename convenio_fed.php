@@ -12,10 +12,67 @@
  *     (con opcion "todos los meses") e indicador. Orden de columnas del detalle:
  *     renipress, establecimiento, anio, mes, valor_numerador, valor_denominador,
  *     porcentaje_avance, observaciones (+ Indicador y Fecha/Hora de importacion).
+ *
+ * v3.1 - Correccion del ERROR 500 (2026-11-04):
+ *  - fedTablaExiste() y fedTieneColumna() ya no usan prepare("SHOW ... LIKE ?").
+ *    Con PDO::ATTR_EMULATE_PREPARES => false (config.php), el protocolo de
+ *    sentencias preparadas de MySQL/MariaDB rechaza el placeholder '?' en las
+ *    sentencias SHOW (error 1064) y la pagina caia con "500 Internal Server
+ *    Error" nada mas entrar. Ahora se consulta information_schema (admite
+ *    placeholders) con respaldo SHOW + literal seguro.
+ *  - Red de seguridad global: cualquier error no previsto muestra un panel
+ *    de diagnostico legible en lugar de una pagina 500 en blanco.
+ *  - Auto-reparacion del esquema: si la tabla de avances/indicadores quedo sin
+ *    PRIMARY KEY o AUTO_INCREMENT (los ALTER del volcado antiguo usaban el
+ *    nombre singular CONVENIO_FED_AVANCE), se repara automaticamente; si el
+ *    hosting no permite ALTER, los INSERT asignan el id manualmente (MAX + 1).
  */
 require_once 'includes/auth.php';
 verificarAutenticacion();
 require_once 'includes/functions.php';
+
+/* ============================================================================
+ * 0. RED DE SEGURIDAD CONTRA ERRORES FATALES
+ * --------------------------------------------------------------------------
+ * Si algo falla de forma inesperada (por ejemplo, una consulta incompatible
+ * con la version de MySQL/MariaDB del hosting), se muestra un panel legible
+ * con el motivo en lugar del en blanco "500 Internal Server Error".
+ * ========================================================================== */
+if (!function_exists('fedPanelError')) {
+    function fedPanelError($titulo, $detallesHtml) {
+        while (ob_get_level() > 0) { ob_end_clean(); }
+        if (!headers_sent()) { http_response_code(500); }
+        $tituloEsc = htmlspecialchars((string)$titulo, ENT_QUOTES, 'UTF-8');
+        echo '<!DOCTYPE html><html lang="es"><head><meta charset="utf-8">'
+           . '<meta name="viewport" content="width=device-width, initial-scale=1">'
+           . '<title>Convenio FED - ' . $tituloEsc . '</title></head>'
+           . '<body style="font-family:Segoe UI,Arial,sans-serif;max-width:860px;margin:40px auto;padding:0 16px;color:#212529">'
+           . '<div style="border:2px solid #dc3545;border-radius:10px;padding:22px 26px;background:#fff8f8">'
+           . '<h1 style="font-size:20px;margin:0 0 12px;color:#dc3545">Convenio FED - ' . $tituloEsc . '</h1>'
+           . $detallesHtml
+           . '<p style="margin-top:18px;font-size:13px;color:#6c757d">Consejo: suba el archivo <code>diagnostico_fed.php</code> a la raiz del sitio y abralo para un diagnostico completo del servidor.</p>'
+           . '<p style="font-size:13px"><a href="dashboard.php">&larr; Volver al panel</a></p>'
+           . '</div></body></html>';
+        exit;
+    }
+}
+set_exception_handler(function ($e) {
+    $msg = htmlspecialchars($e->getMessage(), ENT_QUOTES, 'UTF-8');
+    fedPanelError('Error inesperado',
+        '<p>La pagina no pudo completarse por un error no previsto. Detalle tecnico:</p>'
+      . '<p style="font-family:Consolas,monospace;background:#f8f9fa;border:1px solid #dee2e6;border-radius:6px;padding:10px;word-break:break-word">' . $msg . '</p>');
+});
+register_shutdown_function(function () {
+    $e = error_get_last();
+    if ($e !== null && in_array($e['type'], [E_ERROR, E_PARSE, E_CORE_ERROR, E_COMPILE_ERROR], true)) {
+        $msg = htmlspecialchars($e['message'], ENT_QUOTES, 'UTF-8');
+        fedPanelError('Error fatal del servidor',
+            '<p>El script se detuvo de forma abrupta. Detalle tecnico:</p>'
+          . '<p style="font-family:Consolas,monospace;background:#f8f9fa;border:1px solid #dee2e6;border-radius:6px;padding:10px;word-break:break-word">'
+          . $msg . ' (linea ' . (int)$e['line'] . ')</p>');
+    }
+});
+ob_start(); // captura la salida: permite mostrar el panel de error limpio si algo falla
 
 $pdo = getDBConnection();
 $esAdmin = esAdmin();
@@ -28,21 +85,96 @@ $tipoMensaje = '';
  * ========================================================================== */
 
 /**
- * Verifica si una tabla existe en la base de datos actual
+ * Verifica si una tabla existe en la base de datos actual.
+ *
+ * IMPORTANTE (causa del error 500 corregido en v3.1): con la configuracion
+ * PDO::ATTR_EMULATE_PREPARES => false de config.php, las sentencias SHOW se
+ * preparan de forma NATIVA en MySQL/MariaDB y ese protocolo NO admite el
+ * placeholder '?' dentro de SHOW (error 1064 "near '?'"). Por eso aqui se
+ * consulta information_schema (que SI admite placeholders) y, como plan B,
+ * se usa SHOW con el nombre como literal seguro (lista blanca interna,
+ * nunca entrada del usuario), igual que hacia la version anterior.
  */
 function fedTablaExiste($pdo, $nombre) {
-    $st = $pdo->prepare("SHOW TABLES LIKE ?");
-    $st->execute([$nombre]);
-    return (bool)$st->fetchColumn();
+    try {
+        $st = $pdo->prepare("SELECT COUNT(*) FROM information_schema.TABLES
+                             WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ?");
+        $st->execute([$nombre]);
+        return (bool)$st->fetchColumn();
+    } catch (Throwable $e) {
+        try { // Plan B: SHOW con literal (el nombre proviene del codigo, es seguro)
+            $st = $pdo->query("SHOW TABLES LIKE " . $pdo->quote($nombre));
+            return (bool)$st->fetchColumn();
+        } catch (Throwable $e2) {
+            return false;
+        }
+    }
 }
 
 /**
- * Verifica si una columna existe en una tabla
+ * Verifica si una columna existe en una tabla (mismo criterio que fedTablaExiste)
  */
 function fedTieneColumna($pdo, $tabla, $columna) {
-    $st = $pdo->prepare("SHOW COLUMNS FROM `{$tabla}` LIKE ?");
-    $st->execute([$columna]);
-    return (bool)$st->fetchColumn();
+    try {
+        $st = $pdo->prepare("SELECT COUNT(*) FROM information_schema.COLUMNS
+                             WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? AND COLUMN_NAME = ?");
+        $st->execute([$tabla, $columna]);
+        return (bool)$st->fetchColumn();
+    } catch (Throwable $e) {
+        try { // Plan B: SHOW COLUMNS con literal (tabla de lista blanca interna)
+            $tablaSeg = str_replace('`', '', (string)$tabla);
+            $st = $pdo->query("SHOW COLUMNS FROM `{$tablaSeg}` LIKE " . $pdo->quote($columna));
+            return (bool)$st->fetchColumn();
+        } catch (Throwable $e2) {
+            return false;
+        }
+    }
+}
+
+/**
+ * Verifica si una columna es AUTO_INCREMENT (via information_schema, compatible
+ * con prepare nativo).
+ */
+function fedEsAutoIncrement($pdo, $tabla, $columna) {
+    try {
+        $st = $pdo->prepare("SELECT COUNT(*) FROM information_schema.COLUMNS
+                             WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ?
+                               AND COLUMN_NAME = ? AND EXTRA LIKE '%auto_increment%'");
+        $st->execute([$tabla, $columna]);
+        return (bool)$st->fetchColumn();
+    } catch (Throwable $e) {
+        return false;
+    }
+}
+
+/**
+ * Garantiza PRIMARY KEY + AUTO_INCREMENT en la columna indicada de una tabla.
+ *
+ * MOTIVO (bug real detectado): en Database/if0_42181393_his.sql los ALTER de
+ * clave primaria y AUTO_INCREMENT de la tabla de avances apuntan al nombre en
+ * SINGULAR (CONVENIO_FED_AVANCE), que no existe, por lo que al importar ese
+ * volcado la tabla real quedo sin PK ni AUTO_INCREMENT y los INSERT fallaban
+ * con "Field 'id_avance' doesn't have a default value". Esta funcion repara
+ * el esquema de forma automatica la primera vez que se necesita. Si el hosting
+ * no permite ALTER, los INSERT usan el modo de id manual (MAX + 1).
+ */
+function fedAsegurarAutoIncrement($pdo, $tabla, $columna) {
+    if (fedEsAutoIncrement($pdo, $tabla, $columna)) {
+        return true;
+    }
+    try {
+        $st = $pdo->prepare("SELECT COUNT(*) FROM information_schema.TABLE_CONSTRAINTS
+                             WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ?
+                               AND CONSTRAINT_TYPE = 'PRIMARY KEY'");
+        $st->execute([$tabla]);
+        if (!$st->fetchColumn()) {
+            $pdo->exec("ALTER TABLE `{$tabla}` ADD PRIMARY KEY (`{$columna}`)");
+        }
+        $pdo->exec("ALTER TABLE `{$tabla}` MODIFY `{$columna}` int(11) NOT NULL AUTO_INCREMENT");
+        return fedEsAutoIncrement($pdo, $tabla, $columna);
+    } catch (Throwable $e) {
+        return false; // sin permisos ALTER: los INSERT usaran id manual
+    }
 }
 
 $tablaIndicadores = fedTablaExiste($pdo, 'CONVENIO_FED_INDICADORES') ? 'CONVENIO_FED_INDICADORES' : null;
@@ -220,12 +352,26 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                                                   $peso, $periodo, $respons ?: null, $orden, $estado, $idInd]);
                     $mensaje = "Indicador <strong>" . clean($codigo) . "</strong> modificado correctamente.";
                 } else {
-                    $sql = "INSERT INTO `{$tablaIndicadores}`
-                            (codigo, nombre, descripcion, unidad_medida, meta_anual, peso_ponderado,
-                             periodo, responsable, orden, estado)
-                            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
-                    $pdo->prepare($sql)->execute([$codigo, $nombre, $descr ?: null, $unidad ?: null, $meta,
-                                                  $peso, $periodo, $respons ?: null, $orden, $estado]);
+                    // Reparacion preventiva: si la tabla quedo sin AUTO_INCREMENT
+                    // (volcados antiguos), se intenta activar; si no se puede,
+                    // se inserta con id manual (MAX + 1).
+                    $autoIncInd = fedAsegurarAutoIncrement($pdo, $tablaIndicadores, 'id_indicador');
+                    if ($autoIncInd) {
+                        $sql = "INSERT INTO `{$tablaIndicadores}`
+                                (codigo, nombre, descripcion, unidad_medida, meta_anual, peso_ponderado,
+                                 periodo, responsable, orden, estado)
+                                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+                        $pdo->prepare($sql)->execute([$codigo, $nombre, $descr ?: null, $unidad ?: null, $meta,
+                                                      $peso, $periodo, $respons ?: null, $orden, $estado]);
+                    } else {
+                        $nuevoId = (int)$pdo->query("SELECT COALESCE(MAX(id_indicador), 0) + 1 FROM `{$tablaIndicadores}`")->fetchColumn();
+                        $sql = "INSERT INTO `{$tablaIndicadores}`
+                                (id_indicador, codigo, nombre, descripcion, unidad_medida, meta_anual, peso_ponderado,
+                                 periodo, responsable, orden, estado)
+                                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+                        $pdo->prepare($sql)->execute([$nuevoId, $codigo, $nombre, $descr ?: null, $unidad ?: null, $meta,
+                                                      $peso, $periodo, $respons ?: null, $orden, $estado]);
+                    }
                     $mensaje = "Indicador <strong>" . clean($codigo) . "</strong> agregado correctamente.";
                 }
                 $tipoMensaje = 'success';
@@ -323,6 +469,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 }
 
                 // --- Escritura en BD (transaccion) ---
+                // Reparacion preventiva: si la tabla de avances quedo sin PRIMARY
+                // KEY / AUTO_INCREMENT (volcado antiguo con nombre singular), se
+                // repara sola; si el hosting no permite ALTER, se inserta con id
+                // manual (MAX + 1).
+                $autoIncAvances = fedAsegurarAutoIncrement($pdo, $tablaAvances, 'id_avance');
                 $horaImportacion = date('Y-m-d H:i:s');
                 $insertados = 0;
                 $actualizados = 0;
@@ -351,22 +502,24 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                                             WHERE id_indicador = ? AND renipress = ? AND anio = ?
                                               AND ((mes IS NULL AND ? IS NULL) OR mes = ?)");
                     if ($tieneFechaImportacion) {
-                        $stIns = $pdo->prepare("INSERT INTO `{$tablaAvances}`
-                            (id_indicador, renipress, establecimiento, anio, trimestre, mes,
+                        $sqlIns = "INSERT INTO `{$tablaAvances}`
+                            (" . (!$autoIncAvances ? "id_avance, " : "") . "id_indicador, renipress, establecimiento, anio, trimestre, mes,
                              valor_numerador, valor_denominador, porcentaje_avance, observaciones,
                              fecha_registro, fecha_importacion, usuario)
-                            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
+                            VALUES (" . (!$autoIncAvances ? "?, " : "") . "?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+                        $stIns = $pdo->prepare($sqlIns);
                         $stUpd = $pdo->prepare("UPDATE `{$tablaAvances}`
                             SET establecimiento = ?, valor_numerador = ?, valor_denominador = ?,
                                 porcentaje_avance = ?, observaciones = ?, trimestre = ?,
                                 fecha_registro = ?, fecha_importacion = ?, usuario = ?
                             WHERE id_avance = ?");
                     } else {
-                        $stIns = $pdo->prepare("INSERT INTO `{$tablaAvances}`
-                            (id_indicador, renipress, establecimiento, anio, trimestre, mes,
+                        $sqlIns = "INSERT INTO `{$tablaAvances}`
+                            (" . (!$autoIncAvances ? "id_avance, " : "") . "id_indicador, renipress, establecimiento, anio, trimestre, mes,
                              valor_numerador, valor_denominador, porcentaje_avance, observaciones,
                              fecha_registro, usuario)
-                            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
+                            VALUES (" . (!$autoIncAvances ? "?, " : "") . "?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+                        $stIns = $pdo->prepare($sqlIns);
                         $stUpd = $pdo->prepare("UPDATE `{$tablaAvances}`
                             SET establecimiento = ?, valor_numerador = ?, valor_denominador = ?,
                                 porcentaje_avance = ?, observaciones = ?, trimestre = ?,
@@ -403,17 +556,25 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                             $actualizados++;
                             if ($esRepetidoEnArchivo) $duplicadosArchivo++;
                         } else {
-                            // No existe -> INSERTAR (el id_avance lo genera MySQL)
-                            if ($tieneFechaImportacion) {
-                                $stIns->execute([$r['id_indicador'], $r['renipress'], $r['establecimiento'], $r['anio'],
-                                                 $r['trimestre'], $r['mes'], $r['valor_numerador'], $r['valor_denominador'],
-                                                 $r['porcentaje_avance'], $r['observaciones'], $fechaReg, $horaImportacion, $usuarioFinal]);
-                            } else {
-                                $stIns->execute([$r['id_indicador'], $r['renipress'], $r['establecimiento'], $r['anio'],
-                                                 $r['trimestre'], $r['mes'], $r['valor_numerador'], $r['valor_denominador'],
-                                                 $r['porcentaje_avance'], $r['observaciones'], $fechaReg, $usuarioFinal]);
+                            // No existe -> INSERTAR (el id_avance lo genera MySQL
+                            // si la tabla tiene AUTO_INCREMENT; si no, se asigna
+                            // manualmente como MAX(id_avance) + 1)
+                            $idManual = null;
+                            if (!$autoIncAvances) {
+                                $idManual = (int)$pdo->query("SELECT COALESCE(MAX(id_avance), 0) + 1 FROM `{$tablaAvances}`")->fetchColumn();
                             }
-                            $idsEnArchivo[$clave] = (int)$pdo->lastInsertId();
+                            if ($tieneFechaImportacion) {
+                                $paramsIns = [$r['id_indicador'], $r['renipress'], $r['establecimiento'], $r['anio'],
+                                              $r['trimestre'], $r['mes'], $r['valor_numerador'], $r['valor_denominador'],
+                                              $r['porcentaje_avance'], $r['observaciones'], $fechaReg, $horaImportacion, $usuarioFinal];
+                            } else {
+                                $paramsIns = [$r['id_indicador'], $r['renipress'], $r['establecimiento'], $r['anio'],
+                                              $r['trimestre'], $r['mes'], $r['valor_numerador'], $r['valor_denominador'],
+                                              $r['porcentaje_avance'], $r['observaciones'], $fechaReg, $usuarioFinal];
+                            }
+                            if ($idManual !== null) { array_unshift($paramsIns, $idManual); }
+                            $stIns->execute($paramsIns);
+                            $idsEnArchivo[$clave] = ($idManual !== null) ? $idManual : (int)$pdo->lastInsertId();
                             $insertados++;
                         }
                     }
