@@ -153,7 +153,7 @@ $esAdmin = esAdmin();
                 <?php if ($esAdmin): ?>
                 <!-- Administracion (dropdown) - solo admin -->
                 <li class="nav-item dropdown">
-                    <a class="nav-link dropdown-toggle <?= (in_array($currentpage, ['import', 'usuarios', 'log', 'esni_config']) || ($currentpage === 'convenio_fed' && in_array(($_GET['tab'] ?? ''), ['gestion', 'importar'], true))) ? 'active' : '' ?>"
+                    <a class="nav-link dropdown-toggle <?= in_array($currentpage, ['import', 'usuarios', 'log', 'esni_config', 'fed_gestion_indicadores', 'fed_importar_avances']) ? 'active' : '' ?>"
                        href="#" role="button" data-bs-toggle="dropdown" aria-expanded="false">
                         <i class="fas fa-cog me-1"></i> Admin
                     </a>
@@ -165,13 +165,13 @@ $esAdmin = esAdmin();
                             </a>
                         </li>
                         <li>
-                            <a class="dropdown-item <?= $currentpage === 'convenio_fed' && ($_GET['tab'] ?? '') === 'importar' ? 'active' : '' ?>" href="convenio_fed.php?tab=importar">
+                            <a class="dropdown-item <?= $currentpage === 'fed_importar_avances' ? 'active' : '' ?>" href="fed_importar_avances.php">
                                 <i class="fas fa-medal me-2 text-warning"></i>FED: Importar Avances
                                 <small class="d-block text-muted">Carga del archivo Resultados.txt</small>
                             </a>
                         </li>
                         <li>
-                            <a class="dropdown-item <?= $currentpage === 'convenio_fed' && ($_GET['tab'] ?? '') === 'gestion' ? 'active' : '' ?>" href="convenio_fed.php?tab=gestion">
+                            <a class="dropdown-item <?= $currentpage === 'fed_gestion_indicadores' ? 'active' : '' ?>" href="fed_gestion_indicadores.php">
                                 <i class="fas fa-tasks me-2 text-warning"></i>FED: Gestion de Indicadores
                                 <small class="d-block text-muted">Agregar, modificar, desactivar</small>
                             </a>
