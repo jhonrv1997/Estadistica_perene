@@ -4,14 +4,29 @@
  * Pagina 02: Convenio FED - Fondo de Estimulo al Desempeno
  * Consulta y visualizacion de avances (todos los roles).
  *
- * v4 - Separacion del modulo en paginas independientes (2026-11-04):
- *  Esta pagina queda como vista de consulta: filtros, resumen rapido, avance
- *  global ponderado, detalle por establecimiento y mes y resumen por indicador.
- *  Las funciones de administracion se trasladaron a paginas propias:
- *    - fed_gestion_indicadores.php -> FED: Gestion de Indicadores (solo admin)
- *    - fed_importar_avances.php    -> FED: Importar Avances (solo admin)
- *  Compatibilidad: las URL antiguas convenio_fed.php?tab=gestion y
- *  convenio_fed.php?tab=importar redirigen automaticamente a las paginas nuevas.
+ * v5 - Rediseño UI/UX en dos paneles (2026-11-05):
+ *  Se conserva el encabezado page-header-section y el aviso
+ *  fed-info-import de "Datos actualizados al". El resto de la pagina se
+ *  reorganiza en dos paneles enlazados entre si:
+ *
+ *    PANEL 01 - Presentacion:
+ *      Tarjetas de los indicadores activos con: codigo, nombre,
+ *      descripcion, meta_anual % y promedio total de porcentaje_avance
+ *      (acumulado de todos los periodos). Cada tarjeta incluye un boton
+ *      "Ver detalle" que enlaza con el Panel 02 (?ind=ID#panel02)
+ *      conservando los filtros elegidos.
+ *
+ *    PANEL 02 - Detalle del indicador:
+ *      Cabecera con codigo, nombre y descripcion del indicador
+ *      seleccionado junto a: meta_anual %, promedio total de
+ *      porcentaje_avance, suma total de valor_numerador y suma total de
+ *      valor_denominador (segun filtros). Incluye filtros de anio, mes
+ *      (por defecto "Todos los meses") y establecimiento, la tabla
+ *      "Detalle de Avances por Establecimiento" (renipress,
+ *      establecimiento, valor_numerador, valor_denominador,
+ *      porcentaje_avance; agrupada por establecimiento con numerador y
+ *      denominador sumados) y el Ranking de Establecimientos con
+ *      grafico de barras por porcentaje_avance.
  *
  * Historial de versiones del modulo:
  *  v3   - Gestion de indicadores + importacion Resultados.txt + visualizacion
@@ -27,6 +42,10 @@
  *         establecimiento y suma numerador y denominador de todos sus meses.
  *         Se oculta Fecha Importacion y se retiran el resumen por
  *         establecimiento y la vista de tarjetas.
+ *  v5   - Rediseño en dos paneles enlazados (tarjetas -> detalle). La tabla de
+ *         detalle se agrupa SIEMPRE por establecimiento directamente en SQL
+ *         (GROUP BY renipress, establecimiento) con el porcentaje recalculado
+ *         sobre los totales sumados. Se agrega el ranking con barras.
  */
 require_once 'includes/auth.php';
 verificarAutenticacion();
@@ -49,8 +68,11 @@ if ($tabLegacy === 'importar') {
 }
 
 /* ============================================================================
- * 1. FILTROS DE LA VISTA (GET)
- *    anio | mes ('' = todos los meses) | est (renipress) | ind (id_indicador)
+ * 1. PARAMETROS DE LA VISTA (GET)
+ *    ind  (id_indicador del Panel 02; vacio = primer indicador activo)
+ *    anio (obligatorio; por defecto el mas reciente con datos)
+ *    mes  ('' = Todos los meses, valor por defecto)
+ *    est  (renipress; '' = Todos los establecimientos)
  * ========================================================================== */
 
 $fAnio = trim($_GET['anio'] ?? '');
@@ -58,9 +80,16 @@ $fMes  = trim($_GET['mes'] ?? '');
 $fEst  = trim($_GET['est'] ?? '');
 $fInd  = trim($_GET['ind'] ?? '');
 
+if ($fInd !== '' && !ctype_digit($fInd)) {
+    $fInd = '';
+}
+if ($fMes !== '' && !preg_match('/^(0[1-9]|1[0-2])$/', $fMes)) {
+    $fMes = '';
+}
+
 $aniosDisp = [];
 $establecimientosDisp = [];
-$indicadoresFiltro = [];
+$indicadoresFiltro = [];   // indicadores activos (selector del Panel 02)
 
 if ($tablaAvances !== null) {
     $aniosDisp = $pdo->query("SELECT DISTINCT anio FROM `{$tablaAvances}` WHERE anio IS NOT NULL ORDER BY anio DESC")
@@ -71,7 +100,7 @@ if (empty($aniosDisp)) {
 }
 if ($fAnio === '' || !in_array($fAnio, $aniosDisp, true)) {
     // Por defecto: el anio mas reciente con datos (o el anio actual)
-    $fAnio = in_array((string)date('Y'), $aniosDisp, true) ? (string)date('Y') : (string)$aniosDisp[0];
+    $fAnio = in_array((string)date('Y'), array_map('strval', $aniosDisp), true) ? (string)date('Y') : (string)$aniosDisp[0];
 }
 
 if ($tablaAvances !== null) {
@@ -80,82 +109,44 @@ if ($tablaAvances !== null) {
                                   ->fetchAll();
 }
 if ($tablaIndicadores !== null) {
-    $indicadoresFiltro = $pdo->query("SELECT id_indicador, codigo, nombre, estado FROM `{$tablaIndicadores}`
-                                      ORDER BY orden ASC, codigo ASC")->fetchAll();
-}
-// Validar id de indicador recibido
-if ($fInd !== '' && !ctype_digit($fInd)) {
-    $fInd = '';
+    $indicadoresFiltro = $pdo->query("SELECT id_indicador, codigo, nombre FROM `{$tablaIndicadores}`
+                                      WHERE estado = 1 ORDER BY orden ASC, codigo ASC")->fetchAll();
 }
 
 /* ============================================================================
- * 2. CONSULTAS DE DATOS PARA LA VISUALIZACION
+ * 2. PANEL 01: AGREGADO GLOBAL POR INDICADOR (sin filtros; todos los periodos)
+ *    Cada tarjeta muestra: codigo, nombre, descripcion, meta_anual % y
+ *    promedio total de porcentaje_avance.
  * ========================================================================== */
 
-$avances = [];            // detalle (filas de la tabla principal)
-$resumenIndicadores = []; // agregado por indicador
-$resumenEstablecimientos = []; // agregado por establecimiento (calculado en PHP)
-$ultimaActualizacion = null;
+$panel01 = [];
 $avanceGlobalPonderado = null;
 $pesoTotal = 0.0;
 
 if ($sistemaOK) {
-    // --- 2.1 Ultima actualizacion de datos (fecha/hora de importacion) ---
-    $colUltima = $tieneFechaImportacion
-        ? 'MAX(COALESCE(fecha_importacion, fecha_registro))'
-        : 'MAX(fecha_registro)';
-    $ultimaActualizacion = $pdo->query("SELECT {$colUltima} FROM `{$tablaAvances}`")->fetchColumn();
+    $sql01 = "SELECT i.id_indicador, i.codigo, i.nombre, i.descripcion, i.unidad_medida,
+                     i.meta_anual, i.peso_ponderado, i.responsable,
+                     COUNT(a.id_avance)          AS n_reg,
+                     AVG(a.porcentaje_avance)    AS pct_prom,
+                     SUM(a.valor_numerador)      AS sum_num,
+                     SUM(a.valor_denominador)    AS sum_den,
+                     COUNT(DISTINCT a.renipress) AS n_est
+              FROM `{$tablaIndicadores}` i
+              LEFT JOIN `{$tablaAvances}` a ON a.id_indicador = i.id_indicador
+              WHERE i.estado = 1
+              GROUP BY i.id_indicador, i.codigo, i.nombre, i.descripcion, i.unidad_medida,
+                       i.meta_anual, i.peso_ponderado, i.responsable
+              ORDER BY i.orden ASC, i.codigo ASC";
+    $panel01 = $pdo->query($sql01)->fetchAll();
 
-    // --- 2.2 Detalle de avances con filtros ---
-    $colFI = $tieneFechaImportacion ? ', a.fecha_importacion' : ', NULL AS fecha_importacion';
-    $sql = "SELECT a.id_avance, a.id_indicador, a.renipress, a.establecimiento, a.anio, a.mes,
-                   a.valor_numerador, a.valor_denominador, a.porcentaje_avance, a.observaciones,
-                   a.fecha_registro {$colFI},
-                   i.codigo, i.nombre AS indicador_nombre
-            FROM `{$tablaAvances}` a
-            LEFT JOIN `{$tablaIndicadores}` i ON i.id_indicador = a.id_indicador
-            WHERE 1=1";
-    $params = [];
-    if ($fAnio !== '') { $sql .= " AND a.anio = ?";            $params[] = $fAnio; }
-    if ($fMes  !== '') { $sql .= " AND a.mes = ?";             $params[] = $fMes; }
-    if ($fEst  !== '') { $sql .= " AND a.renipress = ?";       $params[] = $fEst; }
-    if ($fInd  !== '') { $sql .= " AND a.id_indicador = ?";    $params[] = (int)$fInd; }
-    $sql .= " ORDER BY a.establecimiento ASC, i.codigo ASC, a.mes ASC";
-    $st = $pdo->prepare($sql);
-    $st->execute($params);
-    $avances = $st->fetchAll();
-
-    // --- 2.3 Resumen agregado por indicador (mismos filtros) ---
-    $conInd = [];
-    $paramsInd = [];
-    if ($fAnio !== '') { $conInd[] = "a.anio = ?";         $paramsInd[] = $fAnio; }
-    if ($fMes  !== '') { $conInd[] = "a.mes = ?";          $paramsInd[] = $fMes; }
-    if ($fEst  !== '') { $conInd[] = "a.renipress = ?";    $paramsInd[] = $fEst; }
-    if ($fInd  !== '') { $conInd[] = "a.id_indicador = ?"; $paramsInd[] = (int)$fInd; }
-
-    $sqlInd = "SELECT i.id_indicador, i.codigo, i.nombre, i.descripcion, i.unidad_medida,
-                      i.meta_anual, i.peso_ponderado, i.periodo, i.responsable, i.estado, i.orden,
-                      COUNT(a.id_avance) AS n_reg,
-                      SUM(a.valor_numerador) AS sum_num,
-                      SUM(a.valor_denominador) AS sum_den,
-                      AVG(a.porcentaje_avance) AS pct_prom
-               FROM `{$tablaIndicadores}` i
-               LEFT JOIN `{$tablaAvances}` a ON a.id_indicador = i.id_indicador"
-               . (!empty($conInd) ? ' AND ' . implode(' AND ', $conInd) : '') . "
-               WHERE i.estado = 1" . ($fInd !== '' ? " AND i.id_indicador = ?" : "") . "
-               GROUP BY i.id_indicador, i.codigo, i.nombre, i.descripcion, i.unidad_medida,
-                        i.meta_anual, i.peso_ponderado, i.periodo, i.responsable, i.estado, i.orden
-               ORDER BY i.orden ASC, i.codigo ASC";
-    $stInd = $pdo->prepare($sqlInd);
-    $stInd->execute($fInd !== '' ? array_merge($paramsInd, [(int)$fInd]) : $paramsInd);
-    $resumenIndicadores = $stInd->fetchAll();
-
-    // Avance global ponderado del FED (según filtros aplicados)
-    foreach ($resumenIndicadores as $ri) {
-        $pctCalc = ((float)$ri['sum_den'] > 0) ? round(((float)$ri['sum_num'] / (float)$ri['sum_den']) * 100, 2) : null;
+    // Avance global ponderado del convenio (con los pesos de cada indicador)
+    foreach ($panel01 as $ri) {
+        $sumNum = $ri['sum_num'] !== null ? (float)$ri['sum_num'] : null;
+        $sumDen = $ri['sum_den'] !== null ? (float)$ri['sum_den'] : null;
+        $pctCalc = ($sumDen !== null && $sumDen > 0) ? round(($sumNum / $sumDen) * 100, 2) : null;
         $pct = $pctCalc !== null ? $pctCalc : ($ri['pct_prom'] !== null ? (float)$ri['pct_prom'] : null);
         $peso = $ri['peso_ponderado'] !== null ? (float)$ri['peso_ponderado'] : 0;
-        if ($pct !== null && $ri['n_reg'] > 0) {
+        if ($pct !== null && (int)$ri['n_reg'] > 0) {
             $avanceGlobalPonderado = ($avanceGlobalPonderado ?? 0) + ($pct * $peso / 100);
             $pesoTotal += $peso;
         }
@@ -165,138 +156,149 @@ if ($sistemaOK) {
     } else {
         $avanceGlobalPonderado = null;
     }
-
-    // --- 2.4 Resumen agregado por establecimiento (PHP, a partir del detalle) ---
-    $tmpEst = [];
-    foreach ($avances as $a) {
-        $key = $a['renipress'];
-        if (!isset($tmpEst[$key])) {
-            $tmpEst[$key] = ['renipress' => $a['renipress'], 'establecimiento' => $a['establecimiento'],
-                             'n' => 0, 'suma' => 0.0];
-        }
-        $tmpEst[$key]['n']++;
-        $tmpEst[$key]['suma'] += (float)$a['porcentaje_avance'];
-    }
-    foreach ($tmpEst as $t) {
-        $t['pct_prom'] = $t['n'] > 0 ? round($t['suma'] / $t['n'], 2) : 0;
-        $resumenEstablecimientos[] = $t;
-    }
-    // Peores primero: para el seguimiento diario lo urgente va arriba
-    usort($resumenEstablecimientos, function ($x, $y) { return $x['pct_prom'] <=> $y['pct_prom']; });
 }
 
 /* ============================================================================
- * 2.5 VISTA DEL DETALLE
- *     Con Mes = todos y Establecimiento = todos, cada establecimiento aparece
- *     una sola vez: se suman numerador y denominador de todos sus meses
- *     (y de los indicadores que entren en el filtro). El porcentaje se
- *     recalcula como numerador / denominador.
- *     Si se elige un mes o un establecimiento, se mantiene el detalle por fila.
+ * 3. PANEL 02: INDICADOR SELECCIONADO
+ *    Viene de ?ind=ID (enlace de cada tarjeta del Panel 01). Si no llega o es
+ *    invalido, se toma el primer indicador activo para que el panel siempre
+ *    muestre informacion.
  * ========================================================================== */
-$agruparPorEstablecimiento = ($fMes === '' && $fEst === '');
-$avancesVista = $avances;
-if ($agruparPorEstablecimiento && !empty($avances)) {
-    $ordenEst = [];
-    $grupos = [];
-    foreach ($avances as $a) {
-        $key = (string)$a['renipress'];
-        if (!isset($grupos[$key])) {
-            $ordenEst[] = $key;
-            $grupos[$key] = [
-                'renipress'         => $a['renipress'],
-                'establecimiento'   => $a['establecimiento'],
-                'anio'              => $a['anio'],
-                'mes'               => $a['mes'],
-                'valor_numerador'   => 0.0,
-                'valor_denominador' => 0.0,
-                'porcentaje_avance' => null,
-                'observaciones'     => '',
-                'codigo'            => '',
-                'indicador_nombre'  => '',
-                '_inds'             => [],
-                '_obs'              => [],
-                '_pcts'             => [],
-                '_meses'            => [],
-                '_n_obs'            => 0,
-            ];
-        }
-        $grupos[$key]['valor_numerador']   += (float)$a['valor_numerador'];
-        $grupos[$key]['valor_denominador'] += (float)$a['valor_denominador'];
 
-        $mes = trim((string)($a['mes'] ?? ''));
-        if ($mes !== '' && !in_array($mes, $grupos[$key]['_meses'], true)) {
-            $grupos[$key]['_meses'][] = $mes;
-        }
+$idsActivos = array_map(function ($r) { return (int)$r['id_indicador']; }, $indicadoresFiltro);
+$indId = 0;
+if ($fInd !== '' && in_array((int)$fInd, $idsActivos, true)) {
+    $indId = (int)$fInd;
+} elseif (!empty($idsActivos)) {
+    $indId = $idsActivos[0];
+}
 
-        $cod = trim((string)($a['codigo'] ?? ''));
-        $indKey = $cod !== '' ? $cod : ('id:' . (string)($a['id_indicador'] ?? ''));
-        $grupos[$key]['_inds'][$indKey] = (string)($a['indicador_nombre'] ?? '');
-
-        $obs = trim((string)($a['observaciones'] ?? ''));
-        if ($obs !== '' && !in_array($obs, $grupos[$key]['_obs'], true)) {
-            $grupos[$key]['_obs'][] = $obs;
-        }
-        if ($a['porcentaje_avance'] !== null && $a['porcentaje_avance'] !== '') {
-            $grupos[$key]['_pcts'][] = (float)$a['porcentaje_avance'];
-        }
-    }
-
-    $avancesVista = [];
-    foreach ($ordenEst as $key) {
-        $g = $grupos[$key];
-        usort($g['_meses'], function ($x, $y) { return ((int)$x) <=> ((int)$y); });
-
-        $den = (float)$g['valor_denominador'];
-        $num = (float)$g['valor_numerador'];
-        if ($den > 0) {
-            $g['porcentaje_avance'] = round(($num / $den) * 100, 2);
-        } elseif (count($g['_pcts']) > 0) {
-            $g['porcentaje_avance'] = round(array_sum($g['_pcts']) / count($g['_pcts']), 2);
-        }
-
-        if (count($g['_meses']) === 1) {
-            $g['mes'] = $g['_meses'][0];
-        }
-
-        $labels = [];
-        $nombreUnico = '';
-        $codigoUnico = '';
-        foreach ($g['_inds'] as $k => $nom) {
-            if (strpos((string)$k, 'id:') === 0) {
-                $labels[] = $nom !== '' ? $nom : 'N/D';
-                $codigoUnico = '';
-            } else {
-                $labels[] = (string)$k;
-                $codigoUnico = (string)$k;
-            }
-            $nombreUnico = $nom;
-        }
-        $nInd = count($labels);
-        if ($nInd === 1) {
-            $g['codigo'] = $codigoUnico;
-            $g['indicador_nombre'] = $nombreUnico;
-        } elseif ($nInd > 1) {
-            $g['codigo'] = $nInd . ' ind.';
-            $g['indicador_nombre'] = implode(', ', $labels);
-        }
-
-        $g['_n_obs'] = count($g['_obs']);
-        if ($g['_n_obs'] > 0) {
-            $g['observaciones'] = implode(' | ', $g['_obs']);
-        }
-
-        unset($g['_inds'], $g['_obs'], $g['_pcts']);
-        $avancesVista[] = $g;
+$indSel = null;
+foreach ($panel01 as $p) {
+    if ((int)$p['id_indicador'] === $indId) {
+        $indSel = $p;
+        break;
     }
 }
 
-$csrfToken = generateCSRFToken();
+/* ============================================================================
+ * 4. PANEL 02: CABECERA + DETALLE AGRUPADO POR ESTABLECIMIENTO + RANKING
+ *    Aplica los filtros anio (obligatorio), mes ('' = todos) y establecimiento.
+ *    El detalle se agrupa SIEMPRE por establecimiento: numerador y denominador
+ *    se suman (todos los meses cuando mes = todos) y el porcentaje se
+ *    recalcula sobre esos totales.
+ * ========================================================================== */
+
+$statsInd = null;    // totales de la cabecera del Panel 02
+$detalleEst = [];    // filas agrupadas de la tabla de detalle
+$rankingEst = [];    // mismo detalle ordenado de mejor a peor avance
+$pctDetalleGlobal = null;
+$pctCabecera = null;
+
+if ($sistemaOK && $indSel !== null) {
+    $con = ['a.id_indicador = ?', 'a.anio = ?'];
+    $params = [$indId, $fAnio];
+    if ($fMes !== '') { $con[] = 'a.mes = ?';       $params[] = $fMes; }
+    if ($fEst !== '') { $con[] = 'a.renipress = ?'; $params[] = $fEst; }
+    $where = implode(' AND ', $con);
+
+    // --- 4.1 Totales de la cabecera (suma numerador/denominador y promedio) ---
+    $st = $pdo->prepare("SELECT COUNT(*) AS n_reg,
+                                COUNT(DISTINCT a.renipress) AS n_est,
+                                SUM(a.valor_numerador)   AS sum_num,
+                                SUM(a.valor_denominador) AS sum_den,
+                                AVG(a.porcentaje_avance) AS pct_prom
+                         FROM `{$tablaAvances}` a WHERE {$where}");
+    $st->execute($params);
+    $row = $st->fetch();
+    if ($row && (int)$row['n_reg'] > 0) {
+        $statsInd = $row;
+        $pctCabecera = $row['pct_prom'] !== null ? round((float)$row['pct_prom'], 1) : null;
+    }
+
+    // --- 4.2 Detalle de Avances por Establecimiento (agrupado y sumado) ---
+    $st = $pdo->prepare("SELECT a.renipress, a.establecimiento, COUNT(*) AS n_reg,
+                                SUM(a.valor_numerador)   AS sum_num,
+                                SUM(a.valor_denominador) AS sum_den,
+                                AVG(a.porcentaje_avance) AS pct_prom
+                         FROM `{$tablaAvances}` a WHERE {$where}
+                         GROUP BY a.renipress, a.establecimiento
+                         ORDER BY a.establecimiento ASC");
+    $st->execute($params);
+    $detalleEst = $st->fetchAll();
+    foreach ($detalleEst as $k => $de) {
+        $num = (float)$de['sum_num'];
+        $den = (float)$de['sum_den'];
+        if ($den > 0) {
+            $detalleEst[$k]['pct'] = round(($num / $den) * 100, 2);
+        } elseif ($de['pct_prom'] !== null) {
+            $detalleEst[$k]['pct'] = round((float)$de['pct_prom'], 2);
+        } else {
+            $detalleEst[$k]['pct'] = null;
+        }
+    }
+
+    // --- 4.3 Ranking de establecimientos: mejor avance primero ---
+    $rankingEst = $detalleEst;
+    usort($rankingEst, function ($x, $y) {
+        $px = $x['pct'];
+        $py = $y['pct'];
+        if ($px === null && $py === null) { return strcasecmp((string)$x['establecimiento'], (string)$y['establecimiento']); }
+        if ($px === null) { return 1; }
+        if ($py === null) { return -1; }
+        return $py <=> $px;
+    });
+
+    // --- 4.4 Porcentaje global del detalle (fila TOTAL de la tabla) ---
+    if ($statsInd !== null) {
+        $gNum = (float)$statsInd['sum_num'];
+        $gDen = (float)$statsInd['sum_den'];
+        if ($gDen > 0) {
+            $pctDetalleGlobal = round(($gNum / $gDen) * 100, 2);
+        } elseif ($statsInd['pct_prom'] !== null) {
+            $pctDetalleGlobal = round((float)$statsInd['pct_prom'], 1);
+        }
+    }
+}
+
+/* ============================================================================
+ * 5. HELPERS DE LA VISTA Y ENLACES ENTRE PANELES
+ * ========================================================================== */
+
+/** Formatea numeros (numerador/denominador) tolerando nulos */
+function fedFmtNumero($v, $dec = 2) {
+    return $v === null ? '-' : number_format((float)$v, $dec);
+}
+
+/** Formatea la meta anual quitando ceros sobrantes (95.00 -> 95; 87.50 -> 87.5) */
+function fedFmtPctMeta($v) {
+    if ($v === null) { return '-'; }
+    $f = rtrim(rtrim(number_format((float)$v, 2, '.', ''), '0'), '.');
+    return $f === '' ? '0' : $f;
+}
+
+/** Nombre del establecimiento filtrado (para la linea de contexto del Panel 02) */
+$nombreEstFiltro = '';
+if ($fEst !== '') {
+    foreach ($establecimientosDisp as $e) {
+        if ((string)$e['renipress'] === (string)$fEst) { $nombreEstFiltro = (string)$e['establecimiento']; break; }
+    }
+}
+
+/** Query string base para los enlaces Panel 01 -> Panel 02 (conserva filtros) */
+$qsPanel2 = [];
+if ($fAnio !== '') { $qsPanel2['anio'] = $fAnio; }
+if ($fMes  !== '') { $qsPanel2['mes']  = $fMes; }
+if ($fEst  !== '') { $qsPanel2['est']  = $fEst; }
+
 $pageTitle = 'Convenio FED - Sistema HIS';
 include 'includes/header.php';
 ?>
 
 <style>
-/* ---- Estilos especificos de la vista de consulta del modulo Convenio FED ---- */
+/* ---- Estilos especificos de la vista de consulta del modulo Convenio FED (v5) ---- */
+html { scroll-behavior: smooth; }
+.fed-anchor { scroll-margin-top: 14px; }
 .fed-table-detalle th.sortable { cursor: pointer; user-select: none; white-space: nowrap; }
 .fed-table-detalle th.sortable:hover { background: #e9ecef; }
 .fed-table-detalle th.sortable::after { content: "\f0dc"; font-family: "Font Awesome 6 Free"; font-weight: 900; font-size: .68rem; margin-left: 5px; color: #adb5bd; }
@@ -306,6 +308,60 @@ include 'includes/header.php';
 .fed-barra { height: 7px; border-radius: 4px; }
 .fed-est-name { font-weight: 600; }
 .fed-info-import { background: #eef6ff; border: 1px solid #cfe5ff; border-radius: 8px; }
+
+/* Barra para el rango Bajo (40-59%): complementa colorBarraFED() */
+.bg-orange { background-color: #e67e22 !important; }
+
+/* Insignia de numero de panel */
+.fed-panel-badge {
+    font-size: .72rem; letter-spacing: .5px; text-transform: uppercase; font-weight: 700;
+    color: var(--his-primary); background: rgba(26, 82, 118, .08);
+    border: 1px solid rgba(26, 82, 118, .18); padding: 3px 12px; border-radius: 20px; white-space: nowrap;
+}
+
+/* Panel 01: tarjetas de indicadores */
+.fed-desc {
+    display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical;
+    overflow: hidden; font-size: .78rem; line-height: 1.35; margin-bottom: .5rem;
+}
+.fed-card-selected { outline: 2px solid var(--his-primary); outline-offset: 2px; }
+
+/* Panel 02: cabecera con datos del indicador */
+.fed-stat-tile {
+    background: #f6f9fc; border: 1px solid #e3ebf3; border-radius: 10px;
+    padding: .6rem .5rem; height: 100%; text-align: center;
+}
+.fed-tile-label {
+    font-size: .66rem; text-transform: uppercase; letter-spacing: .4px;
+    color: #6c757d; font-weight: 600; margin-bottom: .15rem; white-space: nowrap;
+}
+.fed-tile-value { font-size: 1.28rem; font-weight: 700; color: #2c3e50; line-height: 1.15; font-variant-numeric: tabular-nums; }
+.fed-tile-sub { font-size: .66rem; color: #98a6b3; margin-top: .1rem; }
+.fed-tile-meta .fed-tile-value   { color: var(--his-primary); }
+.fed-tile-avance .fed-tile-value { color: #1e8449; }
+.fed-tile-num .fed-tile-value    { color: var(--his-info); }
+.fed-tile-den .fed-tile-value    { color: #27ae60; }
+
+/* Panel 02: ranking de establecimientos (grafico de barras con CSS) */
+.fed-rank-row { display: flex; align-items: center; gap: .65rem; padding: .4rem 0; }
+.fed-rank-row + .fed-rank-row { border-top: 1px dashed #eef1f5; }
+.fed-rank-pos {
+    width: 30px; height: 30px; border-radius: 50%; background: #eef2f7; color: #495057;
+    font-weight: 700; font-size: .78rem; display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+}
+.fed-pos-1 { background: #ffd43b; color: #7a5c00; }
+.fed-pos-2 { background: #ced4da; color: #343a40; }
+.fed-pos-3 { background: #f0c29b; color: #7a4300; }
+.fed-rank-body { flex: 1 1 auto; min-width: 0; }
+.fed-rank-head { display: flex; justify-content: space-between; align-items: baseline; gap: .75rem; margin-bottom: 3px; }
+.fed-rank-name { font-weight: 600; font-size: .82rem; color: #2c3e50; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.fed-rank-val { font-weight: 700; font-size: .82rem; color: #2c3e50; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.fed-rank-val.fed-sin-dato { color: #98a6b3; font-weight: 500; }
+.fed-rank-track { position: relative; height: 16px; background: #eef2f7; border-radius: 8px; }
+.fed-rank-bar { height: 100%; border-radius: 8px; transition: width .8s ease; }
+.fed-rank-goal { position: absolute; top: -3px; bottom: -3px; width: 0; border-left: 2px dashed #8395a7; }
+.fed-legend-dot { width: 12px; height: 12px; border-radius: 3px; display: inline-block; flex-shrink: 0; }
+.fed-legend-goal { width: 0; height: 12px; border-left: 2px dashed #8395a7; display: inline-block; }
 </style>
 
 <div class="page-header-section">
@@ -342,13 +398,232 @@ include 'includes/header.php';
 
 <?php if ($sistemaOK): ?>
 
-<!-- ===================== FILTROS ===================== -->
-<div class="card shadow-sm mb-4">
-    <div class="card-header bg-white">
-        <h6 class="mb-0 fw-bold"><i class="fas fa-filter me-2 text-primary"></i>Filtros de Consulta</h6>
+<!-- ===================== AVISO DE ACTUALIZACION DE DATOS ===================== -->
+<div class="fed-info-import d-flex align-items-center gap-2 px-3 py-2 mb-4">
+    <i class="fas fa-clock text-primary fs-5"></i>
+    <div class="small">
+        <strong>Datos actualizados al:</strong>
+        <?php
+        $ultimaActualizacion = null;
+        try {
+            $colUltima = $tieneFechaImportacion
+                ? 'MAX(COALESCE(fecha_importacion, fecha_registro))'
+                : 'MAX(fecha_registro)';
+            $ultimaActualizacion = $pdo->query("SELECT {$colUltima} FROM `{$tablaAvances}`")->fetchColumn();
+        } catch (Throwable $e) {
+            $ultimaActualizacion = null;
+        }
+        ?>
+        <?php if ($ultimaActualizacion): ?>
+            <strong class="text-primary"><?= formatDateTime($ultimaActualizacion) ?></strong>
+        <?php else: ?>
+            <span class="text-muted">Aun no se ha importado informacion de avances.</span>
+        <?php endif; ?>
+        <span class="text-muted d-block d-md-inline">Fuente: BD Local</span>
     </div>
-    <div class="card-body">
-        <form method="GET" action="convenio_fed.php" class="row g-2 align-items-end" id="formFiltros">
+</div>
+
+<!-- ============================================================= -->
+<!-- PANEL 01 · PRESENTACION: tarjetas de indicadores              -->
+<!-- ============================================================= -->
+<div class="fed-anchor" id="panel01"></div>
+<div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3">
+    <div class="d-flex align-items-center gap-2">
+        <span class="fed-panel-badge">Panel 01</span>
+        <h5 class="mb-0 fw-bold text-dark">Presentacion de Indicadores</h5>
+    </div>
+    <span class="stat-mini"><i class="fas fa-layer-group me-1"></i><?= count($panel01) ?> indicadores activos &middot; Acumulado de todos los periodos</span>
+</div>
+
+<?php if (empty($panel01)): ?>
+    <div class="alert alert-info">
+        <i class="fas fa-info-circle me-2"></i>
+        No hay indicadores activos registrados en el convenio FED.
+        <?php if ($esAdmin): ?>Agreguelos en <a href="fed_gestion_indicadores.php"><strong>Gestion de Indicadores</strong></a>.<?php endif; ?>
+    </div>
+<?php else: ?>
+
+<?php if ($avanceGlobalPonderado !== null): ?>
+<!-- Avance global ponderado del convenio -->
+<div class="card shadow-sm mb-3">
+    <div class="card-body py-3">
+        <div class="d-flex justify-content-between align-items-center mb-2">
+            <h6 class="mb-0 fw-bold"><i class="fas fa-chart-line me-2 text-primary"></i>Avance Global del Convenio FED (ponderado)</h6>
+            <span class="avance-badge <?= clasificarAvanceFED($avanceGlobalPonderado)['clase'] ?>">
+                <?= number_format($avanceGlobalPonderado, 1) ?>% &middot; <?= clasificarAvanceFED($avanceGlobalPonderado)['texto'] ?>
+            </span>
+        </div>
+        <div class="progress" style="height: 18px; border-radius: 9px;">
+            <div class="progress-bar <?= colorBarraFED($avanceGlobalPonderado) ?>"
+                 role="progressbar" style="width: <?= min(100, $avanceGlobalPonderado) ?>%;"
+                 aria-valuenow="<?= $avanceGlobalPonderado ?>" aria-valuemin="0" aria-valuemax="100">
+                <?= number_format($avanceGlobalPonderado, 1) ?>%
+            </div>
+        </div>
+        <small class="text-muted">Calculado con los pesos de cada indicador sobre todo el historial importado (<?= number_format($pesoTotal, 1) ?>% de peso con datos).</small>
+    </div>
+</div>
+<?php endif; ?>
+
+<div class="row g-3 mb-4">
+    <?php foreach ($panel01 as $p):
+        $pctCard = $p['pct_prom'] !== null ? round((float)$p['pct_prom'], 1) : null;
+        $avCard  = clasificarAvanceFED($pctCard);
+        $selCard = (int)$p['id_indicador'] === $indId;
+        $urlPanel2 = 'convenio_fed.php?' . http_build_query(array_merge($qsPanel2, ['ind' => (int)$p['id_indicador']])) . '#panel02';
+        $nombreCorto = mb_strimwidth((string)$p['nombre'], 0, 90, '...');
+    ?>
+    <div class="col-xl-3 col-lg-4 col-md-6 col-12 d-flex">
+        <div class="card indicador-card <?= $avCard['estado'] ?> w-100 <?= $selCard ? 'fed-card-selected' : '' ?>">
+            <div class="d-flex flex-column h-100 w-100">
+                <div class="d-flex justify-content-between align-items-center mb-2">
+                    <span class="indicador-codigo"><?= clean($p['codigo']) ?></span>
+                    <span class="avance-badge <?= $avCard['clase'] ?>"><?= $avCard['texto'] ?></span>
+                </div>
+                <h6 class="indicador-nombre" title="<?= clean($p['nombre']) ?>"><?= clean($nombreCorto) ?></h6>
+                <?php if (!empty($p['descripcion'])): ?>
+                    <p class="fed-desc text-muted" title="<?= clean($p['descripcion']) ?>"><?= clean($p['descripcion']) ?></p>
+                <?php endif; ?>
+                <div class="mt-auto">
+                    <div class="d-flex justify-content-between align-items-center small mb-1">
+                        <span class="text-muted"><i class="fas fa-bullseye me-1"></i>Meta anual</span>
+                        <strong><?= $p['meta_anual'] !== null ? fedFmtPctMeta($p['meta_anual']) . '%' : '-' ?></strong>
+                    </div>
+                    <div class="d-flex justify-content-between align-items-center small mb-1">
+                        <span class="text-muted"><i class="fas fa-percent me-1"></i>Promedio de avance</span>
+                        <?php if ($pctCard !== null): ?>
+                            <strong class="text-primary"><?= number_format($pctCard, 1) ?>%</strong>
+                        <?php else: ?>
+                            <span class="text-muted">Sin dato</span>
+                        <?php endif; ?>
+                    </div>
+                    <div class="progress progress-his fed-barra mb-2">
+                        <?php if ($pctCard !== null): ?>
+                            <div class="progress-bar <?= colorBarraFED($pctCard) ?>" role="progressbar" style="width: <?= min(100, $pctCard) ?>%;"></div>
+                        <?php endif; ?>
+                    </div>
+                    <div class="d-flex justify-content-between small text-muted mb-2">
+                        <span><i class="fas fa-database me-1"></i><?= number_format((int)$p['n_reg']) ?> registros</span>
+                        <span><i class="fas fa-hospital me-1"></i><?= (int)$p['n_est'] ?> establec.</span>
+                    </div>
+                    <?php if ($selCard): ?>
+                        <a href="#panel02" class="btn btn-outline-primary btn-sm w-100" title="El detalle de este indicador se muestra en el Panel 02">
+                            <i class="fas fa-check me-1"></i> Mostrando detalle (Panel 02)
+                        </a>
+                    <?php else: ?>
+                        <a href="<?= $urlPanel2 ?>" class="btn btn-his btn-sm w-100" title="Ver la informacion detallada de este indicador en el Panel 02">
+                            <i class="fas fa-arrow-circle-down me-1"></i> Ver detalle (Panel 02)
+                        </a>
+                    <?php endif; ?>
+                </div>
+            </div>
+        </div>
+    </div>
+    <?php endforeach; ?>
+</div>
+
+<?php endif; /* fin Panel 01 con indicadores */ ?>
+
+<!-- ============================================================= -->
+<!-- PANEL 02 · DETALLE DEL INDICADOR SELECCIONADO                 -->
+<!-- ============================================================= -->
+<div class="fed-anchor" id="panel02"></div>
+<div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3">
+    <div class="d-flex align-items-center gap-2">
+        <span class="fed-panel-badge">Panel 02</span>
+        <h5 class="mb-0 fw-bold text-dark">Informacion Detallada del Indicador</h5>
+    </div>
+    <a href="#panel01" class="small"><i class="fas fa-arrow-circle-up me-1"></i>Volver al Panel 01</a>
+</div>
+
+<?php if ($indSel === null): ?>
+    <div class="alert alert-warning">
+        <i class="fas fa-exclamation-triangle me-2"></i>
+        No hay indicadores activos para mostrar. Los datos del Panel 02 apareceran cuando exista al menos un indicador activo
+        <?php if ($esAdmin): ?>creado desde <a href="fed_gestion_indicadores.php"><strong>Gestion de Indicadores</strong></a><?php endif; ?>.
+    </div>
+<?php else: ?>
+
+<div class="card shadow-sm mb-4">
+    <!-- ---------- Cabecera del indicador ---------- -->
+    <div class="card-header bg-white py-3">
+        <div class="row g-3 align-items-center">
+            <div class="col-xl-5">
+                <div class="d-flex align-items-center gap-2 mb-1 flex-wrap">
+                    <span class="indicador-codigo"><?= clean($indSel['codigo']) ?></span>
+                    <span class="avance-badge <?= clasificarAvanceFED($pctCabecera)['clase'] ?>"><?= clasificarAvanceFED($pctCabecera)['texto'] ?></span>
+                </div>
+                <h5 class="fw-bold mb-1" style="color: var(--his-primary);"><?= clean($indSel['nombre']) ?></h5>
+                <p class="small text-muted mb-2"><?= !empty($indSel['descripcion']) ? clean($indSel['descripcion']) : 'Sin descripcion registrada.' ?></p>
+                <div class="small text-muted d-flex flex-wrap gap-3">
+                    <?php if (!empty($indSel['responsable'])): ?>
+                        <span><i class="fas fa-user-tie me-1"></i><?= clean($indSel['responsable']) ?></span>
+                    <?php endif; ?>
+                    <?php if (!empty($indSel['unidad_medida'])): ?>
+                        <span><i class="fas fa-ruler me-1"></i>Unidad: <?= clean($indSel['unidad_medida']) ?></span>
+                    <?php endif; ?>
+                    <?php if ($indSel['peso_ponderado'] !== null): ?>
+                        <span><i class="fas fa-balance-scale me-1"></i>Peso: <?= fedFmtPctMeta($indSel['peso_ponderado']) ?>%</span>
+                    <?php endif; ?>
+                </div>
+            </div>
+            <div class="col-xl-7">
+                <div class="row g-2">
+                    <div class="col-6 col-md-3">
+                        <div class="fed-stat-tile fed-tile-meta">
+                            <div class="fed-tile-label"><i class="fas fa-bullseye me-1"></i>Meta Anual</div>
+                            <div class="fed-tile-value"><?= $indSel['meta_anual'] !== null ? fedFmtPctMeta($indSel['meta_anual']) . '%' : '-' ?></div>
+                            <div class="fed-tile-sub">meta_anual</div>
+                        </div>
+                    </div>
+                    <div class="col-6 col-md-3">
+                        <div class="fed-stat-tile fed-tile-avance">
+                            <div class="fed-tile-label"><i class="fas fa-percent me-1"></i>Promedio Total</div>
+                            <div class="fed-tile-value"><?= $pctCabecera !== null ? number_format($pctCabecera, 1) . '%' : 'Sin dato' ?></div>
+                            <div class="fed-tile-sub">promedio porcentaje_avance</div>
+                        </div>
+                    </div>
+                    <div class="col-6 col-md-3">
+                        <div class="fed-stat-tile fed-tile-num">
+                            <div class="fed-tile-label"><i class="fas fa-arrow-up me-1"></i>Suma Numerador</div>
+                            <div class="fed-tile-value"><?= fedFmtNumero($statsInd['sum_num'] ?? null) ?></div>
+                            <div class="fed-tile-sub">suma valor_numerador</div>
+                        </div>
+                    </div>
+                    <div class="col-6 col-md-3">
+                        <div class="fed-stat-tile fed-tile-den">
+                            <div class="fed-tile-label"><i class="fas fa-arrow-down me-1"></i>Suma Denominador</div>
+                            <div class="fed-tile-value"><?= fedFmtNumero($statsInd['sum_den'] ?? null) ?></div>
+                            <div class="fed-tile-sub">suma valor_denominador</div>
+                        </div>
+                    </div>
+                </div>
+                <div class="small text-muted mt-2 text-center text-xl-end">
+                    <i class="fas fa-filter me-1"></i>
+                    Periodo consultado: <strong><?= clean($fAnio) ?></strong> &middot;
+                    <?= $fMes !== '' ? getNombreMes((int)$fMes) : 'Todos los meses' ?> &middot;
+                    <?= $fEst !== '' ? clean($nombreEstFiltro) : 'Todos los establecimientos (' . count($establecimientosDisp) . ')' ?>
+                    <?php if ($statsInd !== null): ?>
+                        &middot; <?= number_format((int)$statsInd['n_reg']) ?> registros &middot; <?= (int)$statsInd['n_est'] ?> establecimientos
+                    <?php endif; ?>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ---------- Filtros del Panel 02 ---------- -->
+    <div class="card-body border-top py-3">
+        <form method="GET" action="convenio_fed.php#panel02" class="row g-2 align-items-end" id="formPanel02">
+            <div class="col-lg-3 col-md-6 col-12">
+                <label class="form-label small fw-semibold mb-0">Indicador</label>
+                <select name="ind" class="form-select form-select-sm" onchange="this.form.submit()">
+                    <?php foreach ($indicadoresFiltro as $if): ?>
+                        <option value="<?= (int)$if['id_indicador'] ?>" <?= $indId === (int)$if['id_indicador'] ? 'selected' : '' ?>>
+                            <?= clean($if['codigo']) ?> - <?= clean(mb_strimwidth($if['nombre'], 0, 55, '...')) ?>
+                        </option>
+                    <?php endforeach; ?>
+                </select>
+            </div>
             <div class="col-lg-2 col-md-3 col-6">
                 <label class="form-label small fw-semibold mb-0">Anio</label>
                 <select name="anio" class="form-select form-select-sm" onchange="this.form.submit()">
@@ -381,199 +656,70 @@ include 'includes/header.php';
                     <?php endforeach; ?>
                 </select>
             </div>
-            <div class="col-lg-3 col-md-6 col-12">
-                <label class="form-label small fw-semibold mb-0">Indicador</label>
-                <select name="ind" class="form-select form-select-sm" onchange="this.form.submit()">
-                    <option value="">-- Todos los indicadores --</option>
-                    <?php foreach ($indicadoresFiltro as $if): ?>
-                        <option value="<?= (int)$if['id_indicador'] ?>" <?= $fInd === (string)$if['id_indicador'] ? 'selected' : '' ?>>
-                            <?= clean($if['codigo']) ?> - <?= clean(mb_strimwidth($if['nombre'], 0, 55, '...')) ?><?= (int)$if['estado'] === 0 ? ' (inactivo)' : '' ?>
-                        </option>
-                    <?php endforeach; ?>
-                </select>
-            </div>
             <div class="col-lg-1 col-12">
                 <button type="submit" class="btn btn-his btn-sm w-100" title="Consultar"><i class="fas fa-search"></i></button>
             </div>
+            <div class="col-12">
+                <small class="text-muted">
+                    <i class="fas fa-info-circle me-1"></i>
+                    Con <strong>Todos los meses</strong> la tabla muestra cada establecimiento una sola vez con numerador y denominador sumados de todo el periodo. Elija un mes para ver el dato puntual.
+                </small>
+            </div>
         </form>
     </div>
-</div>
 
-<!-- ===================== AVISO DE ACTUALIZACION DE DATOS ===================== -->
-<div class="fed-info-import d-flex align-items-center gap-2 px-3 py-2 mb-4">
-    <i class="fas fa-clock text-primary fs-5"></i>
-    <div class="small">
-        <strong>Datos actualizados al:</strong>
-        <?php if ($ultimaActualizacion): ?>
-            <strong class="text-primary"><?= formatDateTime($ultimaActualizacion) ?></strong>
-            
-        <?php else: ?>
-            <span class="text-muted">Aun no se ha importado informacion de avances.</span>
-        <?php endif; ?>
-        <span class="text-muted d-block d-md-inline">Fuente: BD Local</span>
-    </div>
-</div>
-
-<!-- ===================== RESUMEN RAPIDO ===================== -->
-<?php
-$nRegistros = count($avances);
-$nFilasDetalle = count($avancesVista);
-$nEstablecimientos = count($resumenEstablecimientos);
-$nIndicadoresConDato = count(array_unique(array_map(function ($a) { return $a['id_indicador']; }, $avances)));
-$pctPromedioGeneral = $nRegistros > 0 ? round(array_sum(array_map(function ($a) { return (float)$a['porcentaje_avance']; }, $avances)) / $nRegistros, 1) : null;
-$avClasifProm = clasificarAvanceFED($pctPromedioGeneral);
-?>
-<div class="row mb-4">
-    <div class="col-md-3 col-6 mb-3">
-        <div class="stat-card stat-primary">
-            <div class="stat-icon"><i class="fas fa-list-ol"></i></div>
-            <div class="stat-info">
-                <span class="stat-value"><?= number_format($nFilasDetalle) ?></span>
-                <span class="stat-label"><?= $agruparPorEstablecimiento ? 'Establecimientos (agrupado)' : 'Registros visibles' ?></span>
+    <!-- ---------- Tabla: Detalle de Avances por Establecimiento ---------- -->
+    <div class="card-body border-top py-3">
+        <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-2">
+            <h6 class="mb-0 fw-bold"><i class="fas fa-table me-2 text-primary"></i>Detalle de Avances por Establecimiento</h6>
+            <div class="d-flex gap-2 align-items-center flex-wrap">
+                <span class="stat-mini" id="contadorDetalle"></span>
+                <div class="input-group input-group-sm" style="width: 220px;">
+                    <span class="input-group-text"><i class="fas fa-search"></i></span>
+                    <input type="text" id="busquedaDetalle" class="form-control" placeholder="Buscar en la tabla...">
+                </div>
+                <button type="button" class="btn btn-sm btn-outline-success" id="btnExportarCsv" title="Exportar lo que se muestra a CSV (Excel)">
+                    <i class="fas fa-file-csv me-1"></i> Exportar CSV
+                </button>
             </div>
         </div>
-    </div>
-    <div class="col-md-3 col-6 mb-3">
-        <div class="stat-card stat-info">
-            <div class="stat-icon"><i class="fas fa-hospital"></i></div>
-            <div class="stat-info">
-                <span class="stat-value"><?= number_format($nEstablecimientos) ?></span>
-                <span class="stat-label">Establecimientos</span>
-            </div>
-        </div>
-    </div>
-    <div class="col-md-3 col-6 mb-3">
-        <div class="stat-card stat-success">
-            <div class="stat-icon"><i class="fas fa-bullseye"></i></div>
-            <div class="stat-info">
-                <span class="stat-value"><?= number_format($nIndicadoresConDato) ?></span>
-                <span class="stat-label">Indicadores con datos</span>
-            </div>
-        </div>
-    </div>
-    <div class="col-md-3 col-6 mb-3">
-        <div class="stat-card <?= $pctPromedioGeneral === null ? 'stat-warning' : ($pctPromedioGeneral >= 75 ? 'stat-success' : 'stat-warning') ?>">
-            <div class="stat-icon"><i class="fas fa-percentage"></i></div>
-            <div class="stat-info">
-                <span class="stat-value"><?= $pctPromedioGeneral !== null ? number_format($pctPromedioGeneral, 1) . '%' : '-' ?></span>
-                <span class="stat-label">Avance promedio (filtros)</span>
-            </div>
-        </div>
-    </div>
-</div>
-
-<!-- ===================== AVANCE GLOBAL PONDERADO ===================== -->
-<?php if ($avanceGlobalPonderado !== null): ?>
-<div class="card shadow-sm mb-4">
-    <div class="card-body">
-        <div class="d-flex justify-content-between align-items-center mb-2">
-            <h6 class="mb-0 fw-bold"><i class="fas fa-chart-line me-2 text-primary"></i>Avance Global del Convenio FED (ponderado)</h6>
-            <span class="avance-badge <?= clasificarAvanceFED($avanceGlobalPonderado)['clase'] ?>">
-                <?= number_format($avanceGlobalPonderado, 1) ?>% &middot; <?= clasificarAvanceFED($avanceGlobalPonderado)['texto'] ?>
-            </span>
-        </div>
-        <div class="progress" style="height: 22px; border-radius: 11px;">
-            <div class="progress-bar <?= colorBarraFED($avanceGlobalPonderado) ?>"
-                 role="progressbar" style="width: <?= min(100, $avanceGlobalPonderado) ?>%;"
-                 aria-valuenow="<?= $avanceGlobalPonderado ?>" aria-valuemin="0" aria-valuemax="100">
-                <?= number_format($avanceGlobalPonderado, 1) ?>%
-            </div>
-        </div>
-        <small class="text-muted">Calculado con los pesos de cada indicador y los filtros seleccionados (<?= number_format($pesoTotal, 1) ?>% de peso con datos).</small>
-    </div>
-</div>
-<?php endif; ?>
-
-<!-- ===================== DETALLE DE AVANCES (tabla interactiva) ===================== -->
-<div class="card shadow-sm mb-4">
-    <div class="card-header bg-white d-flex justify-content-between align-items-center flex-wrap gap-2">
-        <h6 class="mb-0 fw-bold"><i class="fas fa-table me-2 text-primary"></i>Detalle de Avances por Establecimiento y Mes</h6>
-        <div class="d-flex gap-2 align-items-center flex-wrap">
-            <?php if ($agruparPorEstablecimiento): ?>
-                <span class="badge rounded-pill bg-light text-primary border">1 fila por establecimiento</span>
-            <?php endif; ?>
-            <span class="stat-mini" id="contadorDetalle"></span>
-            <div class="input-group input-group-sm" style="width: 230px;">
-                <span class="input-group-text"><i class="fas fa-search"></i></span>
-                <input type="text" id="busquedaDetalle" class="form-control" placeholder="Buscar en la tabla...">
-            </div>
-            <button type="button" class="btn btn-sm btn-outline-success" id="btnExportarCsv" title="Exportar lo que se muestra a CSV (Excel)">
-                <i class="fas fa-file-csv me-1"></i> Exportar CSV
-            </button>
-        </div>
-    </div>
-    <div class="card-body p-0">
-        <div class="px-3 pt-2">
-            <?php if ($agruparPorEstablecimiento): ?>
-                <small class="text-muted"><i class="fas fa-layer-group me-1"></i>Cada establecimiento aparece una sola vez. El numerador y el denominador suman todos sus meses y el porcentaje se recalcula sobre esos totales. Elija un mes o un establecimiento para ver el detalle.</small>
-            <?php else: ?>
-                <small class="text-muted"><i class="fas fa-info-circle me-1"></i>Haga clic en el encabezado de una columna para ordenar. La busqueda filtra en vivo.</small>
-            <?php endif; ?>
-        </div>
+        <small class="text-muted d-block mb-2">
+            <i class="fas fa-layer-group me-1"></i>
+            Agrupado por establecimiento: numerador y denominador suman todos los meses del periodo seleccionado y el porcentaje se recalcula sobre esos totales.
+        </small>
         <div class="table-responsive">
-            <table class="table table-hover table-sm mb-0 fed-table-detalle" id="tablaDetalle">
+            <table class="table table-hover table-sm mb-0 fed-table-detalle" id="tablaDetalleEst">
                 <thead class="table-light">
                     <tr>
-                        <th class="sortable" data-col="0" data-type="num" data-csv="renipress">Renipress</th>
+                        <th class="sortable" data-col="0" data-type="str" data-csv="renipress">Renipress</th>
                         <th class="sortable" data-col="1" data-type="str" data-csv="establecimiento">Establecimiento</th>
-                        <th class="sortable" data-col="2" data-type="num" data-csv="anio">Anio</th>
-                        <th class="sortable" data-col="3" data-type="str" data-csv="mes">Mes</th>
-                        <th class="sortable text-end" data-col="4" data-type="num" data-csv="valor_numerador">Valor Numerador</th>
-                        <th class="sortable text-end" data-col="5" data-type="num" data-csv="valor_denominador">Valor Denominador</th>
-                        <th class="sortable" data-col="6" data-type="num" data-csv="porcentaje_avance">Porcentaje Avance</th>
-                        <th class="sortable" data-col="7" data-type="str" data-csv="observaciones">Observaciones</th>
-                        <th class="sortable" data-col="8" data-type="str" data-csv="indicador">Indicador</th>
+                        <th class="sortable text-end" data-col="2" data-type="num" data-csv="valor_numerador">Valor Numerador</th>
+                        <th class="sortable text-end" data-col="3" data-type="num" data-csv="valor_denominador">Valor Denominador</th>
+                        <th class="sortable text-end" data-col="4" data-type="num" data-csv="porcentaje_avance">Porcentaje Avance</th>
                     </tr>
                 </thead>
                 <tbody>
-                    <?php if (empty($avancesVista)): ?>
+                    <?php if (empty($detalleEst)): ?>
                         <tr>
-                            <td colspan="9" class="text-center text-muted py-4">
+                            <td colspan="5" class="text-center text-muted py-4">
                                 <i class="fas fa-inbox fa-2x d-block mb-2"></i>
-                                No hay registros de avances para los filtros seleccionados.
+                                No hay registros de avances para este indicador con los filtros seleccionados.
                                 <?php if ($esAdmin): ?>Utilice el modulo <a href="fed_importar_avances.php"><strong>Importar Resultados.txt</strong></a> para cargar los datos.<?php endif; ?>
                             </td>
                         </tr>
                     <?php else: ?>
-                        <?php foreach ($avancesVista as $a):
-                            $pct  = $a['porcentaje_avance'] !== null ? (float)$a['porcentaje_avance'] : null;
-                            $av   = clasificarAvanceFED($pct);
-                            $mesesGrupo = (isset($a['_meses']) && is_array($a['_meses'])) ? $a['_meses'] : [];
-                            $nMesesGrupo = count($mesesGrupo);
-                            if ($nMesesGrupo > 1) {
-                                $partesMes = [];
-                                foreach ($mesesGrupo as $mm) {
-                                    $partesMes[] = $mm . ' - ' . getNombreMes((int)$mm);
-                                }
-                                $mesSort = $mesesGrupo[0];
-                                $mesCsv = implode(', ', $partesMes);
-                                $mesTitle = implode(', ', $partesMes);
-                                $mesTxt = '';
-                            } else {
-                                $mesN = $a['mes'] !== null ? (int)$a['mes'] : null;
-                                $mesTxt = $a['mes'] !== null ? $a['mes'] . ' &middot; ' . getNombreMes($mesN) : '-';
-                                $mesSort = (string)($a['mes'] ?? '');
-                                $mesCsv = $a['mes'] !== null ? $a['mes'] . ' - ' . getNombreMes($mesN) : '';
-                                $mesTitle = '';
-                            }
-                            $nObs = isset($a['_n_obs']) ? (int)$a['_n_obs'] : 0;
+                        <?php foreach ($detalleEst as $de):
+                            $pct = $de['pct'];
+                            $av  = clasificarAvanceFED($pct);
                         ?>
                         <tr data-sortable="1">
-                            <td data-sort="<?= clean($a['renipress']) ?>"><code><?= clean($a['renipress']) ?></code></td>
-                            <td class="fed-est-name" data-sort="<?= clean($a['establecimiento']) ?>"><?= clean($a['establecimiento']) ?></td>
-                            <td data-sort="<?= clean($a['anio']) ?>"><?= clean($a['anio']) ?></td>
-                            <td data-sort="<?= clean($mesSort) ?>" data-csv="<?= clean($mesCsv) ?>"<?= $mesTitle !== '' ? ' title="' . clean($mesTitle) . '"' : '' ?>>
-                                <?php if ($nMesesGrupo > 1): ?>
-                                    <span class="badge bg-light text-dark border"><?= (int)$nMesesGrupo ?> meses</span>
-                                <?php else: ?>
-                                    <?= $mesTxt ?>
-                                <?php endif; ?>
-                            </td>
-                            <td class="text-end fed-num" data-sort="<?= (float)$a['valor_numerador'] ?>" data-csv="<?= number_format((float)$a['valor_numerador'], 2, '.', '') ?>"><?= number_format((float)$a['valor_numerador'], 2) ?></td>
-                            <td class="text-end fed-num" data-sort="<?= (float)$a['valor_denominador'] ?>" data-csv="<?= number_format((float)$a['valor_denominador'], 2, '.', '') ?>"><?= number_format((float)$a['valor_denominador'], 2) ?></td>
-                            <td data-sort="<?= $pct ?? -1 ?>" data-csv="<?= $pct !== null ? number_format($pct, 2, '.', '') : '' ?>">
+                            <td data-sort="<?= clean($de['renipress']) ?>"><code><?= clean($de['renipress']) ?></code></td>
+                            <td class="fed-est-name" data-sort="<?= clean($de['establecimiento']) ?>"><?= clean($de['establecimiento']) ?></td>
+                            <td class="text-end fed-num" data-sort="<?= (float)$de['sum_num'] ?>" data-csv="<?= number_format((float)$de['sum_num'], 2, '.', '') ?>"><?= fedFmtNumero($de['sum_num']) ?></td>
+                            <td class="text-end fed-num" data-sort="<?= (float)$de['sum_den'] ?>" data-csv="<?= number_format((float)$de['sum_den'], 2, '.', '') ?>"><?= fedFmtNumero($de['sum_den']) ?></td>
+                            <td class="text-end" data-sort="<?= $pct ?? -1 ?>" data-csv="<?= $pct !== null ? number_format($pct, 2, '.', '') : '' ?>">
                                 <?php if ($pct !== null): ?>
-                                    <div class="d-flex align-items-center gap-2">
+                                    <div class="d-flex align-items-center justify-content-end gap-2">
                                         <span class="avance-badge <?= $av['clase'] ?>" style="min-width:64px;"><?= number_format($pct, 1) ?>%</span>
                                         <div class="progress progress-his flex-grow-1 fed-barra">
                                             <div class="progress-bar <?= colorBarraFED($pct) ?>" role="progressbar" style="width: <?= min(100, $pct) ?>%;"></div>
@@ -583,119 +729,131 @@ $avClasifProm = clasificarAvanceFED($pctPromedioGeneral);
                                     <span class="text-muted small">Sin dato</span>
                                 <?php endif; ?>
                             </td>
-                            <td data-sort="<?= clean($a['observaciones'] ?? '') ?>" data-csv="<?= clean($a['observaciones'] ?? '') ?>">
-                                <?php if (!empty($a['observaciones'])): ?>
-                                    <?php if ($nObs > 1): ?>
-                                        <small title="<?= clean($a['observaciones']) ?>"><?= (int)$nObs ?> observaciones</small>
-                                    <?php else: ?>
-                                        <small title="<?= clean($a['observaciones']) ?>"><?= clean(mb_strimwidth($a['observaciones'], 0, 40, '...')) ?></small>
-                                    <?php endif; ?>
-                                <?php else: ?>
-                                    <small class="text-muted">-</small>
-                                <?php endif; ?>
-                            </td>
-                            <td data-sort="<?= clean($a['codigo'] ?? '') ?>" data-csv="<?= clean(($a['codigo'] ?? '')) ?> <?= clean($a['indicador_nombre'] ?? '') ?>">
-                                <?php if (!empty($a['codigo'])): ?>
-                                    <span class="badge bg-light text-dark border" title="<?= clean($a['indicador_nombre'] ?? '') ?>"><?= clean($a['codigo']) ?></span>
-                                    <small class="text-muted d-none d-xl-inline"><?= clean(mb_strimwidth($a['indicador_nombre'] ?? '', 0, 48, '...')) ?></small>
-                                <?php else: ?>
-                                    <small class="text-muted">N/D</small>
-                                <?php endif; ?>
-                            </td>
                         </tr>
                         <?php endforeach; ?>
                     <?php endif; ?>
                 </tbody>
+                <?php if (!empty($detalleEst) && $statsInd !== null): ?>
+                <tfoot class="table-light">
+                    <tr class="fw-semibold">
+                        <td colspan="2"><i class="fas fa-calculator me-1 text-primary"></i>TOTAL (<?= count($detalleEst) ?> establecimientos)</td>
+                        <td class="text-end fed-num"><?= fedFmtNumero($statsInd['sum_num']) ?></td>
+                        <td class="text-end fed-num"><?= fedFmtNumero($statsInd['sum_den']) ?></td>
+                        <td class="text-end">
+                            <?php if ($pctDetalleGlobal !== null): ?>
+                                <strong class="<?= $pctDetalleGlobal >= 75 ? 'text-success' : ($pctDetalleGlobal >= 60 ? 'text-warning' : 'text-danger') ?>">
+                                    <?= number_format($pctDetalleGlobal, 1) ?>%
+                                </strong>
+                            <?php else: ?>
+                                <span class="text-muted">Sin dato</span>
+                            <?php endif; ?>
+                        </td>
+                    </tr>
+                </tfoot>
+                <?php endif; ?>
             </table>
         </div>
+    </div>
+
+    <!-- ---------- Ranking de Establecimientos (grafico de barras) ---------- -->
+    <div class="card-body border-top py-3">
+        <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-2">
+            <h6 class="mb-0 fw-bold"><i class="fas fa-ranking-star me-2 text-primary"></i>Ranking de Establecimientos</h6>
+            <div class="d-flex gap-2 flex-wrap">
+                <?php if ($indSel['meta_anual'] !== null): ?>
+                    <span class="stat-mini"><i class="fas fa-bullseye me-1"></i>Meta anual: <?= fedFmtPctMeta($indSel['meta_anual']) ?>%</span>
+                <?php endif; ?>
+                <span class="stat-mini"><i class="fas fa-sort-amount-down me-1"></i>Mejor avance primero</span>
+            </div>
+        </div>
+
+        <?php if (empty($rankingEst)): ?>
+            <div class="text-center text-muted py-4">
+                <i class="fas fa-chart-simple fa-2x d-block mb-2"></i>
+                Sin datos para graficar con los filtros seleccionados.
+            </div>
+        <?php else: ?>
+            <div class="fed-rank-list">
+                <?php $pos = 0; foreach ($rankingEst as $rk):
+                    $pos++;
+                    $pctR = $rk['pct'];
+                    $colorR = colorBarraFED($pctR);
+                    $widthR = $pctR !== null ? min(100, max(0, $pctR)) : 0;
+                    $clsPos = $pos <= 3 ? ' fed-pos-' . $pos : '';
+                    $goalLeft = ($indSel['meta_anual'] !== null && (float)$indSel['meta_anual'] > 0)
+                        ? min(100, max(0, (float)$indSel['meta_anual'])) : null;
+                ?>
+                <div class="fed-rank-row">
+                    <div class="fed-rank-pos<?= $clsPos ?>" title="Puesto <?= $pos ?>">
+                        <?php if ($pos <= 3 && $pctR !== null): ?><i class="fas fa-medal"></i><?php else: ?><?= $pos ?><?php endif; ?>
+                    </div>
+                    <div class="fed-rank-body">
+                        <div class="fed-rank-head">
+                            <span class="fed-rank-name" title="<?= clean($rk['establecimiento']) ?> (<?= clean($rk['renipress']) ?>)">
+                                <?= clean($rk['establecimiento']) ?>
+                                <small class="text-muted fw-normal"><code><?= clean($rk['renipress']) ?></code></small>
+                            </span>
+                            <?php if ($pctR !== null): ?>
+                                <span class="fed-rank-val"><?= number_format($pctR, 1) ?>%</span>
+                            <?php else: ?>
+                                <span class="fed-rank-val fed-sin-dato">Sin dato</span>
+                            <?php endif; ?>
+                        </div>
+                        <div class="fed-rank-track" title="Numerador: <?= fedFmtNumero($rk['sum_num']) ?> | Denominador: <?= fedFmtNumero($rk['sum_den']) ?> | <?= number_format((int)$rk['n_reg']) ?> registro(s)">
+                            <div class="fed-rank-bar <?= $colorR ?>" data-w="<?= $widthR ?>" style="width: <?= $widthR ?>%;"></div>
+                            <?php if ($goalLeft !== null): ?>
+                                <div class="fed-rank-goal" style="left: <?= $goalLeft ?>%;" title="Meta anual: <?= fedFmtPctMeta($indSel['meta_anual']) ?>%"></div>
+                            <?php endif; ?>
+                        </div>
+                    </div>
+                </div>
+                <?php endforeach; ?>
+            </div>
+
+            <div class="d-flex flex-wrap gap-3 mt-3 small text-muted">
+                <span class="d-inline-flex align-items-center gap-1"><span class="fed-legend-dot bg-success"></span>Excelente &ge; 90%</span>
+                <span class="d-inline-flex align-items-center gap-1"><span class="fed-legend-dot bg-info"></span>Bueno 75-89%</span>
+                <span class="d-inline-flex align-items-center gap-1"><span class="fed-legend-dot bg-warning"></span>Regular 60-74%</span>
+                <span class="d-inline-flex align-items-center gap-1"><span class="fed-legend-dot bg-orange"></span>Bajo 40-59%</span>
+                <span class="d-inline-flex align-items-center gap-1"><span class="fed-legend-dot bg-danger"></span>Critico &lt; 40%</span>
+                <?php if ($indSel['meta_anual'] !== null && (float)$indSel['meta_anual'] > 0): ?>
+                    <span class="d-inline-flex align-items-center gap-1"><span class="fed-legend-goal"></span>Línea de meta (<?= fedFmtPctMeta($indSel['meta_anual']) ?>%)</span>
+                <?php endif; ?>
+            </div>
+        <?php endif; ?>
     </div>
 </div>
 
-<!-- ===================== RESUMEN POR INDICADOR ===================== -->
-<div class="card shadow-sm mb-4">
-    <div class="card-header bg-white d-flex justify-content-between align-items-center flex-wrap gap-2">
-        <h6 class="mb-0 fw-bold"><i class="fas fa-bullseye me-2 text-primary"></i>Reporte de Avance por Indicador FED</h6>
-        <span class="stat-mini">Acumulado segun los filtros seleccionados</span>
-    </div>
-    <div class="card-body p-0">
-        <div class="table-responsive">
-            <table class="table table-hover table-sm mb-0">
-                <thead class="table-light">
-                    <tr>
-                        <th style="width:80px;">Codigo</th>
-                        <th>Indicador</th>
-                        <th style="width:90px;">Unidad</th>
-                        <th style="width:90px;" class="text-end">Meta</th>
-                        <th style="width:80px;" class="text-end">Registros</th>
-                        <th style="width:110px;" class="text-end">Numerador</th>
-                        <th style="width:110px;" class="text-end">Denominador</th>
-                        <th style="width:100px;" class="text-end">Avance</th>
-                        <th style="width:170px;">Barra de Avance</th>
-                        <th style="width:100px;">Estado</th>
-                        <th style="width:130px;">Responsable</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    <?php if (empty($resumenIndicadores)): ?>
-                        <tr><td colspan="11" class="text-center text-muted py-4">No hay indicadores activos registrados. <?php if ($esAdmin): ?>Agreguelos en <a href="fed_gestion_indicadores.php"><strong>Gestion de Indicadores</strong></a>.<?php endif; ?></td></tr>
-                    <?php else: ?>
-                        <?php foreach ($resumenIndicadores as $ri):
-                            $nReg = (int)$ri['n_reg'];
-                            $sumNum = $ri['sum_num'] !== null ? (float)$ri['sum_num'] : null;
-                            $sumDen = $ri['sum_den'] !== null ? (float)$ri['sum_den'] : null;
-                            $pctCalc = ($sumDen !== null && $sumDen > 0) ? round(($sumNum / $sumDen) * 100, 1) : null;
-                            $pct = $pctCalc !== null ? $pctCalc : ($ri['pct_prom'] !== null ? round((float)$ri['pct_prom'], 1) : null);
-                            $av = clasificarAvanceFED($pct);
-                        ?>
-                        <tr>
-                            <td><code><?= clean($ri['codigo']) ?></code></td>
-                            <td title="<?= clean($ri['descripcion'] ?? '') ?>">
-                                <strong><?= clean($ri['nombre']) ?></strong>
-                                <?php if (!empty($ri['descripcion'])): ?>
-                                    <small class="d-block text-muted" style="font-size:0.74rem;"><?= clean(mb_strimwidth($ri['descripcion'], 0, 80, '...')) ?></small>
-                                <?php endif; ?>
-                            </td>
-                            <td><small><?= clean($ri['unidad_medida'] ?? '-') ?></small></td>
-                            <td class="text-end"><?= $ri['meta_anual'] !== null ? number_format((float)$ri['meta_anual'], 2) : '-' ?></td>
-                            <td class="text-end"><?= $nReg ?></td>
-                            <td class="text-end fed-num"><?= $sumNum !== null ? number_format($sumNum, 2) : '-' ?></td>
-                            <td class="text-end fed-num"><?= $sumDen !== null ? number_format($sumDen, 2) : '-' ?></td>
-                            <td class="text-end">
-                                <?php if ($pct !== null): ?><strong><?= number_format($pct, 1) ?>%</strong>
-                                <?php else: ?><span class="text-muted">Sin dato</span><?php endif; ?>
-                            </td>
-                            <td>
-                                <?php if ($pct !== null): ?>
-                                    <div class="progress progress-his" style="height:8px;">
-                                        <div class="progress-bar <?= colorBarraFED($pct) ?>" role="progressbar" style="width: <?= min(100, $pct) ?>%;"></div>
-                                    </div>
-                                <?php else: ?>
-                                    <span class="text-muted small">-</span>
-                                <?php endif; ?>
-                            </td>
-                            <td><span class="avance-badge <?= $av['clase'] ?>"><?= $av['texto'] ?></span></td>
-                            <td><small><?= clean($ri['responsable'] ?? '-') ?></small></td>
-                        </tr>
-                        <?php endforeach; ?>
-                    <?php endif; ?>
-                </tbody>
-            </table>
-        </div>
-    </div>
-</div>
+<?php endif; /* fin Panel 02 con indicador seleccionado */ ?>
 
 <?php endif; /* fin $sistemaOK */ ?>
 
 <script>
 /* ============================================================
  * Interactividad de la vista de consulta FED (JavaScript puro)
- * La gestion de indicadores y la importacion tienen su propia
- * pagina (fed_gestion_indicadores.php / fed_importar_avances.php).
+ *  - Tabla del Panel 02: busqueda en vivo, orden por columna y CSV.
+ *  - Grafico de ranking: animacion de las barras.
+ *  - Salto automatico al Panel 02 al llegar con ?ind=... sin ancla.
  * ============================================================ */
 document.addEventListener('DOMContentLoaded', function () {
 
+    /* ---- Animacion de las barras del ranking ---- */
+    document.querySelectorAll('.fed-rank-bar[data-w]').forEach(function (barra) {
+        var w = parseFloat(barra.getAttribute('data-w')) || 0;
+        barra.style.width = '0%';
+        requestAnimationFrame(function () {
+            setTimeout(function () { barra.style.width = w + '%'; }, 80);
+        });
+    });
+
+    /* ---- Salto automatico al Panel 02 cuando se llega con ?ind=... ---- */
+    if (!location.hash && /[?&]ind=\d+/.test(location.search)) {
+        var panel2 = document.getElementById('panel02');
+        if (panel2) { panel2.scrollIntoView({ behavior: 'smooth', block: 'start' }); }
+    }
+
     /* ---- Tabla de detalle: busqueda en vivo, orden por columna y CSV ---- */
-    var tabla = document.getElementById('tablaDetalle');
+    var tabla = document.getElementById('tablaDetalleEst');
     if (!tabla) return;
     var tbody = tabla.querySelector('tbody');
     var filas = Array.prototype.slice.call(tbody.querySelectorAll('tr[data-sortable="1"]'));
@@ -712,7 +870,7 @@ document.addEventListener('DOMContentLoaded', function () {
             tr.style.display = mostrar ? '' : 'none';
             if (mostrar) visibles++;
         });
-        contador.textContent = visibles + ' de ' + filas.length + ' registros';
+        contador.textContent = visibles + ' de ' + filas.length + ' establecimientos';
     }
     if (input) input.addEventListener('input', aplicarFiltro);
 
@@ -758,7 +916,7 @@ document.addEventListener('DOMContentLoaded', function () {
             var blob = new Blob(["\uFEFF" + lineas.join('\r\n')], { type: 'text/csv;charset=utf-8;' });
             var a = document.createElement('a');
             a.href = URL.createObjectURL(blob);
-            a.download = <?= json_encode('avances_fed_' . $fAnio . ($fMes !== '' ? '_' . $fMes : 's_todos') . ($fEst !== '' ? '_est' . $fEst : '') . '.csv') ?>;
+            a.download = <?= json_encode('detalle_fed_' . preg_replace('/[^A-Za-z0-9_-]/', '', (string)($indSel['codigo'] ?? 'FED')) . '_' . $fAnio . ($fMes !== '' ? '_' . $fMes : '_todos') . '.csv') ?>;
             document.body.appendChild(a);
             a.click();
             document.body.removeChild(a);
