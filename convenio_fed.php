@@ -4,6 +4,15 @@
  * Pagina 02: Convenio FED - Fondo de Estimulo al Desempeno
  * Consulta y visualizacion de avances (todos los roles).
  *
+ * v6 - Navegacion "un panel a la vez" (2026-11-05):
+ *  Al cargar la pagina solo es visible el PANEL 01 (Presentacion); el PANEL 02
+ *  (Detalle) queda oculto. El boton "Ver detalle (Panel 02)" de cada tarjeta
+ *  lleva a convenio_fed.php?vista=detalle&ind=ID... y entonces solo es visible
+ *  el PANEL 02, que incluye el boton "Regresar" (junto al titulo y tambien al
+ *  final del panel) para volver al PANEL 01 conservando anio/mes/est. Los
+ *  enlaces antiguos con ?ind=ID siguen abriendo el Panel 02 (compatibilidad)
+ *  y los filtros del Panel 02 conservan vista=detalle al consultar.
+ *
  * v5 - Rediseño UI/UX en dos paneles (2026-11-05):
  *  Se conserva el encabezado page-header-section y el aviso
  *  fed-info-import de "Datos actualizados al". El resto de la pagina se
@@ -46,6 +55,9 @@
  *         detalle se agrupa SIEMPRE por establecimiento directamente en SQL
  *         (GROUP BY renipress, establecimiento) con el porcentaje recalculado
  *         sobre los totales sumados. Se agrega el ranking con barras.
+ *  v6   - Navegacion un panel a la vez: al cargar solo Panel 01; el boton
+ *         "Ver detalle" muestra solo el Panel 02; el boton "Regresar" del
+ *         Panel 02 vuelve al Panel 01.
  */
 require_once 'includes/auth.php';
 verificarAutenticacion();
@@ -291,6 +303,23 @@ if ($fAnio !== '') { $qsPanel2['anio'] = $fAnio; }
 if ($fMes  !== '') { $qsPanel2['mes']  = $fMes; }
 if ($fEst  !== '') { $qsPanel2['est']  = $fEst; }
 
+/* ----------------------------------------------------------------------------
+ * 5.1 VISTA ACTIVA (v6): un solo panel visible a la vez
+ *  - Carga por defecto (sin vista y sin ind) -> PANEL 01 visible, PANEL 02 oculto.
+ *  - vista=detalle (o enlaces antiguos con ?ind=ID) -> PANEL 02 visible,
+ *    PANEL 01 oculto. El boton "Regresar" del Panel 02 vuelve al Panel 01.
+ *  - Sin indicadores activos no hay detalle posible: siempre se muestra el
+ *    Panel 01 con su aviso.
+ * --------------------------------------------------------------------------- */
+$verDetalle = (($_GET['vista'] ?? '') === 'detalle')
+           || (($_GET['vista'] ?? '') === '' && $fInd !== '');
+if (empty($indicadoresFiltro)) {
+    $verDetalle = false;
+}
+
+/* URL del boton Regresar del Panel 02 -> Panel 01 (conserva anio/mes/est) */
+$urlVolverPanel1 = 'convenio_fed.php' . (empty($qsPanel2) ? '' : '?' . http_build_query($qsPanel2));
+
 $pageTitle = 'Convenio FED - Sistema HIS';
 include 'includes/header.php';
 ?>
@@ -324,7 +353,6 @@ html { scroll-behavior: smooth; }
     display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical;
     overflow: hidden; font-size: .78rem; line-height: 1.35; margin-bottom: .5rem;
 }
-.fed-card-selected { outline: 2px solid var(--his-primary); outline-offset: 2px; }
 
 /* Panel 02: cabecera con datos del indicador */
 .fed-stat-tile {
@@ -425,7 +453,10 @@ html { scroll-behavior: smooth; }
 
 <!-- ============================================================= -->
 <!-- PANEL 01 · PRESENTACION: tarjetas de indicadores              -->
+<!-- v6: visible solo en la carga por defecto; el Panel 02 queda   -->
+<!--     oculto hasta pulsar "Ver detalle" en una tarjeta.         -->
 <!-- ============================================================= -->
+<?php if (!$verDetalle): ?>
 <div class="fed-anchor" id="panel01"></div>
 <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3">
     <div class="d-flex align-items-center gap-2">
@@ -469,12 +500,11 @@ html { scroll-behavior: smooth; }
     <?php foreach ($panel01 as $p):
         $pctCard = $p['pct_prom'] !== null ? round((float)$p['pct_prom'], 1) : null;
         $avCard  = clasificarAvanceFED($pctCard);
-        $selCard = (int)$p['id_indicador'] === $indId;
-        $urlPanel2 = 'convenio_fed.php?' . http_build_query(array_merge($qsPanel2, ['ind' => (int)$p['id_indicador']])) . '#panel02';
+        $urlPanel2 = 'convenio_fed.php?' . http_build_query(array_merge($qsPanel2, ['vista' => 'detalle', 'ind' => (int)$p['id_indicador']])) . '#panel02';
         $nombreCorto = mb_strimwidth((string)$p['nombre'], 0, 90, '...');
     ?>
     <div class="col-xl-3 col-lg-4 col-md-6 col-12 d-flex">
-        <div class="card indicador-card <?= $avCard['estado'] ?> w-100 <?= $selCard ? 'fed-card-selected' : '' ?>">
+        <div class="card indicador-card <?= $avCard['estado'] ?> w-100">
             <div class="d-flex flex-column h-100 w-100">
                 <div class="d-flex justify-content-between align-items-center mb-2">
                     <span class="indicador-codigo"><?= clean($p['codigo']) ?></span>
@@ -506,15 +536,9 @@ html { scroll-behavior: smooth; }
                         <span><i class="fas fa-database me-1"></i><?= number_format((int)$p['n_reg']) ?> registros</span>
                         <span><i class="fas fa-hospital me-1"></i><?= (int)$p['n_est'] ?> establec.</span>
                     </div>
-                    <?php if ($selCard): ?>
-                        <a href="#panel02" class="btn btn-outline-primary btn-sm w-100" title="El detalle de este indicador se muestra en el Panel 02">
-                            <i class="fas fa-check me-1"></i> Mostrando detalle (Panel 02)
-                        </a>
-                    <?php else: ?>
-                        <a href="<?= $urlPanel2 ?>" class="btn btn-his btn-sm w-100" title="Ver la informacion detallada de este indicador en el Panel 02">
-                            <i class="fas fa-arrow-circle-down me-1"></i> Ver detalle (Panel 02)
-                        </a>
-                    <?php endif; ?>
+                    <a href="<?= clean($urlPanel2) ?>" class="btn btn-his btn-sm w-100" title="Muestra el Panel 02 con la informacion detallada de este indicador">
+                        <i class="fas fa-arrow-circle-down me-1"></i> Ver detalle (Panel 02)
+                    </a>
                 </div>
             </div>
         </div>
@@ -523,17 +547,24 @@ html { scroll-behavior: smooth; }
 </div>
 
 <?php endif; /* fin Panel 01 con indicadores */ ?>
+<?php endif; /* fin vista Panel 01 (v6): el Panel 01 se oculta al consultar el detalle */ ?>
 
 <!-- ============================================================= -->
 <!-- PANEL 02 · DETALLE DEL INDICADOR SELECCIONADO                 -->
+<!-- v6: visible solo al pulsar "Ver detalle" en el Panel 01;      -->
+<!--     incluye el boton "Regresar" para volver al Panel 01.      -->
 <!-- ============================================================= -->
+<?php if ($verDetalle): ?>
 <div class="fed-anchor" id="panel02"></div>
 <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3">
     <div class="d-flex align-items-center gap-2">
         <span class="fed-panel-badge">Panel 02</span>
         <h5 class="mb-0 fw-bold text-dark">Informacion Detallada del Indicador</h5>
     </div>
-    <a href="#panel01" class="small"><i class="fas fa-arrow-circle-up me-1"></i>Volver al Panel 01</a>
+    <!-- Boton Regresar: vuelve a mostrar el Panel 01 y oculta el Panel 02 -->
+    <a href="<?= clean($urlVolverPanel1) ?>" class="btn btn-outline-secondary btn-sm" title="Vuelve a la Presentacion de Indicadores (Panel 01)">
+        <i class="fas fa-arrow-circle-left me-1"></i>Regresar
+    </a>
 </div>
 
 <?php if ($indSel === null): ?>
@@ -614,6 +645,7 @@ html { scroll-behavior: smooth; }
     <!-- ---------- Filtros del Panel 02 ---------- -->
     <div class="card-body border-top py-3">
         <form method="GET" action="convenio_fed.php#panel02" class="row g-2 align-items-end" id="formPanel02">
+            <input type="hidden" name="vista" value="detalle">
             <div class="col-lg-3 col-md-6 col-12">
                 <label class="form-label small fw-semibold mb-0">Indicador</label>
                 <select name="ind" class="form-select form-select-sm" onchange="this.form.submit()">
@@ -826,6 +858,15 @@ html { scroll-behavior: smooth; }
 
 <?php endif; /* fin Panel 02 con indicador seleccionado */ ?>
 
+<!-- Boton Regresar al final del Panel 02 (tras la tabla y el ranking) -->
+<div class="text-center mb-4">
+    <a href="<?= clean($urlVolverPanel1) ?>" class="btn btn-outline-secondary" title="Vuelve a la Presentacion de Indicadores (Panel 01)">
+        <i class="fas fa-arrow-circle-left me-1"></i>Regresar al Panel 01
+    </a>
+</div>
+
+<?php endif; /* fin vista Panel 02 (v6): visible solo con vista=detalle */ ?>
+
 <?php endif; /* fin $sistemaOK */ ?>
 
 <script>
@@ -833,7 +874,7 @@ html { scroll-behavior: smooth; }
  * Interactividad de la vista de consulta FED (JavaScript puro)
  *  - Tabla del Panel 02: busqueda en vivo, orden por columna y CSV.
  *  - Grafico de ranking: animacion de las barras.
- *  - Salto automatico al Panel 02 al llegar con ?ind=... sin ancla.
+ *  - Salto automatico al Panel 02 al llegar con ?ind=... o ?vista=detalle sin ancla.
  * ============================================================ */
 document.addEventListener('DOMContentLoaded', function () {
 
@@ -846,8 +887,8 @@ document.addEventListener('DOMContentLoaded', function () {
         });
     });
 
-    /* ---- Salto automatico al Panel 02 cuando se llega con ?ind=... ---- */
-    if (!location.hash && /[?&]ind=\d+/.test(location.search)) {
+    /* ---- Salto automatico al Panel 02 al llegar con ?ind=... o ?vista=detalle sin ancla ---- */
+    if (!location.hash && (/[?&]ind=\d+/.test(location.search) || /[?&]vista=detalle/.test(location.search))) {
         var panel2 = document.getElementById('panel02');
         if (panel2) { panel2.scrollIntoView({ behavior: 'smooth', block: 'start' }); }
     }
