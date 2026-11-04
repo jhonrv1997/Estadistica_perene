@@ -6,8 +6,7 @@
  *
  * v4 - Separacion del modulo en paginas independientes (2026-11-04):
  *  Esta pagina queda como vista de consulta: filtros, resumen rapido, avance
- *  global ponderado, detalle por establecimiento y mes, resumen por indicador,
- *  resumen por establecimiento y vista de tarjetas.
+ *  global ponderado, detalle por establecimiento y mes y resumen por indicador.
  *  Las funciones de administracion se trasladaron a paginas propias:
  *    - fed_gestion_indicadores.php -> FED: Gestion de Indicadores (solo admin)
  *    - fed_importar_avances.php    -> FED: Importar Avances (solo admin)
@@ -24,6 +23,10 @@
  *         o 13 columnas (formato antiguo con id numerico). Ver
  *         fed_importar_avances.php.
  *  v4   - Separacion en paginas; codigo comun en includes/fed_common.php.
+ *  v4.1 - Con Mes y Establecimiento en "todos", el detalle muestra una fila por
+ *         establecimiento y suma numerador y denominador de todos sus meses.
+ *         Se oculta Fecha Importacion y se retiran el resumen por
+ *         establecimiento y la vista de tarjetas.
  */
 require_once 'includes/auth.php';
 verificarAutenticacion();
@@ -182,6 +185,111 @@ if ($sistemaOK) {
     usort($resumenEstablecimientos, function ($x, $y) { return $x['pct_prom'] <=> $y['pct_prom']; });
 }
 
+/* ============================================================================
+ * 2.5 VISTA DEL DETALLE
+ *     Con Mes = todos y Establecimiento = todos, cada establecimiento aparece
+ *     una sola vez: se suman numerador y denominador de todos sus meses
+ *     (y de los indicadores que entren en el filtro). El porcentaje se
+ *     recalcula como numerador / denominador.
+ *     Si se elige un mes o un establecimiento, se mantiene el detalle por fila.
+ * ========================================================================== */
+$agruparPorEstablecimiento = ($fMes === '' && $fEst === '');
+$avancesVista = $avances;
+if ($agruparPorEstablecimiento && !empty($avances)) {
+    $ordenEst = [];
+    $grupos = [];
+    foreach ($avances as $a) {
+        $key = (string)$a['renipress'];
+        if (!isset($grupos[$key])) {
+            $ordenEst[] = $key;
+            $grupos[$key] = [
+                'renipress'         => $a['renipress'],
+                'establecimiento'   => $a['establecimiento'],
+                'anio'              => $a['anio'],
+                'mes'               => $a['mes'],
+                'valor_numerador'   => 0.0,
+                'valor_denominador' => 0.0,
+                'porcentaje_avance' => null,
+                'observaciones'     => '',
+                'codigo'            => '',
+                'indicador_nombre'  => '',
+                '_inds'             => [],
+                '_obs'              => [],
+                '_pcts'             => [],
+                '_meses'            => [],
+                '_n_obs'            => 0,
+            ];
+        }
+        $grupos[$key]['valor_numerador']   += (float)$a['valor_numerador'];
+        $grupos[$key]['valor_denominador'] += (float)$a['valor_denominador'];
+
+        $mes = trim((string)($a['mes'] ?? ''));
+        if ($mes !== '' && !in_array($mes, $grupos[$key]['_meses'], true)) {
+            $grupos[$key]['_meses'][] = $mes;
+        }
+
+        $cod = trim((string)($a['codigo'] ?? ''));
+        $indKey = $cod !== '' ? $cod : ('id:' . (string)($a['id_indicador'] ?? ''));
+        $grupos[$key]['_inds'][$indKey] = (string)($a['indicador_nombre'] ?? '');
+
+        $obs = trim((string)($a['observaciones'] ?? ''));
+        if ($obs !== '' && !in_array($obs, $grupos[$key]['_obs'], true)) {
+            $grupos[$key]['_obs'][] = $obs;
+        }
+        if ($a['porcentaje_avance'] !== null && $a['porcentaje_avance'] !== '') {
+            $grupos[$key]['_pcts'][] = (float)$a['porcentaje_avance'];
+        }
+    }
+
+    $avancesVista = [];
+    foreach ($ordenEst as $key) {
+        $g = $grupos[$key];
+        usort($g['_meses'], function ($x, $y) { return ((int)$x) <=> ((int)$y); });
+
+        $den = (float)$g['valor_denominador'];
+        $num = (float)$g['valor_numerador'];
+        if ($den > 0) {
+            $g['porcentaje_avance'] = round(($num / $den) * 100, 2);
+        } elseif (count($g['_pcts']) > 0) {
+            $g['porcentaje_avance'] = round(array_sum($g['_pcts']) / count($g['_pcts']), 2);
+        }
+
+        if (count($g['_meses']) === 1) {
+            $g['mes'] = $g['_meses'][0];
+        }
+
+        $labels = [];
+        $nombreUnico = '';
+        $codigoUnico = '';
+        foreach ($g['_inds'] as $k => $nom) {
+            if (strpos((string)$k, 'id:') === 0) {
+                $labels[] = $nom !== '' ? $nom : 'N/D';
+                $codigoUnico = '';
+            } else {
+                $labels[] = (string)$k;
+                $codigoUnico = (string)$k;
+            }
+            $nombreUnico = $nom;
+        }
+        $nInd = count($labels);
+        if ($nInd === 1) {
+            $g['codigo'] = $codigoUnico;
+            $g['indicador_nombre'] = $nombreUnico;
+        } elseif ($nInd > 1) {
+            $g['codigo'] = $nInd . ' ind.';
+            $g['indicador_nombre'] = implode(', ', $labels);
+        }
+
+        $g['_n_obs'] = count($g['_obs']);
+        if ($g['_n_obs'] > 0) {
+            $g['observaciones'] = implode(' | ', $g['_obs']);
+        }
+
+        unset($g['_inds'], $g['_obs'], $g['_pcts']);
+        $avancesVista[] = $g;
+    }
+}
+
 $csrfToken = generateCSRFToken();
 $pageTitle = 'Convenio FED - Sistema HIS';
 include 'includes/header.php';
@@ -204,7 +312,7 @@ include 'includes/header.php';
     <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
         <div>
             <h4><i class="fas fa-medal me-2"></i>Convenio FED - Fondo de Estimulo al Desempeno</h4>
-            <p class="subtitle">Red de Salud Perené - Seguimiento del avance de los indicadores FED por establecimiento y mes.</p>
+            <p class="subtitle">Zona Sanitaria Perené - Seguimiento del avance de los indicadores FED</p>
         </div>
         <?php if ($esAdmin && $sistemaOK): ?>
         <div class="d-flex gap-2">
@@ -298,17 +406,18 @@ include 'includes/header.php';
         <strong>Datos actualizados al:</strong>
         <?php if ($ultimaActualizacion): ?>
             <strong class="text-primary"><?= formatDateTime($ultimaActualizacion) ?></strong>
-            (fecha y hora de la ultima importacion desde el SQL Server)
+            
         <?php else: ?>
             <span class="text-muted">Aun no se ha importado informacion de avances.</span>
         <?php endif; ?>
-        <span class="text-muted d-block d-md-inline">Fuente: base SQL Server local &rarr; importacion .txt &rarr; sitio web.</span>
+        <span class="text-muted d-block d-md-inline">Fuente: BD Local</span>
     </div>
 </div>
 
 <!-- ===================== RESUMEN RAPIDO ===================== -->
 <?php
 $nRegistros = count($avances);
+$nFilasDetalle = count($avancesVista);
 $nEstablecimientos = count($resumenEstablecimientos);
 $nIndicadoresConDato = count(array_unique(array_map(function ($a) { return $a['id_indicador']; }, $avances)));
 $pctPromedioGeneral = $nRegistros > 0 ? round(array_sum(array_map(function ($a) { return (float)$a['porcentaje_avance']; }, $avances)) / $nRegistros, 1) : null;
@@ -319,8 +428,8 @@ $avClasifProm = clasificarAvanceFED($pctPromedioGeneral);
         <div class="stat-card stat-primary">
             <div class="stat-icon"><i class="fas fa-list-ol"></i></div>
             <div class="stat-info">
-                <span class="stat-value"><?= number_format($nRegistros) ?></span>
-                <span class="stat-label">Registros visibles</span>
+                <span class="stat-value"><?= number_format($nFilasDetalle) ?></span>
+                <span class="stat-label"><?= $agruparPorEstablecimiento ? 'Establecimientos (agrupado)' : 'Registros visibles' ?></span>
             </div>
         </div>
     </div>
@@ -380,6 +489,9 @@ $avClasifProm = clasificarAvanceFED($pctPromedioGeneral);
     <div class="card-header bg-white d-flex justify-content-between align-items-center flex-wrap gap-2">
         <h6 class="mb-0 fw-bold"><i class="fas fa-table me-2 text-primary"></i>Detalle de Avances por Establecimiento y Mes</h6>
         <div class="d-flex gap-2 align-items-center flex-wrap">
+            <?php if ($agruparPorEstablecimiento): ?>
+                <span class="badge rounded-pill bg-light text-primary border">1 fila por establecimiento</span>
+            <?php endif; ?>
             <span class="stat-mini" id="contadorDetalle"></span>
             <div class="input-group input-group-sm" style="width: 230px;">
                 <span class="input-group-text"><i class="fas fa-search"></i></span>
@@ -392,7 +504,11 @@ $avClasifProm = clasificarAvanceFED($pctPromedioGeneral);
     </div>
     <div class="card-body p-0">
         <div class="px-3 pt-2">
-            <small class="text-muted"><i class="fas fa-info-circle me-1"></i>Haga clic en el encabezado de una columna para ordenar. La busqueda filtra en vivo.</small>
+            <?php if ($agruparPorEstablecimiento): ?>
+                <small class="text-muted"><i class="fas fa-layer-group me-1"></i>Cada establecimiento aparece una sola vez. El numerador y el denominador suman todos sus meses y el porcentaje se recalcula sobre esos totales. Elija un mes o un establecimiento para ver el detalle.</small>
+            <?php else: ?>
+                <small class="text-muted"><i class="fas fa-info-circle me-1"></i>Haga clic en el encabezado de una columna para ordenar. La busqueda filtra en vivo.</small>
+            <?php endif; ?>
         </div>
         <div class="table-responsive">
             <table class="table table-hover table-sm mb-0 fed-table-detalle" id="tablaDetalle">
@@ -407,31 +523,52 @@ $avClasifProm = clasificarAvanceFED($pctPromedioGeneral);
                         <th class="sortable" data-col="6" data-type="num" data-csv="porcentaje_avance">Porcentaje Avance</th>
                         <th class="sortable" data-col="7" data-type="str" data-csv="observaciones">Observaciones</th>
                         <th class="sortable" data-col="8" data-type="str" data-csv="indicador">Indicador</th>
-                        <th class="sortable" data-col="9" data-type="str" data-csv="fecha_importacion">Fecha Importacion</th>
                     </tr>
                 </thead>
                 <tbody>
-                    <?php if (empty($avances)): ?>
+                    <?php if (empty($avancesVista)): ?>
                         <tr>
-                            <td colspan="10" class="text-center text-muted py-4">
+                            <td colspan="9" class="text-center text-muted py-4">
                                 <i class="fas fa-inbox fa-2x d-block mb-2"></i>
                                 No hay registros de avances para los filtros seleccionados.
                                 <?php if ($esAdmin): ?>Utilice el modulo <a href="fed_importar_avances.php"><strong>Importar Resultados.txt</strong></a> para cargar los datos.<?php endif; ?>
                             </td>
                         </tr>
                     <?php else: ?>
-                        <?php foreach ($avances as $a):
+                        <?php foreach ($avancesVista as $a):
                             $pct  = $a['porcentaje_avance'] !== null ? (float)$a['porcentaje_avance'] : null;
                             $av   = clasificarAvanceFED($pct);
-                            $mesN = $a['mes'] !== null ? (int)$a['mes'] : null;
-                            $mesTxt = $a['mes'] !== null ? $a['mes'] . ' &middot; ' . getNombreMes($mesN) : '-';
-                            $fechaImp = $a['fecha_importacion'] ?? $a['fecha_registro'];
+                            $mesesGrupo = (isset($a['_meses']) && is_array($a['_meses'])) ? $a['_meses'] : [];
+                            $nMesesGrupo = count($mesesGrupo);
+                            if ($nMesesGrupo > 1) {
+                                $partesMes = [];
+                                foreach ($mesesGrupo as $mm) {
+                                    $partesMes[] = $mm . ' - ' . getNombreMes((int)$mm);
+                                }
+                                $mesSort = $mesesGrupo[0];
+                                $mesCsv = implode(', ', $partesMes);
+                                $mesTitle = implode(', ', $partesMes);
+                                $mesTxt = '';
+                            } else {
+                                $mesN = $a['mes'] !== null ? (int)$a['mes'] : null;
+                                $mesTxt = $a['mes'] !== null ? $a['mes'] . ' &middot; ' . getNombreMes($mesN) : '-';
+                                $mesSort = (string)($a['mes'] ?? '');
+                                $mesCsv = $a['mes'] !== null ? $a['mes'] . ' - ' . getNombreMes($mesN) : '';
+                                $mesTitle = '';
+                            }
+                            $nObs = isset($a['_n_obs']) ? (int)$a['_n_obs'] : 0;
                         ?>
                         <tr data-sortable="1">
                             <td data-sort="<?= clean($a['renipress']) ?>"><code><?= clean($a['renipress']) ?></code></td>
                             <td class="fed-est-name" data-sort="<?= clean($a['establecimiento']) ?>"><?= clean($a['establecimiento']) ?></td>
                             <td data-sort="<?= clean($a['anio']) ?>"><?= clean($a['anio']) ?></td>
-                            <td data-sort="<?= clean($a['mes'] ?? '') ?>" data-csv="<?= $a['mes'] !== null ? clean($a['mes']) . ' - ' . clean(getNombreMes($mesN)) : '' ?>"><?= $mesTxt ?></td>
+                            <td data-sort="<?= clean($mesSort) ?>" data-csv="<?= clean($mesCsv) ?>"<?= $mesTitle !== '' ? ' title="' . clean($mesTitle) . '"' : '' ?>>
+                                <?php if ($nMesesGrupo > 1): ?>
+                                    <span class="badge bg-light text-dark border"><?= (int)$nMesesGrupo ?> meses</span>
+                                <?php else: ?>
+                                    <?= $mesTxt ?>
+                                <?php endif; ?>
+                            </td>
                             <td class="text-end fed-num" data-sort="<?= (float)$a['valor_numerador'] ?>" data-csv="<?= number_format((float)$a['valor_numerador'], 2, '.', '') ?>"><?= number_format((float)$a['valor_numerador'], 2) ?></td>
                             <td class="text-end fed-num" data-sort="<?= (float)$a['valor_denominador'] ?>" data-csv="<?= number_format((float)$a['valor_denominador'], 2, '.', '') ?>"><?= number_format((float)$a['valor_denominador'], 2) ?></td>
                             <td data-sort="<?= $pct ?? -1 ?>" data-csv="<?= $pct !== null ? number_format($pct, 2, '.', '') : '' ?>">
@@ -448,7 +585,11 @@ $avClasifProm = clasificarAvanceFED($pctPromedioGeneral);
                             </td>
                             <td data-sort="<?= clean($a['observaciones'] ?? '') ?>" data-csv="<?= clean($a['observaciones'] ?? '') ?>">
                                 <?php if (!empty($a['observaciones'])): ?>
-                                    <small title="<?= clean($a['observaciones']) ?>"><?= clean(mb_strimwidth($a['observaciones'], 0, 40, '...')) ?></small>
+                                    <?php if ($nObs > 1): ?>
+                                        <small title="<?= clean($a['observaciones']) ?>"><?= (int)$nObs ?> observaciones</small>
+                                    <?php else: ?>
+                                        <small title="<?= clean($a['observaciones']) ?>"><?= clean(mb_strimwidth($a['observaciones'], 0, 40, '...')) ?></small>
+                                    <?php endif; ?>
                                 <?php else: ?>
                                     <small class="text-muted">-</small>
                                 <?php endif; ?>
@@ -456,16 +597,9 @@ $avClasifProm = clasificarAvanceFED($pctPromedioGeneral);
                             <td data-sort="<?= clean($a['codigo'] ?? '') ?>" data-csv="<?= clean(($a['codigo'] ?? '')) ?> <?= clean($a['indicador_nombre'] ?? '') ?>">
                                 <?php if (!empty($a['codigo'])): ?>
                                     <span class="badge bg-light text-dark border" title="<?= clean($a['indicador_nombre'] ?? '') ?>"><?= clean($a['codigo']) ?></span>
-                                    <small class="text-muted d-none d-xl-inline"><?= clean(mb_strimwidth($a['indicador_nombre'] ?? '', 0, 30, '...')) ?></small>
+                                    <small class="text-muted d-none d-xl-inline"><?= clean(mb_strimwidth($a['indicador_nombre'] ?? '', 0, 48, '...')) ?></small>
                                 <?php else: ?>
                                     <small class="text-muted">N/D</small>
-                                <?php endif; ?>
-                            </td>
-                            <td data-sort="<?= clean($fechaImp ?? '') ?>" data-csv="<?= clean($fechaImp ?? '') ?>">
-                                <?php if ($fechaImp): ?>
-                                    <small><i class="far fa-clock text-muted me-1"></i><?= formatDateTime($fechaImp) ?></small>
-                                <?php else: ?>
-                                    <small class="text-muted">-</small>
                                 <?php endif; ?>
                             </td>
                         </tr>
@@ -546,110 +680,6 @@ $avClasifProm = clasificarAvanceFED($pctPromedioGeneral);
                     <?php endif; ?>
                 </tbody>
             </table>
-        </div>
-    </div>
-</div>
-
-<!-- ===================== RESUMEN POR ESTABLECIMIENTO ===================== -->
-<div class="card shadow-sm mb-4">
-    <div class="card-header bg-white d-flex justify-content-between align-items-center flex-wrap gap-2">
-        <h6 class="mb-0 fw-bold"><i class="fas fa-hospital me-2 text-primary"></i>Avance Promedio por Establecimiento</h6>
-        <span class="stat-mini">Los que requieren atencion aparecen primero</span>
-    </div>
-    <div class="card-body p-0">
-        <div class="table-responsive">
-            <table class="table table-hover table-sm mb-0">
-                <thead class="table-light">
-                    <tr>
-                        <th style="width:100px;">Renipress</th>
-                        <th>Establecimiento</th>
-                        <th style="width:90px;" class="text-end">Registros</th>
-                        <th style="width:110px;" class="text-end">Avance Promedio</th>
-                        <th style="width:220px;">Barra de Avance</th>
-                        <th style="width:110px;">Estado</th>
-                        <th style="width:120px;"></th>
-                    </tr>
-                </thead>
-                <tbody>
-                    <?php if (empty($resumenEstablecimientos)): ?>
-                        <tr><td colspan="7" class="text-center text-muted py-4">No hay datos de establecimientos para los filtros seleccionados.</td></tr>
-                    <?php else: ?>
-                        <?php foreach ($resumenEstablecimientos as $re):
-                            $pctE = (float)$re['pct_prom'];
-                            $avE = clasificarAvanceFED($pctE);
-                            $urlDetalle = 'convenio_fed.php?' . http_build_query([
-                                'anio' => $fAnio,
-                                'mes'  => $fMes,
-                                'est'  => $re['renipress'],
-                                'ind'  => $fInd,
-                            ]);
-                        ?>
-                        <tr>
-                            <td><code><?= clean($re['renipress']) ?></code></td>
-                            <td class="fed-est-name"><?= clean($re['establecimiento']) ?></td>
-                            <td class="text-end"><?= (int)$re['n'] ?></td>
-                            <td class="text-end"><strong><?= number_format($pctE, 1) ?>%</strong></td>
-                            <td>
-                                <div class="progress progress-his" style="height:8px;">
-                                    <div class="progress-bar <?= colorBarraFED($pctE) ?>" role="progressbar" style="width: <?= min(100, $pctE) ?>%;"></div>
-                                </div>
-                            </td>
-                            <td><span class="avance-badge <?= $avE['clase'] ?>"><?= $avE['texto'] ?></span></td>
-                            <td class="text-end">
-                                <a href="<?= clean($urlDetalle) ?>" class="btn btn-xs btn-outline-primary" title="Ver solo este establecimiento">
-                                    <i class="fas fa-search-plus me-1"></i>Detalle
-                                </a>
-                            </td>
-                        </tr>
-                        <?php endforeach; ?>
-                    <?php endif; ?>
-                </tbody>
-            </table>
-        </div>
-    </div>
-</div>
-
-<!-- ===================== VISTA DE TARJETAS POR INDICADOR ===================== -->
-<div class="card shadow-sm mb-4">
-    <div class="card-header bg-white">
-        <h6 class="mb-0 fw-bold"><i class="fas fa-th-large me-2 text-primary"></i>Vista de Tarjetas por Indicador FED</h6>
-    </div>
-    <div class="card-body">
-        <div class="row g-3">
-            <?php if (empty($resumenIndicadores)): ?>
-                <div class="col-12 text-center text-muted py-3">No hay indicadores activos para mostrar.</div>
-            <?php else: ?>
-                <?php foreach ($resumenIndicadores as $ri):
-                    $sumNumC = $ri['sum_num'] !== null ? (float)$ri['sum_num'] : 0;
-                    $sumDenC = $ri['sum_den'] !== null ? (float)$ri['sum_den'] : 0;
-                    $pctCard = $sumDenC > 0 ? round(($sumNumC / $sumDenC) * 100, 1) : ($ri['pct_prom'] !== null ? round((float)$ri['pct_prom'], 1) : null);
-                    $avCard = clasificarAvanceFED($pctCard);
-                ?>
-                <div class="col-lg-4 col-md-6">
-                    <div class="indicador-card <?= $avCard['estado'] ?>">
-                        <span class="indicador-codigo"><?= clean($ri['codigo']) ?> &middot; Peso <?= $ri['peso_ponderado'] !== null ? number_format((float)$ri['peso_ponderado'], 1) . '%' : 'N/D' ?></span>
-                        <div class="indicador-nombre"><?= clean($ri['nombre']) ?></div>
-                        <div class="indicador-meta">
-                            <i class="fas fa-bullseye me-1"></i> Meta: <strong><?= $ri['meta_anual'] !== null ? number_format((float)$ri['meta_anual'], 2) : '-' ?></strong>
-                            &middot; <i class="fas fa-ruler me-1"></i> <?= clean($ri['unidad_medida'] ?? '-') ?>
-                        </div>
-                        <?php if ($pctCard !== null): ?>
-                            <div class="progress progress-his mb-2">
-                                <div class="progress-bar <?= colorBarraFED($pctCard) ?>" role="progressbar" style="width: <?= min(100, $pctCard) ?>%;"></div>
-                            </div>
-                            <div class="d-flex justify-content-between align-items-center">
-                                <small class="text-muted"><?= number_format((int)$ri['n_reg']) ?> registro(s)</small>
-                                <span class="avance-badge <?= $avCard['clase'] ?>"><?= number_format($pctCard, 1) ?>% &middot; <?= $avCard['texto'] ?></span>
-                            </div>
-                        <?php else: ?>
-                            <div class="text-center py-2">
-                                <span class="avance-badge avance-sin-dato"><i class="fas fa-minus-circle me-1"></i>Sin registro de avance</span>
-                            </div>
-                        <?php endif; ?>
-                    </div>
-                </div>
-                <?php endforeach; ?>
-            <?php endif; ?>
         </div>
     </div>
 </div>
