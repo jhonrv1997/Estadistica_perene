@@ -19,8 +19,10 @@
  *       PRIMARY KEY / AUTO_INCREMENT (fedTablaExiste, fedTieneColumna,
  *       fedEsAutoIncrement, fedAsegurarAutoIncrement).
  *    3. Flags de capacidades: $puedeGestionar, $puedeImportar, $sistemaOK,
- *       $tieneFechaImportacion.
+ *       $tieneFechaImportacion, $tieneFichaPdf.
  *    4. Helpers de presentacion: clasificarAvanceFED() y colorBarraFED().
+ *    5. Ficha tecnica PDF (v8): fedFichaDir(), fedFichaUrl(),
+ *       fedEliminarFichaTecnica() y fedSubirFichaTecnica().
  *
  * DEPENDENCIAS: incluir SIEMPRE despues de
  *    require_once 'includes/auth.php';   verificarAutenticacion();
@@ -188,6 +190,24 @@ if (!defined('FED_COMMON_CARGADO')) {
     // Columna fecha_importacion (puede no existir si aun no se aplica update_fed_v3.sql)
     $tieneFechaImportacion = $tablaAvances !== null ? fedTieneColumna($pdo, $tablaAvances, 'fecha_importacion') : false;
 
+    /* ----------------------------------------------------------------------------
+     * v8: Columna ficha_tecnica_pdf (ficha tecnica en PDF de cada indicador).
+     * Si no existe se intenta crearla automaticamente (misma auto-reparacion de
+     * esquema que fedAsegurarAutoIncrement). Si el hosting no permite ALTER,
+     * ejecutar manualmente Database/update_fed_v4_fichas.sql desde phpMyAdmin;
+     * mientras tanto las paginas ocultan la funcionalidad de fichas PDF.
+     * ------------------------------------------------------------------------- */
+    $tieneFichaPdf = $tablaIndicadores !== null ? fedTieneColumna($pdo, $tablaIndicadores, 'ficha_tecnica_pdf') : false;
+    if ($tablaIndicadores !== null && !$tieneFichaPdf) {
+        try {
+            $pdo->exec("ALTER TABLE `{$tablaIndicadores}`
+                        ADD COLUMN `ficha_tecnica_pdf` VARCHAR(255) NULL DEFAULT NULL AFTER `responsable`");
+            $tieneFichaPdf = fedTieneColumna($pdo, $tablaIndicadores, 'ficha_tecnica_pdf');
+        } catch (Throwable $e) {
+            $tieneFichaPdf = false; // sin permisos ALTER: aplicar el SQL manual
+        }
+    }
+
     /* ============================================================================
      * 2. HELPERS DE PRESENTACION (clasificacion y color de barras de avance)
      * ========================================================================== */
@@ -208,5 +228,112 @@ if (!defined('FED_COMMON_CARGADO')) {
         if ($pct >= 60) return 'bg-warning';
         if ($pct >= 40) return 'bg-orange';
         return 'bg-danger';
+    }
+
+    /* ============================================================================
+     * 3. FICHA TECNICA EN PDF (v8)
+     * --------------------------------------------------------------------------
+     * Cada indicador del Convenio FED puede tener adjunto un PDF con su ficha
+     * tecnica. El archivo fisico se guarda en la carpeta uploads/fed_fichas/ del
+     * servidor y en la base de datos solo se guarda su nombre (columna
+     * ficha_tecnica_pdf de CONVENIO_FED_INDICADORES).
+     * ========================================================================== */
+
+    define('FED_FICHA_DIR_REL', 'uploads/fed_fichas'); // carpeta dentro de la raiz del sitio
+    define('FED_FICHA_MAX_BYTES', 10485760);           // limite: 10 MB por PDF
+
+    /**
+     * Ruta ABSOLUTA de la carpeta de fichas PDF (uploads/fed_fichas). La crea
+     * automaticamente si todavia no existe. La raiz del sitio se calcula desde
+     * includes/ (este archivo vive en includes/, por eso se sube un nivel).
+     */
+    function fedFichaDir() {
+        $dir = dirname(__DIR__) . '/' . FED_FICHA_DIR_REL;
+        if (!is_dir($dir)) { @mkdir($dir, 0755, true); }
+        return $dir;
+    }
+
+    /**
+     * URL publica (relativa a la raiz del sitio) para abrir una ficha PDF en
+     * otra pestana/ventana del navegador. basename() evita cualquier intento
+     * de path traversal.
+     */
+    function fedFichaUrl($nombre) {
+        if (!is_string($nombre) || $nombre === '') return '';
+        return FED_FICHA_DIR_REL . '/' . rawurlencode(basename($nombre));
+    }
+
+    /**
+     * Elimina de la carpeta uploads/fed_fichas el PDF de ficha tecnica indicado
+     * (mejor esfuerzo: si no existe o no se puede borrar, no falla).
+     */
+    function fedEliminarFichaTecnica($nombre) {
+        if (!is_string($nombre) || $nombre === '') return;
+        $ruta = fedFichaDir() . '/' . basename($nombre);
+        if (is_file($ruta)) { @unlink($ruta); }
+    }
+
+    /**
+     * Procesa la subida del PDF de la ficha tecnica (input file "ficha_pdf").
+     *
+     * Validaciones aplicadas:
+     *  - que la subida no tenga errores de PHP (upload_max_filesize, etc.);
+     *  - tamano maximo FED_FICHA_MAX_BYTES (10 MB);
+     *  - extension .pdf;
+     *  - contenido real de PDF (cabecera "%PDF-" dentro de los primeros KB).
+     *
+     * El nombre final es unico: fed_ficha_YYYYMMDD_HHMMSS_XXXXXXXX.pdf
+     *
+     * @param array|null $archivo  $_FILES['ficha_pdf'] o null
+     * @return array [bool ok, string|null nombreGuardado, string|null mensajeError]
+     */
+    function fedSubirFichaTecnica($archivo) {
+        // Campo opcional: sin archivo (o subida vacia) no es un error
+        if (!is_array($archivo) || (int)($archivo['error'] ?? UPLOAD_ERR_NO_FILE) === UPLOAD_ERR_NO_FILE) {
+            return [true, null, null];
+        }
+        $err = (int)$archivo['error'];
+        if ($err !== UPLOAD_ERR_OK) {
+            $mapa = [
+                UPLOAD_ERR_INI_SIZE   => 'El PDF supera el limite de subida del servidor (upload_max_filesize de PHP).',
+                UPLOAD_ERR_FORM_SIZE  => 'El PDF supera el limite de subida del formulario.',
+                UPLOAD_ERR_PARTIAL    => 'La subida del PDF se interrumpio. Intente nuevamente.',
+                UPLOAD_ERR_NO_TMP_DIR => 'Falta la carpeta temporal del servidor (upload_tmp_dir).',
+                UPLOAD_ERR_CANT_WRITE => 'El servidor no pudo escribir el archivo temporal de la subida.',
+                UPLOAD_ERR_EXTENSION  => 'Una extension de PHP detuvo la subida del archivo.',
+            ];
+            return [false, null, $mapa[$err] ?? ('Error desconocido al subir el PDF (codigo ' . $err . ').')];
+        }
+        if (($archivo['size'] ?? 0) <= 0) {
+            return [false, null, 'El archivo PDF esta vacio.'];
+        }
+        if ((int)$archivo['size'] > FED_FICHA_MAX_BYTES) {
+            return [false, null, 'El PDF supera el tamano maximo permitido (10 MB).'];
+        }
+        if (strtolower(pathinfo((string)($archivo['name'] ?? ''), PATHINFO_EXTENSION)) !== 'pdf') {
+            return [false, null, 'Solo se permite adjuntar archivos con extension .pdf.'];
+        }
+        // Verificacion del contenido: un PDF real comienza con la cabecera %PDF-
+        $cabecera = '';
+        $fh = @fopen($archivo['tmp_name'], 'rb');
+        if ($fh) {
+            $cabecera = (string)@fread($fh, 1024);
+            @fclose($fh);
+        }
+        if (strpos($cabecera, '%PDF-') === false) {
+            return [false, null, 'El archivo adjuntado no parece un PDF valido.'];
+        }
+        // Carpeta destino (se crea automaticamente la primera vez)
+        $dir = fedFichaDir();
+        if (!is_dir($dir)) {
+            return [false, null, 'No se pudo crear la carpeta ' . FED_FICHA_DIR_REL . ' en el servidor. Verifique permisos de escritura.'];
+        }
+        $nombre = 'fed_ficha_' . date('Ymd_His') . '_' . bin2hex(random_bytes(4)) . '.pdf';
+        $destino = $dir . '/' . $nombre;
+        if (!@move_uploaded_file($archivo['tmp_name'], $destino)) {
+            return [false, null, 'No se pudo guardar el PDF en ' . FED_FICHA_DIR_REL . '. Verifique permisos de escritura de la carpeta.'];
+        }
+        @chmod($destino, 0644);
+        return [true, $nombre, null];
     }
 }
