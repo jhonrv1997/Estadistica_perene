@@ -13,6 +13,18 @@
  *  enlaces antiguos con ?ind=ID siguen abriendo el Panel 02 (compatibilidad)
  *  y los filtros del Panel 02 conservan vista=detalle al consultar.
  *
+ * v7 - Seccion "Ranking de Establecimientos" dividida en 2 columnas (2026-11-05):
+ *  DERECHA: se conserva el ranking de barras tal como estaba.
+ *  IZQUIERDA: nuevo grafico "Avance por Mes" (linea de tendencia con Chart.js)
+ *  con datos de establecimiento, mes y porcentaje_avance del indicador y anio
+ *  del panel (muestra los 12 meses, independiente de los filtros mes/est).
+ *  Al cargar la pagina la linea muestra el agregado de TODOS los
+ *  establecimientos (numerador y denominador sumados por mes) y un grupo de
+ *  radio-botones permite seleccionar un establecimiento para que la linea
+ *  muestre unicamente los datos de ese establecimiento (sin recargar). La
+ *  linea punteada gris dibuja la tendencia (regresion lineal) de la serie
+ *  visible.
+ *
  * v5 - Rediseño UI/UX en dos paneles (2026-11-05):
  *  Se conserva el encabezado page-header-section y el aviso
  *  fed-info-import de "Datos actualizados al". El resto de la pagina se
@@ -58,6 +70,10 @@
  *  v6   - Navegacion un panel a la vez: al cargar solo Panel 01; el boton
  *         "Ver detalle" muestra solo el Panel 02; el boton "Regresar" del
  *         Panel 02 vuelve al Panel 01.
+ *  v7   - Seccion Ranking a 2 columnas: izquierda "Avance por Mes" (linea de
+ *         tendencia con selector de establecimiento por radio-botones; al
+ *         cargar agrega todos los establecimientos) y derecha el ranking de
+ *         barras.
  */
 require_once 'includes/auth.php';
 verificarAutenticacion();
@@ -206,6 +222,7 @@ $detalleEst = [];    // filas agrupadas de la tabla de detalle
 $rankingEst = [];    // mismo detalle ordenado de mejor a peor avance
 $pctDetalleGlobal = null;
 $pctCabecera = null;
+$fedTrendJson = [];  // v7: datos del grafico "Avance por Mes" (linea de tendencia)
 
 if ($sistemaOK && $indSel !== null) {
     $con = ['a.id_indicador = ?', 'a.anio = ?'];
@@ -270,6 +287,84 @@ if ($sistemaOK && $indSel !== null) {
         } elseif ($statsInd['pct_prom'] !== null) {
             $pctDetalleGlobal = round((float)$statsInd['pct_prom'], 1);
         }
+    }
+
+    /* --- 4.5 Serie mensual del grafico "Avance por Mes" (linea de tendencia, v7) ---
+     * Datos de establecimiento, mes y porcentaje_avance del indicador y anio
+     * del panel (siempre muestra los 12 meses; no depende de los filtros
+     * mes/establecimiento del Panel 02). Se generan:
+     *   - Serie "__todos__": agregado de TODOS los establecimientos (numerador
+     *     y denominador sumados por mes, porcentaje recalculado). Es la serie
+     *     seleccionada al cargar la pagina.
+     *   - Una serie por establecimiento con su porcentaje mensual.
+     * Todo se envia al navegador como JSON y el cambio de serie se hace con
+     * radio-botones en JavaScript (sin recargar la pagina). */
+    $filasTrend = [];
+    try {
+        $st = $pdo->prepare("SELECT a.renipress, a.establecimiento, a.mes,
+                                    SUM(a.valor_numerador)   AS num,
+                                    SUM(a.valor_denominador) AS den,
+                                    AVG(a.porcentaje_avance) AS pct_prom
+                             FROM `{$tablaAvances}` a
+                             WHERE a.id_indicador = ? AND a.anio = ?
+                               AND a.mes IS NOT NULL AND a.mes <> ''
+                             GROUP BY a.renipress, a.establecimiento, a.mes
+                             ORDER BY a.mes ASC, a.establecimiento ASC");
+        $st->execute([$indId, $fAnio]);
+        $filasTrend = $st->fetchAll();
+    } catch (Throwable $e) {
+        $filasTrend = []; // si la consulta falla el grafico simplemente no se muestra
+    }
+
+    if (!empty($filasTrend)) {
+        $pctTrendMes = function ($num, $den, $pctProm) {
+            if ((float)$den > 0) { return round(((float)$num / (float)$den) * 100, 2); }
+            return $pctProm !== null ? round((float)$pctProm, 2) : null;
+        };
+
+        $porEst = [];                                   // serie por establecimiento
+        $agg     = array_fill(1, 12, ['num' => 0.0, 'den' => 0.0]); // agregado por mes
+        foreach ($filasTrend as $ft) {
+            $rp = (string)$ft['renipress'];
+            $m  = (int)$ft['mes'];
+            if ($m < 1 || $m > 12) { continue; }
+            if (!isset($porEst[$rp])) {
+                $porEst[$rp] = ['nombre' => (string)$ft['establecimiento'],
+                                'pct' => array_fill(0, 12, null),
+                                'num' => array_fill(0, 12, null),
+                                'den' => array_fill(0, 12, null)];
+            }
+            $num = (float)$ft['num'];
+            $den = (float)$ft['den'];
+            $porEst[$rp]['pct'][$m - 1] = $pctTrendMes($num, $den, $ft['pct_prom']);
+            $porEst[$rp]['num'][$m - 1] = round($num, 2);
+            $porEst[$rp]['den'][$m - 1] = round($den, 2);
+            $agg[$m]['num'] += $num;
+            $agg[$m]['den'] += $den;
+        }
+
+        // Serie agregada de todos los establecimientos (primera opcion)
+        $pctTodos = array_fill(0, 12, null);
+        $numTodos = array_fill(0, 12, null);
+        $denTodos = array_fill(0, 12, null);
+        foreach ($agg as $m => $v) {
+            if ($v['den'] > 0 || $v['num'] > 0) {
+                $pctTodos[$m - 1] = $pctTrendMes($v['num'], $v['den'], null);
+                $numTodos[$m - 1] = round($v['num'], 2);
+                $denTodos[$m - 1] = round($v['den'], 2);
+            }
+        }
+
+        $seriesTrend = [];
+        $seriesTrend[] = ['key' => '__todos__', 'nombre' => 'Todos los establecimientos',
+                          'pct' => $pctTodos, 'num' => $numTodos, 'den' => $denTodos];
+        uasort($porEst, function ($a, $b) { return strcasecmp($a['nombre'], $b['nombre']); }); // alfabético
+        foreach ($porEst as $rp => $e) {
+            $seriesTrend[] = ['key' => $rp, 'nombre' => $e['nombre'],
+                              'pct' => $e['pct'], 'num' => $e['num'], 'den' => $e['den']];
+        }
+
+        $fedTrendJson = ['anio' => (string)$fAnio, 'series' => $seriesTrend];
     }
 }
 
@@ -390,6 +485,13 @@ html { scroll-behavior: smooth; }
 .fed-rank-goal { position: absolute; top: -3px; bottom: -3px; width: 0; border-left: 2px dashed #8395a7; }
 .fed-legend-dot { width: 12px; height: 12px; border-radius: 3px; display: inline-block; flex-shrink: 0; }
 .fed-legend-goal { width: 0; height: 12px; border-left: 2px dashed #8395a7; display: inline-block; }
+
+/* v7: fila a 2 columnas - grafico "Avance por Mes" (izquierda) y ranking (derecha) */
+.fed-chart-box { background: #fff; border: 1px solid #e3ebf3; border-radius: 10px; padding: .9rem 1rem 1rem; box-shadow: 0 1px 2px rgba(16, 42, 67, .04); }
+.fed-trend-radios { max-height: 118px; overflow-y: auto; padding: 2px 4px 2px 2px; }
+.fed-trend-radios .fed-trend-pill { border-radius: 20px; padding: .18rem .65rem; font-size: .72rem; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.fed-trend-radios .btn-check:checked + .fed-trend-pill { color: #fff; background: var(--his-primary); border-color: var(--his-primary); }
+.fed-trend-wrap { position: relative; height: 330px; }
 </style>
 
 <div class="page-header-section">
@@ -787,72 +889,125 @@ html { scroll-behavior: smooth; }
         </div>
     </div>
 
-    <!-- ---------- Ranking de Establecimientos (grafico de barras) ---------- -->
+    <!-- ==================================================================
+         Fila a 2 columnas (v7):
+           IZQUIERDA -> "Avance por Mes" (linea de tendencia con Chart.js,
+                        selector de establecimiento por radio-botones)
+           DERECHA   -> Ranking de Establecimientos (barras)
+         ================================================================== -->
     <div class="card-body border-top py-3">
-        <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-2">
-            <h6 class="mb-0 fw-bold"><i class="fas fa-ranking-star me-2 text-primary"></i>Ranking de Establecimientos</h6>
-            <div class="d-flex gap-2 flex-wrap">
-                <?php if ($indSel['meta_anual'] !== null): ?>
-                    <span class="stat-mini"><i class="fas fa-bullseye me-1"></i>Meta anual: <?= fedFmtPctMeta($indSel['meta_anual']) ?>%</span>
-                <?php endif; ?>
-                <span class="stat-mini"><i class="fas fa-sort-amount-down me-1"></i>Mejor avance primero</span>
-            </div>
-        </div>
+        <div class="row g-3">
 
-        <?php if (empty($rankingEst)): ?>
-            <div class="text-center text-muted py-4">
-                <i class="fas fa-chart-simple fa-2x d-block mb-2"></i>
-                Sin datos para graficar con los filtros seleccionados.
-            </div>
-        <?php else: ?>
-            <div class="fed-rank-list">
-                <?php $pos = 0; foreach ($rankingEst as $rk):
-                    $pos++;
-                    $pctR = $rk['pct'];
-                    $colorR = colorBarraFED($pctR);
-                    $widthR = $pctR !== null ? min(100, max(0, $pctR)) : 0;
-                    $clsPos = $pos <= 3 ? ' fed-pos-' . $pos : '';
-                    $goalLeft = ($indSel['meta_anual'] !== null && (float)$indSel['meta_anual'] > 0)
-                        ? min(100, max(0, (float)$indSel['meta_anual'])) : null;
-                ?>
-                <div class="fed-rank-row">
-                    <div class="fed-rank-pos<?= $clsPos ?>" title="Puesto <?= $pos ?>">
-                        <?php if ($pos <= 3 && $pctR !== null): ?><i class="fas fa-medal"></i><?php else: ?><?= $pos ?><?php endif; ?>
+            <!-- ---------- IZQUIERDA: Avance por Mes (linea de tendencia) ---------- -->
+            <div class="col-lg-6 d-flex">
+                <div class="fed-chart-box w-100">
+                    <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-1">
+                        <h6 class="mb-0 fw-bold"><i class="fas fa-chart-line me-2 text-success"></i>Avance por Mes</h6>
+                        <span class="stat-mini"><i class="fas fa-calendar me-1"></i>Año <?= clean($fAnio) ?></span>
                     </div>
-                    <div class="fed-rank-body">
-                        <div class="fed-rank-head">
-                            <span class="fed-rank-name" title="<?= clean($rk['establecimiento']) ?> (<?= clean($rk['renipress']) ?>)">
-                                <?= clean($rk['establecimiento']) ?>
-                                <small class="text-muted fw-normal"><code><?= clean($rk['renipress']) ?></code></small>
-                            </span>
-                            <?php if ($pctR !== null): ?>
-                                <span class="fed-rank-val"><?= number_format($pctR, 1) ?>%</span>
-                            <?php else: ?>
-                                <span class="fed-rank-val fed-sin-dato">Sin dato</span>
-                            <?php endif; ?>
+                    <small class="text-muted d-block mb-2">
+                        <i class="fas fa-info-circle me-1"></i>
+                        Línea de tendencia del porcentaje de avance por mes del indicador y año del panel.
+                        Al cargar muestra el agregado de todos los establecimientos; seleccione uno para ver solo sus datos.
+                    </small>
+
+                    <?php if (empty($fedTrendJson)): ?>
+                        <div class="text-center text-muted py-5">
+                            <i class="fas fa-chart-line fa-2x d-block mb-2"></i>
+                            No hay datos mensuales para graficar en <?= clean($fAnio) ?>.
                         </div>
-                        <div class="fed-rank-track" title="Numerador: <?= fedFmtNumero($rk['sum_num']) ?> | Denominador: <?= fedFmtNumero($rk['sum_den']) ?> | <?= number_format((int)$rk['n_reg']) ?> registro(s)">
-                            <div class="fed-rank-bar <?= $colorR ?>" data-w="<?= $widthR ?>" style="width: <?= $widthR ?>%;"></div>
-                            <?php if ($goalLeft !== null): ?>
-                                <div class="fed-rank-goal" style="left: <?= $goalLeft ?>%;" title="Meta anual: <?= fedFmtPctMeta($indSel['meta_anual']) ?>%"></div>
-                            <?php endif; ?>
+                    <?php else: ?>
+                        <!-- Selector de establecimiento (radio-botones) -->
+                        <div class="fed-trend-radios d-flex flex-wrap gap-1 mb-3" id="fedTrendRadios">
+                            <?php foreach ($fedTrendJson['series'] as $i => $s): ?>
+                                <input type="radio" class="btn-check" name="fedTrendEst" id="fedTrendEst<?= $i ?>"
+                                       value="<?= $i ?>" autocomplete="off" <?= $i === 0 ? 'checked' : '' ?>>
+                                <label class="btn btn-outline-primary btn-sm fed-trend-pill" for="fedTrendEst<?= $i ?>"
+                                       title="<?= clean($s['nombre']) ?>">
+                                    <?php if ($i === 0): ?><i class="fas fa-layer-group me-1"></i><?php endif; ?><?= clean($s['nombre']) ?>
+                                </label>
+                            <?php endforeach; ?>
                         </div>
-                    </div>
+
+                        <!-- Grafico de linea (Chart.js) -->
+                        <div class="fed-trend-wrap">
+                            <canvas id="fedTrendChart" role="img" aria-label="Grafico de linea: avance por mes"></canvas>
+                        </div>
+                    <?php endif; ?>
                 </div>
-                <?php endforeach; ?>
             </div>
 
-            <div class="d-flex flex-wrap gap-3 mt-3 small text-muted">
-                <span class="d-inline-flex align-items-center gap-1"><span class="fed-legend-dot bg-success"></span>Excelente &ge; 90%</span>
-                <span class="d-inline-flex align-items-center gap-1"><span class="fed-legend-dot bg-info"></span>Bueno 75-89%</span>
-                <span class="d-inline-flex align-items-center gap-1"><span class="fed-legend-dot bg-warning"></span>Regular 60-74%</span>
-                <span class="d-inline-flex align-items-center gap-1"><span class="fed-legend-dot bg-orange"></span>Bajo 40-59%</span>
-                <span class="d-inline-flex align-items-center gap-1"><span class="fed-legend-dot bg-danger"></span>Critico &lt; 40%</span>
-                <?php if ($indSel['meta_anual'] !== null && (float)$indSel['meta_anual'] > 0): ?>
-                    <span class="d-inline-flex align-items-center gap-1"><span class="fed-legend-goal"></span>Línea de meta (<?= fedFmtPctMeta($indSel['meta_anual']) ?>%)</span>
-                <?php endif; ?>
+            <!-- ---------- DERECHA: Ranking de Establecimientos (grafico de barras) ---------- -->
+            <div class="col-lg-6 d-flex">
+                <div class="fed-chart-box w-100">
+                    <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-2">
+                        <h6 class="mb-0 fw-bold"><i class="fas fa-ranking-star me-2 text-primary"></i>Ranking de Establecimientos</h6>
+                        <div class="d-flex gap-2 flex-wrap">
+                            <?php if ($indSel['meta_anual'] !== null): ?>
+                                <span class="stat-mini"><i class="fas fa-bullseye me-1"></i>Meta anual: <?= fedFmtPctMeta($indSel['meta_anual']) ?>%</span>
+                            <?php endif; ?>
+                            <span class="stat-mini"><i class="fas fa-sort-amount-down me-1"></i>Mejor avance primero</span>
+                        </div>
+                    </div>
+
+                    <?php if (empty($rankingEst)): ?>
+                        <div class="text-center text-muted py-4">
+                            <i class="fas fa-chart-simple fa-2x d-block mb-2"></i>
+                            Sin datos para graficar con los filtros seleccionados.
+                        </div>
+                    <?php else: ?>
+                        <div class="fed-rank-list">
+                            <?php $pos = 0; foreach ($rankingEst as $rk):
+                                $pos++;
+                                $pctR = $rk['pct'];
+                                $colorR = colorBarraFED($pctR);
+                                $widthR = $pctR !== null ? min(100, max(0, $pctR)) : 0;
+                                $clsPos = $pos <= 3 ? ' fed-pos-' . $pos : '';
+                                $goalLeft = ($indSel['meta_anual'] !== null && (float)$indSel['meta_anual'] > 0)
+                                    ? min(100, max(0, (float)$indSel['meta_anual'])) : null;
+                            ?>
+                            <div class="fed-rank-row">
+                                <div class="fed-rank-pos<?= $clsPos ?>" title="Puesto <?= $pos ?>">
+                                    <?php if ($pos <= 3 && $pctR !== null): ?><i class="fas fa-medal"></i><?php else: ?><?= $pos ?><?php endif; ?>
+                                </div>
+                                <div class="fed-rank-body">
+                                    <div class="fed-rank-head">
+                                        <span class="fed-rank-name" title="<?= clean($rk['establecimiento']) ?> (<?= clean($rk['renipress']) ?>)">
+                                            <?= clean($rk['establecimiento']) ?>
+                                            <small class="text-muted fw-normal"><code><?= clean($rk['renipress']) ?></code></small>
+                                        </span>
+                                        <?php if ($pctR !== null): ?>
+                                            <span class="fed-rank-val"><?= number_format($pctR, 1) ?>%</span>
+                                        <?php else: ?>
+                                            <span class="fed-rank-val fed-sin-dato">Sin dato</span>
+                                        <?php endif; ?>
+                                    </div>
+                                    <div class="fed-rank-track" title="Numerador: <?= fedFmtNumero($rk['sum_num']) ?> | Denominador: <?= fedFmtNumero($rk['sum_den']) ?> | <?= number_format((int)$rk['n_reg']) ?> registro(s)">
+                                        <div class="fed-rank-bar <?= $colorR ?>" data-w="<?= $widthR ?>" style="width: <?= $widthR ?>%;"></div>
+                                        <?php if ($goalLeft !== null): ?>
+                                            <div class="fed-rank-goal" style="left: <?= $goalLeft ?>%;" title="Meta anual: <?= fedFmtPctMeta($indSel['meta_anual']) ?>%"></div>
+                                        <?php endif; ?>
+                                    </div>
+                                </div>
+                            </div>
+                            <?php endforeach; ?>
+                        </div>
+
+                        <div class="d-flex flex-wrap gap-3 mt-3 small text-muted">
+                            <span class="d-inline-flex align-items-center gap-1"><span class="fed-legend-dot bg-success"></span>Excelente &ge; 90%</span>
+                            <span class="d-inline-flex align-items-center gap-1"><span class="fed-legend-dot bg-info"></span>Bueno 75-89%</span>
+                            <span class="d-inline-flex align-items-center gap-1"><span class="fed-legend-dot bg-warning"></span>Regular 60-74%</span>
+                            <span class="d-inline-flex align-items-center gap-1"><span class="fed-legend-dot bg-orange"></span>Bajo 40-59%</span>
+                            <span class="d-inline-flex align-items-center gap-1"><span class="fed-legend-dot bg-danger"></span>Critico &lt; 40%</span>
+                            <?php if ($indSel['meta_anual'] !== null && (float)$indSel['meta_anual'] > 0): ?>
+                                <span class="d-inline-flex align-items-center gap-1"><span class="fed-legend-goal"></span>Línea de meta (<?= fedFmtPctMeta($indSel['meta_anual']) ?>%)</span>
+                            <?php endif; ?>
+                        </div>
+                    <?php endif; ?>
+                </div>
             </div>
-        <?php endif; ?>
+
+        </div>
     </div>
 </div>
 
@@ -869,11 +1024,16 @@ html { scroll-behavior: smooth; }
 
 <?php endif; /* fin $sistemaOK */ ?>
 
+<!-- Chart.js: necesario para el grafico "Avance por Mes" del Panel 02 (v7) -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
 <script>
 /* ============================================================
  * Interactividad de la vista de consulta FED (JavaScript puro)
  *  - Tabla del Panel 02: busqueda en vivo, orden por columna y CSV.
  *  - Grafico de ranking: animacion de las barras.
+ *  - Grafico "Avance por Mes" (v7): linea de tendencia mensual con selector
+ *    de establecimiento por radio-botones; al cargar muestra el agregado de
+ *    todos los establecimientos y al elegir uno muestra solo su serie.
  *  - Salto automatico al Panel 02 al llegar con ?ind=... o ?vista=detalle sin ancla.
  * ============================================================ */
 document.addEventListener('DOMContentLoaded', function () {
@@ -886,6 +1046,138 @@ document.addEventListener('DOMContentLoaded', function () {
             setTimeout(function () { barra.style.width = w + '%'; }, 80);
         });
     });
+
+    /* ------------------------------------------------------------
+     * Grafico "Avance por Mes" (v7): linea de tendencia mensual.
+     * Los datos llegan desde PHP en fedTrendDatos.series:
+     *   [0] = agregado de todos los establecimientos (por defecto)
+     *   [n] = serie mensual de cada establecimiento
+     * El selector (radio-botones) cambia la serie sin recargar.
+     * ------------------------------------------------------------ */
+    var fedTrendCanvas = document.getElementById('fedTrendChart');
+    var fedTrendDatos  = <?= json_encode($fedTrendJson ?: null, JSON_UNESCAPED_UNICODE) ?: 'null' ?>;
+    if (fedTrendCanvas && fedTrendDatos && fedTrendDatos.series && fedTrendDatos.series.length) {
+        if (!window.Chart) {
+            // CDN no disponible (sin internet): aviso en lugar de grafico
+            fedTrendCanvas.closest('.fed-trend-wrap').innerHTML =
+                '<div class="text-center text-muted py-5"><i class="fas fa-plug fa-2x d-block mb-2"></i>' +
+                'No se pudo cargar Chart.js. Verifique la conexion a internet del servidor o del navegador.</div>';
+        } else {
+            var MESES_FED = ['ENE', 'FEB', 'MAR', 'ABR', 'MAY', 'JUN', 'JUL', 'AGO', 'SEP', 'OCT', 'NOV', 'DIC'];
+            var fedTrendIdx   = 0;   // serie visible (0 = Todos)
+            var fedTrendChart = null;
+
+            /** Tendencia lineal (regresion lineal simple) de la serie visible */
+            function fedTrendRegresion(arr) {
+                var pts = [];
+                arr.forEach(function (v, i) { if (v !== null && v !== undefined && !isNaN(v)) { pts.push([i, v]); } });
+                if (pts.length < 2) { return null; }
+                var n = pts.length, sx = 0, sy = 0, sxy = 0, sxx = 0;
+                pts.forEach(function (p) { sx += p[0]; sy += p[1]; sxy += p[0] * p[1]; sxx += p[0] * p[0]; });
+                var den = n * sxx - sx * sx;
+                if (!den) { return null; }
+                var m = (n * sxy - sx * sy) / den;
+                var b = (sy - m * sx) / n;
+                return arr.map(function (_, i) {
+                    if (i < pts[0][0] || i > pts[pts.length - 1][0]) { return null; }
+                    return Math.max(0, Math.min(100, m * i + b));
+                });
+            }
+
+            /** Datasets del grafico segun la serie seleccionada */
+            function fedTrendDatasets(idx) {
+                var s = fedTrendDatos.series[idx] || fedTrendDatos.series[0];
+                var ds = [{
+                    label: s.nombre,
+                    data: s.pct,
+                    borderColor: '#9acd32',
+                    backgroundColor: 'rgba(154, 205, 50, .10)',
+                    pointBackgroundColor: '#1a5276',
+                    pointBorderColor: '#ffffff',
+                    pointBorderWidth: 1,
+                    pointStyle: 'rect',
+                    pointRadius: 5,
+                    pointHoverRadius: 7,
+                    borderWidth: 3,
+                    tension: 0.3,
+                    fill: true,
+                    spanGaps: true
+                }];
+                var reg = fedTrendRegresion(s.pct);
+                if (reg) {
+                    ds.push({
+                        label: 'Tendencia',
+                        data: reg,
+                        borderColor: '#8395a7',
+                        borderDash: [7, 5],
+                        borderWidth: 1.6,
+                        pointRadius: 0,
+                        pointHoverRadius: 0,
+                        fill: false,
+                        tension: 0,
+                        spanGaps: true
+                    });
+                }
+                return ds;
+            }
+
+            fedTrendChart = new Chart(fedTrendCanvas, {
+                type: 'line',
+                data: { labels: MESES_FED, datasets: fedTrendDatasets(0) },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    interaction: { mode: 'nearest', intersect: false },
+                    plugins: {
+                        legend: {
+                            position: 'bottom',
+                            labels: { boxWidth: 26, boxHeight: 3, font: { size: 11 }, color: '#2c3e50' }
+                        },
+                        tooltip: {
+                            callbacks: {
+                                title: function (items) {
+                                    return MESES_FED[items[0].dataIndex] + ' ' + fedTrendDatos.anio;
+                                },
+                                label: function (item) {
+                                    var v = item.parsed.y;
+                                    return item.dataset.label + ': ' +
+                                        (v === null || isNaN(v) ? '-' : v.toFixed(2)) + '%';
+                                },
+                                afterLabel: function (item) {
+                                    if (item.datasetIndex !== 0) { return ''; }
+                                    var s = fedTrendDatos.series[fedTrendIdx] || {};
+                                    var num = (s.num || [])[item.dataIndex];
+                                    var den = (s.den || [])[item.dataIndex];
+                                    if (num === null || num === undefined) { return ''; }
+                                    return 'Numerador: ' + Number(num).toLocaleString('es-PE') +
+                                           ' | Denominador: ' + Number(den).toLocaleString('es-PE');
+                                }
+                            }
+                        }
+                    },
+                    scales: {
+                        x: { grid: { display: false }, ticks: { color: '#5b6b7b', font: { size: 11 } } },
+                        y: {
+                            min: 0,
+                            max: 100,
+                            ticks: { color: '#5b6b7b', font: { size: 11 }, callback: function (v) { return v + '%'; } },
+                            grid: { color: '#eef1f5' }
+                        }
+                    }
+                }
+            });
+
+            /* Radio-botones: cambiar la serie del grafico (sin recargar) */
+            document.querySelectorAll('#fedTrendRadios input[name="fedTrendEst"]').forEach(function (radio) {
+                radio.addEventListener('change', function () {
+                    if (!radio.checked) { return; }
+                    fedTrendIdx = parseInt(radio.value, 10) || 0;
+                    fedTrendChart.data.datasets = fedTrendDatasets(fedTrendIdx);
+                    fedTrendChart.update();
+                });
+            });
+        }
+    }
 
     /* ---- Salto automatico al Panel 02 al llegar con ?ind=... o ?vista=detalle sin ancla ---- */
     if (!location.hash && (/[?&]ind=\d+/.test(location.search) || /[?&]vista=detalle/.test(location.search))) {
