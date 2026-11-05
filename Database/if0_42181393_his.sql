@@ -64,6 +64,7 @@ CREATE TABLE `CONVENIO_FED_INDICADORES` (
   `peso_ponderado` decimal(5,2) DEFAULT NULL COMMENT 'Peso porcentual del indicador en el FED',
   `periodo` varchar(20) DEFAULT 'TRIMESTRAL',
   `responsable` varchar(150) DEFAULT NULL,
+  `ficha_tecnica_pdf` VARCHAR(255) NULL DEFAULT NULL,
   `orden` int(11) DEFAULT 0,
   `estado` tinyint(1) NOT NULL DEFAULT 1
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='Indicadores del Convenio FED - Fondo de Estimulo al Desempeno';
