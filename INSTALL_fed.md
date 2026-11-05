@@ -1,4 +1,108 @@
 ================================================================
+ CONVENIO FED - FICHA TECNICA EN PDF POR INDICADOR
+ Instrucciones de instalacion - Sistema HIS Perene - 2026-11-06
+================================================================
+
+QUE HACE ESTA MEJORA
+--------------------
+1) fed_gestion_indicadores.php (solo Administrador)
+   - Al AGREGAR o EDITAR un indicador, el modal incluye ahora el campo
+     "Ficha tecnica del indicador (PDF)" para adjuntar un archivo PDF
+     (formula, fuente, metas, exclusiones, etc.).
+   - El PDF se guarda en la carpeta uploads/fed_fichas/ del servidor
+     (se crea automaticamente la primera vez) y la base de datos solo
+     guarda el nombre en la nueva columna ficha_tecnica_pdf de la tabla
+     CONVENIO_FED_INDICADORES.
+   - En la tabla de indicadores hay una nueva columna "Ficha" con un
+     icono PDF que abre el documento en otra pestana/ventana.
+   - Al editar un indicador con ficha ya cargada se muestra el nombre
+     del PDF actual (con enlace para verlo), se puede reemplazar subiendo
+     otro PDF o quitarlo con la casilla "Quitar el PDF actualmente
+     guardado" (el archivo antiguo se elimina del servidor).
+
+2) convenio_fed.php (Panel 02 - todos los roles)
+   - En la cabecera del detalle del indicador, junto al codigo y la
+     insignia de avance, aparece un boton rojo "Ficha tecnica (PDF)"
+     con icono. Al hacer clic abre el PDF del indicador en OTRA ventana
+     (target="_blank"). Si el indicador no tiene ficha adjunta, el
+     boton no aparece.
+
+VALIDACIONES DE LA SUBIDA
+-------------------------
+- Solo archivos .pdf, maximo 10 MB (FED_FICHA_MAX_BYTES en
+  includes/fed_common.php).
+- Verificacion del contenido real del PDF (cabecera %PDF-), ademas de
+  la extension.
+- Nombre unico automatico: fed_ficha_FECHA_HORA_XXXXXXXX.pdf
+- Mensajes claros si el PDF supera upload_max_filesize / post_max_size
+  de PHP o si la carpeta no se puede crear.
+
+ARCHIVOS INCLUIDOS (conservar esta estructura de carpetas)
+----------------------------------------------------------
+  convenio_fed.php                -> raiz del sitio (REEMPLAZA)
+  fed_gestion_indicadores.php     -> raiz del sitio (REEMPLAZA)
+  includes/fed_common.php         -> carpeta includes/ (REEMPLAZA)
+  Database/update_fed_v4_fichas.sql -> carpeta Database/ (NUEVO, opcional)
+  cambios_fed_fichas.patch        -> parche git (alternativa opcional)
+
+COMO INSTALAR
+-------------
+Opcion A (archivos sueltos):
+  1. Haga copia de seguridad de los 3 archivos PHP que va a reemplazar.
+  2. Suba los archivos a las rutas indicadas arriba.
+  3. Listo. NO requiere ejecutar SQL en la mayoria de los hostings:
+     la columna ficha_tecnica_pdf se crea automaticamente la primera
+     vez que se abre el modulo Convenio FED y la carpeta
+     uploads/fed_fichas/ se crea sola al adjuntar el primer PDF.
+
+Opcion B (parche git):
+  git apply cambios_fed_fichas.patch
+
+SOLO SI EL HOSTING BLOQUEA ALTER TABLE
+--------------------------------------
+Si al entrar a "FED: Gestion de Indicadores" aparece el aviso de que la
+columna ficha_tecnica_pdf no existe, ejecute desde phpMyAdmin (pestana
+SQL) el script Database/update_fed_v4_fichas.sql:
+
+  ALTER TABLE `CONVENIO_FED_INDICADORES`
+    ADD COLUMN `ficha_tecnica_pdf` VARCHAR(255) NULL DEFAULT NULL AFTER `responsable`;
+
+Hasta que la columna exista, la funcionalidad de fichas PDF queda
+oculta de forma segura (sin errores).
+
+QUE VERIFICAR DESPUES DE SUBIR
+------------------------------
+  1. Admin > "FED: Gestion de Indicadores" > "Nuevo Indicador":
+     debe verse el campo "Ficha tecnica del indicador (PDF)". Cree un
+     indicador adjuntando un PDF y confirme el mensaje "Se adjunto la
+     ficha tecnica en PDF."
+  2. En la tabla de indicadores, la columna "Ficha" debe mostrar el
+     icono PDF; al hacer clic abre el documento en otra ventana.
+  3. Con el boton "Editar" del indicador, el modal muestra "Ficha
+     tecnica actual: <nombre>.pdf" y la opcion de quitar/reemplazar.
+  4. Reporte Convenios > Convenio FED > "Ver detalle (Panel 02)" de ese
+     indicador: junto al codigo debe verse el boton "Ficha tecnica
+     (PDF)"; al hacer clic se abre el PDF en otra ventana.
+  5. Verifique en el servidor que el archivo quedo en
+     uploads/fed_fichas/.
+
+NOTAS TECNICAS
+--------------
+- El codigo compartido (validacion y guardado del PDF, creacion
+  automatica de la columna y de la carpeta, URL segura del archivo)
+  vive en includes/fed_common.php: fedSubirFichaTecnica(),
+  fedFichaDir(), fedFichaUrl(), fedEliminarFichaTecnica() y el flag
+  $tieneFichaPdf.
+- El archivo se guarda con nombre aleatorio y se sirve por URL
+  relativa "uploads/fed_fichas/<archivo>", igual que el resto de
+  archivos de la carpeta uploads/ del sistema.
+- Si se desactiva un indicador, su ficha PDF se conserva (igual que su
+  historial de avances).
+- No se modifico ninguna consulta ni tabla existente: solo se agrego
+  la columna ficha_tecnica_pdf (VARCHAR 255, admite NULL).
+
+
+================================================================
  SEPARACIÓN DEL MÓDULO CONVENIO FED - INSTRUCCIONES
  Sistema HIS Perené - 2026-11-04
 ================================================================
