@@ -542,9 +542,7 @@ include 'includes/header.php';
             </div>
             <div class="card-body">
                 <p class="small text-muted mb-3">
-                    Importe el archivo <code>Resultados.txt</code> exportado de su base SQL Server local.
-                    El sistema detecta automaticamente el formato: <strong>8 columnas con codigo de indicador</strong>
-                    (export actual, ej. <code>FED-04;319;...</code>) o el antiguo de 13 columnas.
+                    Importe el archivo <code>Resultados.txt</code> exportado de su BD local.
                     Si un registro ya existe (mismo indicador + renipress + anio + mes) se <strong>actualiza</strong>;
                     si es nuevo se <strong>agrega</strong>. El sistema registra la fecha y hora de cada importacion.
                 </p>
@@ -568,7 +566,7 @@ include 'includes/header.php';
                         <div class="form-check">
                             <input class="form-check-input" type="radio" name="modo" id="modoReemplazar" value="reemplazar">
                             <label class="form-check-label small" for="modoReemplazar">
-                                <strong>Reemplazar periodo</strong>: elimina los registros de los periodos (indicador + anio + mes) que trae el archivo y los recarga. Use cuando haya quitado establecimientos o meses en el SQL Server.
+                                <strong>Reemplazar periodo</strong>: elimina los registros de los periodos (indicador + anio + mes) que trae el archivo y los recarga.
                             </label>
                         </div>
                     </div>
@@ -596,10 +594,6 @@ include 'includes/header.php';
                         Ej: FED-04;319;BAJO MARANKIARI;2026;01;1;1;100
                     </code>
                     <div class="mb-1"><i class="fas fa-check text-success me-1"></i>El <code>codigo</code> (ej. <code>FED-04</code>) debe estar registrado en la <a href="fed_gestion_indicadores.php">Gestion de Indicadores</a>.</div>
-                    <div class="mb-1"><i class="fas fa-check text-success me-1"></i>Si el archivo trae 7 columnas (sin <code>porcentaje_avance</code>) se recalcula: num/den*100.</div>
-                    <div class="mb-1"><i class="fas fa-check text-success me-1"></i>Codificacion UTF-8 (con o sin BOM) o ANSI; saltos de linea Windows o Unix.</div>
-                    <div class="mb-1"><i class="fas fa-check text-success me-1"></i>Si la primera linea es una cabecera de columnas, se detecta y se omite.</div>
-                    <div><i class="fas fa-info-circle text-secondary me-1"></i>Tambien se acepta el formato antiguo de 13 columnas (<code>id_avance; id_indicador; renipress; ...; usuario</code>): se detecta automaticamente linea por linea.</div>
                 </div>
 
                 <div class="fed-info-import px-3 py-2">
