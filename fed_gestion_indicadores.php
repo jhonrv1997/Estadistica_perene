@@ -480,8 +480,7 @@ include 'includes/header.php';
                                        accept="application/pdf,.pdf">
                                 <div class="form-text">Documento de referencia del indicador: formula, fuente, metas, exclusiones, etc.
                                     Solo archivos <strong>.pdf</strong> de hasta <strong>10 MB</strong>.
-                                    Se guarda en <code>uploads/fed_fichas/</code> del servidor y queda disponible como icono PDF
-                                    en esta tabla y en el Panel 02 del reporte.
+                                    
                                 </div>
                                 <div id="fichaPdfActual" class="small d-none"></div>
                                 <div class="form-check d-none mt-1" id="fichaQuitarWrap">
