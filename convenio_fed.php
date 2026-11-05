@@ -593,7 +593,7 @@ html { scroll-behavior: smooth; }
                 <?= number_format($avanceGlobalPonderado, 1) ?>%
             </div>
         </div>
-        <small class="text-muted">Calculado con los pesos de cada indicador sobre todo el historial importado (<?= number_format($pesoTotal, 1) ?>% de peso con datos).</small>
+        
     </div>
 </div>
 <?php endif; ?>
@@ -796,7 +796,7 @@ html { scroll-behavior: smooth; }
             <div class="col-12">
                 <small class="text-muted">
                     <i class="fas fa-info-circle me-1"></i>
-                    Con <strong>Todos los meses</strong> la tabla muestra cada establecimiento una sola vez con numerador y denominador sumados de todo el periodo. Elija un mes para ver el dato puntual.
+                    .... <strong>.</strong> .
                 </small>
             </div>
         </form>
@@ -819,7 +819,7 @@ html { scroll-behavior: smooth; }
         </div>
         <small class="text-muted d-block mb-2">
             <i class="fas fa-layer-group me-1"></i>
-            Agrupado por establecimiento: numerador y denominador suman todos los meses del periodo seleccionado y el porcentaje se recalcula sobre esos totales.
+            Agrupado por establecimiento
         </small>
         <div class="table-responsive">
             <table class="table table-hover table-sm mb-0 fed-table-detalle" id="tablaDetalleEst">
@@ -908,7 +908,7 @@ html { scroll-behavior: smooth; }
                     <small class="text-muted d-block mb-2">
                         <i class="fas fa-info-circle me-1"></i>
                         Línea de tendencia del porcentaje de avance por mes del indicador y año del panel.
-                        Al cargar muestra el agregado de todos los establecimientos; seleccione uno para ver solo sus datos.
+                        
                     </small>
 
                     <?php if (empty($fedTrendJson)): ?>
