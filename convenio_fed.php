@@ -13,6 +13,15 @@
  *  enlaces antiguos con ?ind=ID siguen abriendo el Panel 02 (compatibilidad)
  *  y los filtros del Panel 02 conservan vista=detalle al consultar.
  *
+ * v8 - Ficha tecnica en PDF por indicador (2026-11-06):
+ *  El Panel 02 muestra, junto al codigo del indicador, un icono/boton de PDF
+ *  con la ficha tecnica del indicador: al hacer clic abre el PDF en otra
+ *  ventana (target=_blank). El archivo se adjunta desde
+ *  fed_gestion_indicadores.php, se guarda en uploads/fed_fichas/ del servidor
+ *  y su nombre en la columna ficha_tecnica_pdf de CONVENIO_FED_INDICADORES.
+ *  Si el indicador no tiene ficha adjunta (o la columna aun no existe), el
+ *  icono simplemente no se muestra.
+ *
  * v7 - Seccion "Ranking de Establecimientos" dividida en 2 columnas (2026-11-05):
  *  DERECHA: se conserva el ranking de barras tal como estaba.
  *  IZQUIERDA: nuevo grafico "Avance por Mes" (linea de tendencia con Chart.js)
@@ -152,8 +161,10 @@ $avanceGlobalPonderado = null;
 $pesoTotal = 0.0;
 
 if ($sistemaOK) {
+    // v8: la ficha tecnica PDF solo se consulta si la columna ya existe
+    $colFicha = $tieneFichaPdf ? ', i.ficha_tecnica_pdf' : '';
     $sql01 = "SELECT i.id_indicador, i.codigo, i.nombre, i.descripcion, i.unidad_medida,
-                     i.meta_anual, i.peso_ponderado, i.responsable,
+                     i.meta_anual, i.peso_ponderado, i.responsable{$colFicha},
                      COUNT(a.id_avance)          AS n_reg,
                      AVG(a.porcentaje_avance)    AS pct_prom,
                      SUM(a.valor_numerador)      AS sum_num,
@@ -163,7 +174,7 @@ if ($sistemaOK) {
               LEFT JOIN `{$tablaAvances}` a ON a.id_indicador = i.id_indicador
               WHERE i.estado = 1
               GROUP BY i.id_indicador, i.codigo, i.nombre, i.descripcion, i.unidad_medida,
-                       i.meta_anual, i.peso_ponderado, i.responsable
+                       i.meta_anual, i.peso_ponderado, i.responsable{$colFicha}
               ORDER BY i.orden ASC, i.codigo ASC";
     $panel01 = $pdo->query($sql01)->fetchAll();
 
@@ -449,6 +460,16 @@ html { scroll-behavior: smooth; }
     overflow: hidden; font-size: .78rem; line-height: 1.35; margin-bottom: .5rem;
 }
 
+/* v8: boton/icono de la ficha tecnica PDF del indicador (Panel 02) */
+.fed-ficha-btn {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 3px 12px; border-radius: 20px; font-size: .74rem; font-weight: 600;
+    color: #b02a37; background: #fdecec; border: 1px solid #f1b8bd;
+    text-decoration: none; white-space: nowrap; transition: all .15s ease;
+}
+.fed-ficha-btn:hover, .fed-ficha-btn:focus { background: #b02a37; color: #fff; border-color: #b02a37; }
+.fed-ficha-btn .fa-file-pdf { font-size: .95rem; }
+
 /* Panel 02: cabecera con datos del indicador */
 .fed-stat-tile {
     background: #f6f9fc; border: 1px solid #e3ebf3; border-radius: 10px;
@@ -685,6 +706,14 @@ html { scroll-behavior: smooth; }
                 <div class="d-flex align-items-center gap-2 mb-1 flex-wrap">
                     <span class="indicador-codigo"><?= clean($indSel['codigo']) ?></span>
                     <span class="avance-badge <?= clasificarAvanceFED($pctCabecera)['clase'] ?>"><?= clasificarAvanceFED($pctCabecera)['texto'] ?></span>
+                    <?php /* v8: icono de la ficha tecnica del indicador (abre el PDF en otra ventana) */ ?>
+                    <?php if ($tieneFichaPdf && !empty($indSel['ficha_tecnica_pdf'])): ?>
+                        <a href="<?= clean(fedFichaUrl($indSel['ficha_tecnica_pdf'])) ?>" target="_blank" rel="noopener"
+                           class="fed-ficha-btn" title="Ficha tecnica del indicador: abre el PDF en otra ventana">
+                            <i class="fas fa-file-pdf"></i>
+                            <span>Ficha tecnica (PDF)</span>
+                        </a>
+                    <?php endif; ?>
                 </div>
                 <h5 class="fw-bold mb-1" style="color: var(--his-primary);"><?= clean($indSel['nombre']) ?></h5>
                 <p class="small text-muted mb-2"><?= !empty($indSel['descripcion']) ? clean($indSel['descripcion']) : 'Sin descripcion registrada.' ?></p>

@@ -3,6 +3,17 @@
  * Sistema de Gestion de Datos HIS
  * Pagina: FED - Gestion de Indicadores (solo rol Administrador)
  *
+ * v4.2 - Ficha tecnica en PDF (2026-11-06):
+ *  Los formularios de agregar/editar indicadores permiten adjuntar un PDF con
+ *  la FICHA TECNICA del indicador. El archivo se guarda en la carpeta
+ *  uploads/fed_fichas/ del servidor (se crea automaticamente) y su nombre se
+ *  guarda en la columna ficha_tecnica_pdf de CONVENIO_FED_INDICADORES (la
+ *  columna se crea automatica al entrar al modulo; si el hosting no permite
+ *  ALTER, ejecutar Database/update_fed_v4_fichas.sql). La ficha se muestra
+ *  como icono PDF en la tabla de esta pagina y en el Panel 02 de
+ *  convenio_fed.php, donde al hacer clic abre el PDF en otra ventana.
+ *  Al editar tambien se puede ver la ficha actual, reemplazarla o quitarla.
+ *
  * v4.1 - Correccion del boton Editar (2026-11-04):
  *  El boton "Editar" rellenaba el formulario del modal pero nunca lo abria
  *  (el boton "Nuevo Indicador" abre via data-bs-toggle, pero "Editar" no tenia
@@ -39,7 +50,14 @@ if (!$esAdmin) {
  * ========================================================================== */
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    if (!verifyCSRFToken($_POST['csrf_token'] ?? '')) {
+    if (empty($_POST) && empty($_FILES)) {
+        /* POST vacio: casi siempre significa que la subida supero post_max_size
+           de PHP (p. ej. un PDF muy grande). Se explica en lugar del confuso
+           mensaje de token invalido. */
+        $mensaje = 'La subida excedio el limite del servidor (post_max_size de PHP). '
+                 . 'Suba un PDF mas pequeno (maximo 10 MB) o aumente el limite en php.ini.';
+        $tipoMensaje = 'danger';
+    } elseif (!verifyCSRFToken($_POST['csrf_token'] ?? '')) {
         $mensaje = 'Token de seguridad invalido. Recargue la pagina e intente nuevamente.';
         $tipoMensaje = 'danger';
     } else {
@@ -85,16 +103,50 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     if ($peso < 0 || $peso > 100) throw new Exception('El peso ponderado debe estar entre 0 y 100.');
                 }
 
+                /* ------------------------------------------------------------
+                 * v4.2: FICHA TECNICA EN PDF (opcional)
+                 * El archivo fisico se guarda en uploads/fed_fichas/ y en la BD
+                 * solo el nombre (columna ficha_tecnica_pdf). Reglas:
+                 *   - se adjunto un PDF  -> se guarda y reemplaza al anterior;
+                 *   - se marco "quitar"  -> se elimina el archivo y queda NULL;
+                 *   - nada de lo anterior -> se conserva la ficha actual.
+                 * --------------------------------------------------------- */
+                $quitarPdf = isset($_POST['quitar_ficha_pdf']);
+                list($pdfOk, $pdfNuevo, $pdfError) = fedSubirFichaTecnica($_FILES['ficha_pdf'] ?? null);
+                if (!$pdfOk) throw new Exception($pdfError);
+
+                $pdfActual = null; // nombre del PDF guardado actualmente (solo al editar)
+                if ($idInd > 0 && $tieneFichaPdf) {
+                    $st = $pdo->prepare("SELECT ficha_tecnica_pdf FROM `{$tablaIndicadores}` WHERE id_indicador = ?");
+                    $st->execute([$idInd]);
+                    $pdfActual = $st->fetchColumn() ?: null;
+                }
+                $pdfBD = $pdfActual;
+                if ($quitarPdf && $pdfActual) {
+                    fedEliminarFichaTecnica($pdfActual);
+                    $pdfBD = null;
+                }
+                if ($pdfNuevo) {
+                    if ($pdfActual) fedEliminarFichaTecnica($pdfActual);
+                    $pdfBD = $pdfNuevo;
+                }
+
                 if ($idInd > 0) {
                     $st = $pdo->prepare("SELECT COUNT(*) FROM `{$tablaIndicadores}` WHERE id_indicador = ?");
                     $st->execute([$idInd]);
                     if (!$st->fetchColumn()) throw new Exception('El indicador que intenta modificar no existe.');
                     $sql = "UPDATE `{$tablaIndicadores}`
                             SET codigo = ?, nombre = ?, descripcion = ?, unidad_medida = ?, meta_anual = ?,
-                                peso_ponderado = ?, periodo = ?, responsable = ?, orden = ?, estado = ?
-                            WHERE id_indicador = ?";
-                    $pdo->prepare($sql)->execute([$codigo, $nombre, $descr ?: null, $unidad ?: null, $meta,
-                                                  $peso, $periodo, $respons ?: null, $orden, $estado, $idInd]);
+                                peso_ponderado = ?, periodo = ?, responsable = ?, orden = ?, estado = ?";
+                    $params = [$codigo, $nombre, $descr ?: null, $unidad ?: null, $meta,
+                               $peso, $periodo, $respons ?: null, $orden, $estado];
+                    if ($tieneFichaPdf) {           // v4.2: ficha tecnica PDF
+                        $sql .= ", ficha_tecnica_pdf = ?";
+                        $params[] = $pdfBD;
+                    }
+                    $sql .= " WHERE id_indicador = ?";
+                    $params[] = $idInd;
+                    $pdo->prepare($sql)->execute($params);
                     $mensaje = "Indicador <strong>" . clean($codigo) . "</strong> modificado correctamente.";
                 } else {
                     // Reparacion preventiva: si la tabla quedo sin AUTO_INCREMENT
@@ -108,6 +160,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
                         $pdo->prepare($sql)->execute([$codigo, $nombre, $descr ?: null, $unidad ?: null, $meta,
                                                       $peso, $periodo, $respons ?: null, $orden, $estado]);
+                        $idInsertado = (int)$pdo->lastInsertId();
                     } else {
                         $nuevoId = (int)$pdo->query("SELECT COALESCE(MAX(id_indicador), 0) + 1 FROM `{$tablaIndicadores}`")->fetchColumn();
                         $sql = "INSERT INTO `{$tablaIndicadores}`
@@ -116,8 +169,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
                         $pdo->prepare($sql)->execute([$nuevoId, $codigo, $nombre, $descr ?: null, $unidad ?: null, $meta,
                                                       $peso, $periodo, $respons ?: null, $orden, $estado]);
+                        $idInsertado = $nuevoId;
+                    }
+                    // v4.2: registrar el PDF de la ficha tecnica adjuntado al crear
+                    if ($tieneFichaPdf && $pdfBD !== null && $idInsertado > 0) {
+                        $pdo->prepare("UPDATE `{$tablaIndicadores}` SET ficha_tecnica_pdf = ? WHERE id_indicador = ?")
+                            ->execute([$pdfBD, $idInsertado]);
                     }
                     $mensaje = "Indicador <strong>" . clean($codigo) . "</strong> agregado correctamente.";
+                }
+                // v4.2: detalle del resultado de la ficha tecnica en el mensaje
+                if ($pdfNuevo) {
+                    $mensaje .= ' Se adjunto la ficha tecnica en PDF.';
+                } elseif ($quitarPdf && $pdfActual && $pdfBD === null) {
+                    $mensaje .= ' Se elimino la ficha tecnica PDF.';
                 }
                 $tipoMensaje = 'success';
 
@@ -175,7 +240,22 @@ include 'includes/header.php';
 <style>
 /* ---- Estilos especificos de la Gestion de Indicadores FED ---- */
 .fed-tabla-admin td { vertical-align: middle; }
+/* v4.2: icono PDF de la ficha tecnica en la tabla */
+.fed-tabla-admin .fed-ficha-link { color: #c0392b; font-size: 1.15rem; text-decoration: none; }
+.fed-tabla-admin .fed-ficha-link:hover { color: #922b21; }
+/* v4.2: caja de la ficha tecnica dentro del modal */
+.fed-ficha-box { background: #f8f9fa; border: 1px dashed #d0d7de !important; }
+.fed-ficha-box .fa-file-pdf { color: #c0392b; }
 </style>
+
+<?php if ($puedeGestionar && !$tieneFichaPdf): ?>
+<div class="alert alert-info">
+    <i class="fas fa-info-circle me-2"></i>
+    La columna <code>ficha_tecnica_pdf</code> no existe todavia (o el servidor no permitio crearla
+    automaticamente). Ejecute el script <code>Database/update_fed_v4_fichas.sql</code> desde phpMyAdmin
+    para habilitar el adjuntado de fichas tecnicas en PDF.
+</div>
+<?php endif; ?>
 
 <div class="page-header-section">
     <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
@@ -243,6 +323,7 @@ include 'includes/header.php';
                             <th style="width:70px;" class="text-end">Peso</th>
                             <th style="width:105px;">Periodo</th>
                             <th style="width:120px;">Responsable</th>
+                            <th style="width:55px;" class="text-center" title="Ficha tecnica del indicador en PDF">Ficha</th>
                             <th style="width:60px;" class="text-end">Orden</th>
                             <th style="width:95px;">Estado</th>
                             <th style="width:150px;" class="text-end">Acciones</th>
@@ -264,6 +345,16 @@ include 'includes/header.php';
                             <td class="text-end"><?= $ia['peso_ponderado'] !== null ? number_format((float)$ia['peso_ponderado'], 1) . '%' : '-' ?></td>
                             <td><small><?= clean($ia['periodo'] ?? '-') ?></small></td>
                             <td><small><?= clean($ia['responsable'] ?? '-') ?></small></td>
+                            <td class="text-center">
+                                <?php if ($tieneFichaPdf && !empty($ia['ficha_tecnica_pdf'])): ?>
+                                    <a href="<?= clean(fedFichaUrl($ia['ficha_tecnica_pdf'])) ?>" target="_blank" rel="noopener"
+                                       class="fed-ficha-link" title="Abrir ficha tecnica (PDF) en otra ventana">
+                                        <i class="fas fa-file-pdf"></i>
+                                    </a>
+                                <?php else: ?>
+                                    <span class="text-muted" title="Sin ficha tecnica adjunta">-</span>
+                                <?php endif; ?>
+                            </td>
                             <td class="text-end"><?= (int)$ia['orden'] ?></td>
                             <td>
                                 <?php if ((int)$ia['estado'] === 1): ?>
@@ -285,6 +376,7 @@ include 'includes/header.php';
                                             'peso_ponderado' => $ia['peso_ponderado'],
                                             'periodo'        => $ia['periodo'],
                                             'responsable'    => $ia['responsable'],
+                                            'ficha_tecnica_pdf' => $tieneFichaPdf ? ($ia['ficha_tecnica_pdf'] ?? null) : null,
                                             'orden'          => (int)$ia['orden'],
                                             'estado'         => (int)$ia['estado'],
                                         ], JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP)) ?>'
@@ -320,7 +412,7 @@ include 'includes/header.php';
 <div class="modal fade" id="modalIndicador" tabindex="-1" aria-labelledby="tituloModalIndicador" aria-hidden="true">
     <div class="modal-dialog modal-lg modal-dialog-scrollable">
         <div class="modal-content">
-            <form method="POST" action="fed_gestion_indicadores.php" id="formIndicador">
+            <form method="POST" action="fed_gestion_indicadores.php" id="formIndicador" enctype="multipart/form-data">
                 <input type="hidden" name="csrf_token" value="<?= clean($csrfToken) ?>">
                 <input type="hidden" name="accion" value="fed_guardar_indicador">
                 <input type="hidden" name="id_indicador" id="f_id" value="0">
@@ -378,6 +470,29 @@ include 'includes/header.php';
                                 <label class="form-check-label small fw-semibold" for="f_estado">Indicador activo (visible en el reporte)</label>
                             </div>
                         </div>
+                        <?php if ($tieneFichaPdf): /* v4.2: adjuntar ficha tecnica en PDF */ ?>
+                        <div class="col-12">
+                            <label class="form-label small fw-semibold">
+                                <i class="fas fa-file-pdf me-1" style="color:#c0392b;"></i>Ficha tecnica del indicador (PDF)
+                            </label>
+                            <div class="border rounded p-2 fed-ficha-box" id="fichaPdfBox">
+                                <input type="file" class="form-control form-control-sm" name="ficha_pdf" id="f_ficha_pdf"
+                                       accept="application/pdf,.pdf">
+                                <div class="form-text">Documento de referencia del indicador: formula, fuente, metas, exclusiones, etc.
+                                    Solo archivos <strong>.pdf</strong> de hasta <strong>10 MB</strong>.
+                                    Se guarda en <code>uploads/fed_fichas/</code> del servidor y queda disponible como icono PDF
+                                    en esta tabla y en el Panel 02 del reporte.
+                                </div>
+                                <div id="fichaPdfActual" class="small d-none"></div>
+                                <div class="form-check d-none mt-1" id="fichaQuitarWrap">
+                                    <input class="form-check-input" type="checkbox" name="quitar_ficha_pdf" id="f_quitar_pdf" value="1">
+                                    <label class="form-check-label small text-danger" for="f_quitar_pdf">
+                                        Quitar el PDF actualmente guardado
+                                    </label>
+                                </div>
+                            </div>
+                        </div>
+                        <?php endif; ?>
                     </div>
                 </div>
                 <div class="modal-footer">
@@ -477,6 +592,7 @@ document.addEventListener('DOMContentLoaded', function () {
             document.getElementById('f_responsable').value = d.responsable || '';
             document.getElementById('f_orden').value = (d.orden !== null && d.orden !== undefined) ? d.orden : 0;
             document.getElementById('f_estado').checked = parseInt(d.estado, 10) === 1;
+            mostrarFichaPdf(d.ficha_tecnica_pdf); /* v4.2: ficha tecnica actual del indicador */
             abrirModalIndicador(); /* v4.1: abre el modal (antes faltaba esta llamada) */
         });
     });
@@ -488,11 +604,40 @@ document.addEventListener('DOMContentLoaded', function () {
             document.getElementById('f_id').value = '0';
             document.getElementById('f_orden').value = '0';
             document.getElementById('f_estado').checked = true;
+            limpiarFichaPdf(); /* v4.2: sin ficha previa al crear un indicador nuevo */
             abrirModalIndicador(); /* respaldo si el bundle de Bootstrap no cargo */
         });
     }
 
-    /* ---- 2) Confirmaciones de activar / desactivar ---- */
+    /* ---- 2) Ficha tecnica PDF (v4.2): mostrar ficha actual al editar / limpiar al crear ---- */
+    var FED_FICHA_URL_BASE = <?= json_encode(fedFichaUrl('')) ?>; /* uploads/fed_fichas/ */
+    var inputPdf       = document.getElementById('f_ficha_pdf');
+    var cajaPdfActual  = document.getElementById('fichaPdfActual');
+    var cajaQuitarPdf  = document.getElementById('fichaQuitarWrap');
+    var chkQuitarPdf   = document.getElementById('f_quitar_pdf');
+
+    function limpiarFichaPdf() {
+        if (inputPdf) inputPdf.value = '';
+        if (chkQuitarPdf) chkQuitarPdf.checked = false;
+        if (cajaPdfActual) { cajaPdfActual.classList.add('d-none'); cajaPdfActual.innerHTML = ''; }
+        if (cajaQuitarPdf) cajaQuitarPdf.classList.add('d-none');
+    }
+
+    function mostrarFichaPdf(nombre) {
+        if (!cajaPdfActual) return;
+        limpiarFichaPdf();
+        if (nombre && String(nombre) !== '') {
+            var url = FED_FICHA_URL_BASE + encodeURIComponent(nombre);
+            cajaPdfActual.innerHTML =
+                '<i class="fas fa-file-pdf me-1"></i>Ficha tecnica actual: '
+              + '<a href="' + url + '" target="_blank" rel="noopener" title="Abrir el PDF en otra ventana">'
+              + String(nombre).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;') + '</a>';
+            cajaPdfActual.classList.remove('d-none');
+            if (cajaQuitarPdf) cajaQuitarPdf.classList.remove('d-none');
+        }
+    }
+
+    /* ---- 3) Confirmaciones de activar / desactivar ---- */
     document.querySelectorAll('.form-toggle-indicador').forEach(function (f) {
         f.addEventListener('submit', function (e) {
             if (!window.confirm(f.getAttribute('data-confirm'))) e.preventDefault();
