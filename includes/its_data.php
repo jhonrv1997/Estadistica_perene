@@ -107,11 +107,20 @@
  *     como TRATADO cuando la cita registra 99199.11 + valor_lab='TA'.
  *   - Sexo: los SP exigen "sexo is not null" y agrupan M/F; las filas con sexo
  *     distinto de M/F quedan fuera de las secciones con eje sexo.
+ *   - SP 03 (ajuste 2026-11): la exclusion "id_cita NOT IN (select id_cita
+ *     from #POBLACION_CLAVE)" del T-SQL captura ademas las citas con los
+ *     codigos de control prenatal Z3491/Z3492/Z3493/Z3591/Z3592/Z3593/Z359
+ *     (I_ROWNUM_LAB=1). $pcSin5 de la seccion 03 TAMIZAJE VIH excluye ahora
+ *     esas citas via citaSin cualquieraDe; antes el filtro solo aplicaba el
+ *     valor_lab marcador de poblacion clave (TS/HTS/TTS/HSH/TRA) y las
+ *     gestantes con dichos codigos contaban en el item "PERSONAS TAMIZADAS
+ *     PARA VIH (EXCEPTO GESTANTES, POBLACION CLAVE, TBC E INDIGENA)" (fila
+ *     49) y en las demas filas de la seccion 03 que usan $pcSin5.
  */
 
 require_once __DIR__ . '/../config.php';
 
-define('ITS_DATA_VERSION', '2026-10-14-r2');
+define('ITS_DATA_VERSION', '2026-11-06-r1');
 
 /** Version del motor de reporte de ITS/VIH (badge del reporte). */
 function itsDataVersion(): string {
@@ -642,7 +651,18 @@ function itsSecciones(): array {
 
     // ============ Predicados base reutilizables ============
     $pcSin    = ['citaSin'    => ['vl' => $PC4]];                       // NOT #POBLACION_CLAVE (01/02)
-    $pcSin5   = ['citaSin'    => ['vl' => $PC5]];                       // NOT #POBLACION_CLAVE (03/09)
+    // NOT #POBLACION_CLAVE (03/09). Replica la tabla temporal #POBLACION_CLAVE
+    // del usp_..._03_TAMIZAJE_VIH: la cita se excluye si alguna de sus filas
+    // registra valor_lab marcador de poblacion clave (TS/HTS/TTS/HSH/TRA) o
+    // un codigo de control prenatal Z3491/Z3492/Z3493/Z3591/Z3592/Z3593/Z359
+    // (gestantes, I_ROWNUM_LAB=1). Ajuste 2026-11: antes el filtro solo
+    // aplicaba el valor_lab marcador y las gestantes con esos codigos
+    // contaban en "PERSONAS TAMIZADAS PARA VIH (EXCEPTO GESTANTES, ...)"
+    // (fila 49) y en las demas filas de la seccion 03 que usan $pcSin5.
+    $pcSin5   = ['citaSin' => ['cualquieraDe' => [
+                    ['cod' => ['Z3491', 'Z3492', 'Z3493', 'Z3591', 'Z3592', 'Z3593', 'Z359'], 'rownum' => 1],
+                    ['vl' => $PC5],
+                ]]];
     $tratTA   = ['citaTiene'  => ['cod' => '99199.11', 'vl' => 'TA']];  // #TRATADOS (01/09)
     $contacto = ['citaTiene'  => ['cod' => 'Z202']];                    // #CONTACTOS
     $consej   = ['citaTiene'  => ['cod' => '99402.05', 'tip' => 'D', 'rownum' => 1]]; // #CONSEJ_ITS
