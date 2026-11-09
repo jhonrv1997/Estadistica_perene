@@ -106,8 +106,10 @@ CREATE TABLE `CONVENIO_GESTION_INDICADORES` (
   `descripcion` text DEFAULT NULL COMMENT 'Descripcion detallada',
   `unidad_medida` varchar(50) DEFAULT NULL COMMENT 'Porcentaje, Tasa, Ratio, Numero',
   `meta_anual` decimal(10,2) DEFAULT NULL COMMENT 'Meta anual del indicador',
+  `peso_ponderado` DECIMAL(5,2) NULL DEFAULT NULL COMMENT 'Peso porcentual del indicador en el convenio',
   `periodo` varchar(20) DEFAULT 'ANUAL' COMMENT 'MENSUAL, TRIMESTRAL, ANUAL',
   `responsable` varchar(150) DEFAULT NULL,
+  `ficha_tecnica_pdf` VARCHAR(255) NULL DEFAULT NULL,
   `orden` int(11) DEFAULT 0,
   `estado` tinyint(1) NOT NULL DEFAULT 1
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='Indicadores del Convenio de Gestion MINSA-GORE 2026';
