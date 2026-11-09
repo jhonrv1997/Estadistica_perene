@@ -78,6 +78,8 @@ CREATE TABLE `CONVENIO_FED_INDICADORES` (
 CREATE TABLE `CONVENIO_GESTION_AVANCE` (
   `id_avance` int(11) NOT NULL,
   `id_indicador` int(11) NOT NULL,
+  `renipress` VARCHAR(10) NULL DEFAULT NULL COMMENT 'Codigo RENIPRESS del establecimiento',
+  `establecimiento` VARCHAR(50) NULL DEFAULT NULL COMMENT 'Nombre del establecimiento',
   `anio` varchar(4) NOT NULL,
   `mes` varchar(2) DEFAULT NULL COMMENT 'Mes del reporte (NULL si es acumulado anual)',
   `trimestre` varchar(2) DEFAULT NULL COMMENT 'T1, T2, T3, T4',
@@ -87,6 +89,7 @@ CREATE TABLE `CONVENIO_GESTION_AVANCE` (
   `porcentaje_avance` decimal(5,2) DEFAULT NULL COMMENT 'Porcentaje de avance hacia la meta',
   `observaciones` text DEFAULT NULL,
   `fecha_registro` datetime DEFAULT current_timestamp(),
+  `fecha_importacion` DATETIME NULL DEFAULT NULL,
   `usuario` varchar(100) DEFAULT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='Avance periodico de indicadores del Convenio de Gestion';
 
@@ -1769,7 +1772,7 @@ ALTER TABLE `CONVENIO_GESTION_AVANCE`
   ADD PRIMARY KEY (`id_avance`),
   ADD KEY `idx_cga_indicador` (`id_indicador`),
   ADD KEY `idx_cga_periodo` (`anio`,`mes`);
-
+  ADD KEY `idx_cga_renipress` (`renipress`);
 --
 -- Indices de la tabla `CONVENIO_GESTION_INDICADORES`
 --
