@@ -153,7 +153,7 @@ $esAdmin = esAdmin();
                 <?php if ($esAdmin): ?>
                 <!-- Administracion (dropdown) - solo admin -->
                 <li class="nav-item dropdown">
-                    <a class="nav-link dropdown-toggle <?= in_array($currentpage, ['import', 'usuarios', 'log', 'esni_config', 'fed_gestion_indicadores', 'fed_importar_avances']) ? 'active' : '' ?>"
+                    <a class="nav-link dropdown-toggle <?= in_array($currentpage, ['import', 'usuarios', 'log', 'esni_config', 'fed_gestion_indicadores', 'fed_importar_avances', 'cg_gestion_indicadores', 'cg_importar_avances']) ? 'active' : '' ?>"
                        href="#" role="button" data-bs-toggle="dropdown" aria-expanded="false">
                         <i class="fas fa-cog me-1"></i> Admin
                     </a>
@@ -162,6 +162,18 @@ $esAdmin = esAdmin();
                             <a class="dropdown-item <?= $currentpage === 'import' ? 'active' : '' ?>" href="import.php">
                                 <i class="fas fa-file-import me-2 text-primary"></i>Importar Datos
                                 <small class="d-block text-muted">Carga de archivos ZIP</small>
+                            </a>
+                        </li>
+                        <li>
+                            <a class="dropdown-item <?= $currentpage === 'cg_importar_avances' ? 'active' : '' ?>" href="cg_importar_avances.php">
+                                <i class="fas fa-file-contract me-2 text-primary"></i>CG: Importar Avances
+                                <small class="d-block text-muted">Convenio de Gestion (.txt/.csv)</small>
+                            </a>
+                        </li>
+                        <li>
+                            <a class="dropdown-item <?= $currentpage === 'cg_gestion_indicadores' ? 'active' : '' ?>" href="cg_gestion_indicadores.php">
+                                <i class="fas fa-tasks me-2 text-primary"></i>CG: Gestion de Indicadores
+                                <small class="d-block text-muted">Convenio de Gestion: agregar, modificar, desactivar</small>
                             </a>
                         </li>
                         <li>
