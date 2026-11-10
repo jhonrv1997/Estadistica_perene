@@ -9,6 +9,15 @@ if (!isset($pageTitle)) $pageTitle = 'HIS PERENE';
 $currentpage = basename($_SERVER['PHP_SELF'], '.php');
 $subpage = $_GET['sub'] ?? '';
 $esAdmin = esAdmin();
+
+// Permisos de navegacion por modulo (el admin siempre ve todo)
+$puedeConsultaAtenciones  = puedeAccederModulo('consulta_atenciones');
+$puedeRepOperacionales    = puedeAccederModulo('reporte_operacionales');
+$puedeConvenioGestion     = puedeAccederModulo('convenio_gestion');
+$puedeConvenioFed         = puedeAccederModulo('convenio_fed');
+$puedeControlCalidad      = puedeAccederModulo('control_calidad');
+$puedeRepAtenciones       = puedeAccederModulo('reporte_atenciones');
+$puedeLog                 = puedeAccederModulo('log');
 ?>
 <!DOCTYPE html>
 <html lang="es">
@@ -57,29 +66,36 @@ $esAdmin = esAdmin();
                     </a>
                 </li>
 
-                 <!-- Convenios (dropdown) -->
+                 <!-- Convenios (dropdown): visible solo con acceso a alguno de los dos -->
+                <?php if ($puedeConvenioGestion || $puedeConvenioFed): ?>
                 <li class="nav-item dropdown">
-                    <a class="nav-link dropdown-toggle <?= in_array($currentpage, ['convenio_gestion', 'convenio_fed']) ? 'active' : '' ?>"
+                    <a class="nav-link dropdown-toggle <?= ($puedeConvenioGestion && in_array($currentpage, ['convenio_gestion'])) || ($puedeConvenioFed && in_array($currentpage, ['convenio_fed'])) ? 'active' : '' ?>"
                        href="#" role="button" data-bs-toggle="dropdown" aria-expanded="false">
                         <i class="fas fa-handshake me-1"></i> Convenios
                     </a>
                     <ul class="dropdown-menu">
+                        <?php if ($puedeConvenioGestion): ?>
                         <li>
                             <a class="dropdown-item <?= $currentpage === 'convenio_gestion' ? 'active' : '' ?>" href="convenio_gestion.php">
                                 <i class="fas fa-file-contract me-2 text-primary"></i>Convenio de Gestion
                                 <small class="d-block text-muted">MINSA-GORE 2026 (34 indicadores)</small>
                             </a>
                         </li>
+                        <?php endif; ?>
+                        <?php if ($puedeConvenioFed): ?>
                         <li>
                             <a class="dropdown-item <?= $currentpage === 'convenio_fed' ? 'active' : '' ?>" href="convenio_fed.php">
                                 <i class="fas fa-medal me-2 text-warning"></i>Convenio FED
                                 <small class="d-block text-muted">Fondo de Estimulo al Desempeno (7 indicadores)</small>
                             </a>
                         </li>
+                        <?php endif; ?>
                     </ul>
                 </li>
+                <?php endif; ?>
 
-                <!-- Consulta de Atenciones -->
+                <!-- Consulta de Atenciones: requiere modulo asignado -->
+                <?php if ($puedeConsultaAtenciones): ?>
                 <li class="nav-item dropdown">
                     <a class="nav-link dropdown-toggle <?= in_array($currentpage, ['consulta_atenciones']) ? 'active' : '' ?>"
                        href="#" role="button" data-bs-toggle="dropdown" aria-expanded="false">
@@ -100,15 +116,19 @@ $esAdmin = esAdmin();
                         </li>
                     </ul>
                 </li>
+                <?php endif; ?>
 
-                <!-- Control de Calidad -->
+                <!-- Control de Calidad: requiere modulo asignado -->
+                <?php if ($puedeControlCalidad): ?>
                 <li class="nav-item">
                     <a class="nav-link <?= $currentpage === 'control_calidad' ? 'active' : '' ?>" href="control_calidad.php">
                         <i class="fas fa-clipboard-check me-1"></i> C. Calidad
                     </a>
                 </li>
+                <?php endif; ?>
 
-                <!-- Reporte de Atenciones (dropdown) -->
+                <!-- Reporte de Atenciones (dropdown): requiere modulo asignado -->
+                <?php if ($puedeRepAtenciones): ?>
                 <li class="nav-item dropdown">
                     <a class="nav-link dropdown-toggle <?= in_array($currentpage, ['reporte_atenciones']) ? 'active' : '' ?>"
                        href="#" role="button" data-bs-toggle="dropdown" aria-expanded="false">
@@ -121,8 +141,10 @@ $esAdmin = esAdmin();
                         <li><a class="dropdown-item <?= $currentpage === 'reporte_atenciones' && $subpage === '40a' ? 'active' : '' ?>" href="reporte_atenciones.php?sub=40a"><i class="fas fa-file-invoice me-2 text-danger"></i>Reporte 40A</a></li>
                     </ul>
                 </li>
+                <?php endif; ?>
 
-                <!-- Reportes Operacionales (dropdown) -->
+                <!-- Reportes Operacionales (dropdown): requiere modulo asignado -->
+                <?php if ($puedeRepOperacionales): ?>
                 <li class="nav-item dropdown">
                     <a class="nav-link dropdown-toggle <?= in_array($currentpage, ['reporte_operacionales']) ? 'active' : '' ?>"
                        href="#" role="button" data-bs-toggle="dropdown" aria-expanded="false">
@@ -149,6 +171,7 @@ $esAdmin = esAdmin();
                         <li><a class="dropdown-item <?= $currentpage === 'reporte_zoonosis' || ($currentpage === 'reporte_operacionales' && $subpage === 'zoonosis') ? 'active' : '' ?>" href="reporte_zoonosis.php"><i class="fas fa-paw me-2"></i>Zoonosis <span class="badge bg-success ms-1" style="font-size:.65em">NUEVO</span><small class="d-block text-muted">Reporte Operacional</small></a></li>
                     </ul>
                 </li>
+                <?php endif; ?>
 
                 <?php if ($esAdmin): ?>
                 <!-- Administracion (dropdown) - solo admin -->
@@ -209,12 +232,14 @@ $esAdmin = esAdmin();
                     </ul>
                 </li>
                 <?php else: ?>
-                <!-- Log de auditoria visible para todos -->
+                <!-- Log de auditoria: visible para usuarios con el modulo asignado -->
+                <?php if ($puedeLog): ?>
                 <li class="nav-item">
                     <a class="nav-link <?= $currentpage === 'log' ? 'active' : '' ?>" href="log.php">
                         <i class="fas fa-clipboard-list me-1"></i> Log
                     </a>
                 </li>
+                <?php endif; ?>
                 <?php endif; ?>
 
             </ul>
