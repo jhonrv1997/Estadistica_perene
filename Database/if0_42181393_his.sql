@@ -1695,7 +1695,17 @@ INSERT INTO `USUARIOS` (`id_usuario`, `usuario`, `password`, `nombre_completo`, 
 (2, '41132134', '$2y$10$0JLq5iaw1SA1PizLCQN5ouhm76c7b.SMDV8R/MSmVe.iqmwdJLpe.', 'MARCO ANTONIO ESPINOZA VALERIO', 'usuario', 1, '2026-07-20 19:13:56', '2026-07-24 06:06:33');
 
 -- --------------------------------------------------------
+--
+-- Estructura de tabla para la tabla `USUARIO_MODULOS`
+--
 
+CREATE TABLE `USUARIO_MODULOS` (
+  `id_permiso` int(11) NOT NULL,
+  `id_usuario` int(11) NOT NULL,
+  `modulo` varchar(40) NOT NULL,
+  `asignado_por` int(11) DEFAULT NULL,
+  `fecha_asignacion` datetime DEFAULT current_timestamp()
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 --
 -- Estructura de tabla para la tabla `ZSPERENE`
 --
@@ -2030,6 +2040,13 @@ ALTER TABLE `USUARIOS`
   ADD UNIQUE KEY `uk_usuario` (`usuario`);
 
 --
+-- Indices de la tabla `USUARIO_MODULOS`
+--
+ALTER TABLE `USUARIO_MODULOS`
+  ADD PRIMARY KEY (`id_permiso`),
+  ADD UNIQUE KEY `uk_usuario_modulo` (`id_usuario`,`modulo`);
+
+--
 -- Indices de la tabla `ZSPERENE`
 --
 ALTER TABLE `ZSPERENE`
@@ -2129,7 +2146,11 @@ ALTER TABLE `NOMINAL_TRAMA_PERIODOS`
 --
 ALTER TABLE `USUARIOS`
   MODIFY `id_usuario` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=3;
-
+--
+-- AUTO_INCREMENT de la tabla `USUARIO_MODULOS`
+--
+ALTER TABLE `USUARIO_MODULOS`
+  MODIFY `id_permiso` int(11) NOT NULL AUTO_INCREMENT;
 --
 -- Restricciones para tablas volcadas
 --
