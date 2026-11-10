@@ -10,7 +10,8 @@ $esAdmin = esAdmin();
 $nombreUsuario = $_SESSION['nombre_completo'] ?? $_SESSION['usuario'] ?? 'Usuario';
 
 // Definir las paginas disponibles por rol
-// Cada entrada: [icono, titulo, descripcion, color, archivo, Roles]
+// Cada entrada: [icono, titulo, descripcion, color, archivo, Roles, Modulo]
+// 'modulo' = clave en MODULOS_SISTEMA; para no-admins solo se muestra si fue asignado.
 $paginas = [
     // 1. Consulta de Atenciones
     [
@@ -21,6 +22,7 @@ $paginas = [
         'archivo' => 'consulta_atenciones.php?sub=general',
         'badge' => '2 sub-paginas',
         'roles' => ['admin', 'usuario'],
+        'modulo' => 'consulta_atenciones',
     ],
      // 2. Reportes Operacionales
     [
@@ -31,6 +33,7 @@ $paginas = [
         'archivo' => 'reporte_operacionales.php',
         'badge' => '17 estrategias',
         'roles' => ['admin', 'usuario'],
+        'modulo' => 'reporte_operacionales',
     ],
     // 3. Convenio de Gestion
     [
@@ -41,6 +44,7 @@ $paginas = [
         'archivo' => 'convenio_gestion.php',
         'badge' => '34 indicadores',
         'roles' => ['admin', 'usuario'],
+        'modulo' => 'convenio_gestion',
     ],
     // 4. Convenio FED
     [
@@ -51,6 +55,7 @@ $paginas = [
         'archivo' => 'convenio_fed.php',
         'badge' => '7 indicadores',
         'roles' => ['admin', 'usuario'],
+        'modulo' => 'convenio_fed',
     ],
     
     // 5. Control de Calidad
@@ -62,6 +67,7 @@ $paginas = [
         'archivo' => 'control_calidad.php',
         'badge' => 'Observaciones',
         'roles' => ['admin', 'usuario'],
+        'modulo' => 'control_calidad',
     ],
     // 6. Reporte de Atenciones
     [
@@ -72,6 +78,7 @@ $paginas = [
         'archivo' => 'reporte_atenciones.php?sub=atendidos',
         'badge' => '4 sub-reportes',
         'roles' => ['admin', 'usuario'],
+        'modulo' => 'reporte_atenciones',
     ],
       
     // 7. Importar Datos (solo admin)
@@ -103,17 +110,36 @@ $paginas = [
         'archivo' => 'log.php',
         'badge' => 'Historial',
         'roles' => ['admin', 'usuario'],
+        'modulo' => 'log',
     ],
 ];
 
-// Filtrar paginas segun rol
+// Filtrar paginas segun rol Y accesos por modulo asignados por el administrador
 $paginasDisponibles = array_filter($paginas, function($p) use ($esAdmin) {
-    return in_array($esAdmin ? 'admin' : 'usuario', $p['roles'], true);
+    if (!in_array($esAdmin ? 'admin' : 'usuario', $p['roles'], true)) {
+        return false;
+    }
+    // Para usuarios no admin: la tarjeta solo aparece si el modulo fue asignado
+    if (!$esAdmin && !empty($p['modulo']) && !puedeAccederModulo($p['modulo'])) {
+        return false;
+    }
+    return true;
 });
 
 $pageTitle = 'Inicio - Sistema HIS';
 include 'includes/header.php';
 ?>
+
+<!-- Alerta de acceso denegado a un modulo -->
+<?php if (isset($_GET['acceso_denegado'])): ?>
+<div class="alert alert-warning alert-dismissible fade show" role="alert">
+    <i class="fas fa-lock me-2"></i>
+    <strong>Acceso denegado:</strong> no tiene permiso para abrir ese modulo.
+    Si lo necesita, solicite al administrador que le asigne el acceso desde la
+    <a href="javascript:void(0)" class="alert-link">Gestion de Usuarios</a>.
+    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+</div>
+<?php endif; ?>
 
 <!-- Banner de bienvenida -->
 <div class="card shadow-sm mb-4 welcome-banner">
@@ -141,7 +167,7 @@ include 'includes/header.php';
     <h5 class="fw-bold mb-0"><i class="fas fa-th-large me-2 text-primary"></i>Modulos disponibles</h5>
     <span class="text-muted small">
         <i class="fas fa-info-circle me-1"></i>
-        Mostrando <?= count($paginasDisponibles) ?> modulos segun su rol
+        Mostrando <?= count($paginasDisponibles) ?> modulos segun su rol y accesos asignados
     </span>
 </div>
 
@@ -204,8 +230,8 @@ include 'includes/header.php';
     <div class="card-body">
         <h6 class="fw-bold text-info"><i class="fas fa-info-circle me-2"></i>Informacion para usuarios</h6>
         <p class="small mb-0">
-            Su rol <strong>Usuario</strong> le permite consultar reportes, convenios y observaciones de control de calidad.
-            Si requiere importar datos o gestionar usuarios, contacte al administrador del sistema.
+            Su rol <strong>Usuario</strong> le permite consultar los modulos asignados por el administrador           
+            Si requiere un modulo adicional, contacte al administrador del sistema.
         </p>
     </div>
 </div>

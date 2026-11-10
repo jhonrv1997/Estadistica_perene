@@ -15,6 +15,53 @@ $mensaje = '';
 $tipoMensaje = '';
 
 // ============================================================
+// HELPERS: ACCESO POR MODULOS
+// ============================================================
+/**
+ * Guarda los accesos por modulo de un usuario: reemplaza el set anterior.
+ * Los valores recibidos se validan contra el catalogo MODULOS_SISTEMA.
+ * NOTA: los administradores no requieren registros (acceso total por rol).
+ */
+function guardarModulosUsuario($pdo, $idUsuario, $modulosPost, $asignadoPor = null) {
+    $validos = [];
+    foreach ((array)$modulosPost as $m) {
+        if (is_string($m) && array_key_exists($m, MODULOS_SISTEMA)) {
+            $validos[] = $m;
+        }
+    }
+    $validos = array_values(array_unique($validos));
+
+    $stmt = $pdo->prepare("DELETE FROM USUARIO_MODULOS WHERE id_usuario = ?");
+    $stmt->execute([(int)$idUsuario]);
+
+    if (!empty($validos)) {
+        $stmt = $pdo->prepare("INSERT INTO USUARIO_MODULOS (id_usuario, modulo, asignado_por) VALUES (?, ?, ?)");
+        foreach ($validos as $m) {
+            $stmt->execute([(int)$idUsuario, $m, $asignadoPor]);
+        }
+    }
+    return count($validos);
+}
+
+/**
+ * Renderiza la lista de checkboxes de modulos para los formularios.
+ * $prefix: prefijo unico para ids (crear_mod / edit_mod / accesos_mod).
+ * $seleccionados: claves de modulo marcadas de inicio (opcional).
+ */
+function renderCheckboxesModulos($prefix, $seleccionados = []) {
+    foreach (MODULOS_SISTEMA as $clave => $info) {
+        $checked = in_array($clave, (array)$seleccionados, true) ? 'checked' : '';
+        $id = htmlspecialchars($prefix . '_' . $clave);
+        echo '<div class="form-check mb-2">';
+        echo '<input class="form-check-input chk-modulo" type="checkbox" name="modulos[]" value="' . htmlspecialchars($clave) . '" id="' . $id . '" ' . $checked . ' data-prefix="' . htmlspecialchars($prefix) . '">';
+        echo '<label class="form-check-label" for="' . $id . '">';
+        echo '<i class="fas ' . htmlspecialchars($info['icono']) . ' me-1 text-primary"></i><strong>' . htmlspecialchars($info['nombre']) . '</strong>';
+        echo ' <small class="text-muted d-block ms-4">' . htmlspecialchars($info['archivo']) . ' &mdash; ' . htmlspecialchars($info['descripcion']) . '</small>';
+        echo '</label></div>';
+    }
+}
+
+// ============================================================
 // PROCESAR ACCIONES (POST)
 // ============================================================
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
@@ -51,7 +98,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $hash = password_hash($password, PASSWORD_BCRYPT);
                     $stmt = $pdo->prepare("INSERT INTO USUARIOS (usuario, password, nombre_completo, rol, estado, fecha_creacion) VALUES (?, ?, ?, ?, ?, NOW())");
                     $stmt->execute([$usuario, $hash, $nombreCompleto, $rol, $estado]);
-                    $mensaje = "Usuario <strong>" . htmlspecialchars($usuario) . "</strong> creado correctamente.";
+                    $idNuevo = (int)$pdo->lastInsertId();
+
+                    // Acceso por modulos: solo aplica a rol 'usuario'
+                    // (el rol admin tiene acceso a todo por defecto)
+                    if ($rol !== 'admin') {
+                        $nModulos = guardarModulosUsuario($pdo, $idNuevo, $_POST['modulos'] ?? [], (int)($_SESSION['usuario_id'] ?? 0));
+                        $mensaje = "Usuario <strong>" . htmlspecialchars($usuario) . "</strong> creado correctamente con " . $nModulos . " modulo(s) asignado(s).";
+                    } else {
+                        $mensaje = "Usuario <strong>" . htmlspecialchars($usuario) . "</strong> creado correctamente (acceso total por rol Administrador).";
+                    }
                     $tipoMensaje = 'success';
                     break;
                 }
@@ -73,7 +129,35 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
                     $stmt = $pdo->prepare("UPDATE USUARIOS SET nombre_completo = ?, rol = ?, estado = ? WHERE id_usuario = ?");
                     $stmt->execute([$nombreCompleto, $rol, $estado, $idUsuario]);
+
+                    // Acceso por modulos: si pasa a admin se limpian sus registros
+                    // (acceso total por rol); si es usuario se reemplaza el set.
+                    if ($rol !== 'admin') {
+                        guardarModulosUsuario($pdo, $idUsuario, $_POST['modulos'] ?? [], (int)($_SESSION['usuario_id'] ?? 0));
+                    } else {
+                        $stmt = $pdo->prepare("DELETE FROM USUARIO_MODULOS WHERE id_usuario = ?");
+                        $stmt->execute([$idUsuario]);
+                    }
+
                     $mensaje = "Usuario actualizado correctamente.";
+                    $tipoMensaje = 'success';
+                    break;
+                }
+                case 'asignar_modulos': {
+                    $idUsuario = (int)($_POST['id_usuario'] ?? 0);
+                    if ($idUsuario <= 0) throw new Exception('ID de usuario invalido.');
+
+                    // Verificar que el usuario exista y su rol
+                    $stmt = $pdo->prepare("SELECT usuario, rol FROM USUARIOS WHERE id_usuario = ?");
+                    $stmt->execute([$idUsuario]);
+                    $uRow = $stmt->fetch();
+                    if (!$uRow) throw new Exception('El usuario no existe.');
+                    if ($uRow['rol'] === 'admin') {
+                        throw new Exception('El rol Administrador ya tiene acceso a todos los modulos; no requiere asignacion.');
+                    }
+
+                    guardarModulosUsuario($pdo, $idUsuario, $_POST['modulos'] ?? [], (int)($_SESSION['usuario_id'] ?? 0));
+                    $mensaje = "Accesos por modulo actualizados para <strong>" . htmlspecialchars($uRow['usuario']) . "</strong>.";
                     $tipoMensaje = 'success';
                     break;
                 }
@@ -94,6 +178,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     if ($idUsuario <= 0) throw new Exception('ID de usuario invalido.');
                     if ($idUsuario === 1) throw new Exception('El administrador principal no puede ser eliminado.');
                     if ($idUsuario === (int)($_SESSION['usuario_id'] ?? 0)) throw new Exception('No puede eliminar su propia cuenta.');
+
+                    // Eliminar primero sus accesos por modulo
+                    $stmt = $pdo->prepare("DELETE FROM USUARIO_MODULOS WHERE id_usuario = ?");
+                    $stmt->execute([$idUsuario]);
 
                     $stmt = $pdo->prepare("DELETE FROM USUARIOS WHERE id_usuario = ?");
                     $stmt->execute([$idUsuario]);
@@ -158,6 +246,17 @@ $dataSql = "SELECT id_usuario, usuario, nombre_completo, rol, estado, fecha_crea
 $dataStmt = $pdo->prepare($dataSql);
 $dataStmt->execute($params);
 $usuarios = $dataStmt->fetchAll();
+
+// Accesos por modulo de los usuarios listados (badges + modales)
+$modulosPorUsuario = [];
+if (!empty($usuarios)) {
+    $idsLista = array_map('intval', array_column($usuarios, 'id_usuario'));
+    $inIds = implode(',', $idsLista);
+    $rowsMods = $pdo->query("SELECT id_usuario, modulo FROM USUARIO_MODULOS WHERE id_usuario IN ($inIds)")->fetchAll();
+    foreach ($rowsMods as $rm) {
+        $modulosPorUsuario[(int)$rm['id_usuario']][] = $rm['modulo'];
+    }
+}
 
 // Stats
 $statsRow = $pdo->query("SELECT
@@ -288,6 +387,7 @@ include 'includes/header.php';
                             <th>Usuario</th>
                             <th>Nombre Completo</th>
                             <th>Rol</th>
+                            <th>Accesos por Modulo</th>
                             <th>Estado</th>
                             <th>Fecha Creacion</th>
                             <th>Ultimo Acceso</th>
@@ -312,6 +412,20 @@ include 'includes/header.php';
                                     <span class="badge bg-info text-dark"><i class="fas fa-user me-1"></i>Usuario</span>
                                 <?php endif; ?>
                             </td>
+                            <td style="max-width:220px;">
+                                <?php if ($u['rol'] === 'admin'): ?>
+                                    <span class="badge bg-secondary"><i class="fas fa-universal-access me-1"></i>Todos (rol Admin)</span>
+                                <?php else:
+                                    $modsUsu = $modulosPorUsuario[(int)$u['id_usuario']] ?? [];
+                                    if (empty($modsUsu)): ?>
+                                        <span class="text-muted small"><i class="fas fa-ban me-1"></i>Sin accesos asignados</span>
+                                    <?php else: foreach ($modsUsu as $mc): ?>
+                                        <span class="badge bg-light text-dark border mb-1" title="<?= htmlspecialchars(MODULOS_SISTEMA[$mc]['archivo'] ?? $mc) ?>">
+                                            <i class="fas <?= htmlspecialchars(MODULOS_SISTEMA[$mc]['icono'] ?? 'fa-square') ?> me-1 text-primary"></i><?= htmlspecialchars(MODULOS_SISTEMA[$mc]['nombre'] ?? $mc) ?>
+                                        </span>
+                                    <?php endforeach; endif; ?>
+                                <?php endif; ?>
+                            </td>
                             <td>
                                 <?php if ((int)$u['estado'] === 1): ?>
                                     <span class="badge bg-success"><i class="fas fa-check-circle me-1"></i>Activo</span>
@@ -322,6 +436,12 @@ include 'includes/header.php';
                             <td><small><?= formatDateTime($u['fecha_creacion']) ?></small></td>
                             <td><small><?= $u['ultimo_acceso'] ? formatDateTime($u['ultimo_acceso']) : '<span class="text-muted">Nunca</span>' ?></small></td>
                             <td class="text-end">
+                                <?php if ($u['rol'] !== 'admin'): ?>
+                                <button type="button" class="btn btn-xs btn-outline-success"
+                                        onclick='asignarModulos(<?= (int)$u["id_usuario"] ?>, <?= json_encode($u["usuario"], JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>, <?= json_encode($modulosPorUsuario[(int)$u["id_usuario"]] ?? [], JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>)'>
+                                    <i class="fas fa-shield-halved" title="Accesos por modulos"></i>
+                                </button>
+                                <?php endif; ?>
                                 <button type="button" class="btn btn-xs btn-outline-primary"
                                         onclick='editarUsuario(<?= json_encode([
                                             "id_usuario" => (int)$u["id_usuario"],
@@ -329,6 +449,7 @@ include 'includes/header.php';
                                             "nombre_completo" => $u["nombre_completo"],
                                             "rol" => $u["rol"],
                                             "estado" => (int)$u["estado"],
+                                            "modulos" => $modulosPorUsuario[(int)$u["id_usuario"]] ?? [],
                                         ], JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>)'>
                                     <i class="fas fa-edit" title="Editar"></i>
                                 </button>
@@ -432,6 +553,21 @@ include 'includes/header.php';
                             </div>
                         </div>
                     </div>
+                    <!-- Acceso por modulos (aplica al rol Usuario; el Admin tiene acceso total) -->
+                    <div class="border-top pt-3 mt-1">
+                        <label class="form-label fw-semibold"><i class="fas fa-shield-halved me-1 text-success"></i>Acceso por modulos</label>
+                        <div class="alert alert-info py-1 px-2 small mb-2">
+                            Con rol <strong>Administrador</strong> el acceso es total por defecto.
+                            Los modulos marcados aplican cuando el rol es <strong>Usuario</strong>.
+                        </div>
+                        <div class="form-check mb-2">
+                            <input class="form-check-input" type="checkbox" id="crear_mod_todos" onchange="toggleTodosModulos('crear_mod', this.checked)">
+                            <label class="form-check-label fw-semibold" for="crear_mod_todos">Seleccionar todos / quitar todos</label>
+                        </div>
+                        <div style="max-height:240px;overflow-y:auto;" class="ps-2">
+                            <?php renderCheckboxesModulos('crear_mod'); ?>
+                        </div>
+                    </div>
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
@@ -479,6 +615,21 @@ include 'includes/header.php';
                             </div>
                         </div>
                     </div>
+                    <!-- Acceso por modulos (aplica al rol Usuario; el Admin tiene acceso total) -->
+                    <div class="border-top pt-3 mt-1">
+                        <label class="form-label fw-semibold"><i class="fas fa-shield-halved me-1 text-success"></i>Acceso por modulos</label>
+                        <div class="alert alert-info py-1 px-2 small mb-2">
+                            Con rol <strong>Administrador</strong> el acceso es total por defecto.
+                            Los modulos marcados aplican cuando el rol es <strong>Usuario</strong>.
+                        </div>
+                        <div class="form-check mb-2">
+                            <input class="form-check-input" type="checkbox" id="edit_mod_todos" onchange="toggleTodosModulos('edit_mod', this.checked)">
+                            <label class="form-check-label fw-semibold" for="edit_mod_todos">Seleccionar todos / quitar todos</label>
+                        </div>
+                        <div style="max-height:240px;overflow-y:auto;" class="ps-2">
+                            <?php renderCheckboxesModulos('edit_mod'); ?>
+                        </div>
+                    </div>
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
@@ -521,6 +672,43 @@ include 'includes/header.php';
     </div>
 </div>
 
+<!-- Modal Accesos por Modulos -->
+<div class="modal fade" id="modalAccesos" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <form method="POST" action="usuarios.php">
+                <input type="hidden" name="csrf_token" value="<?= $csrfToken ?>">
+                <input type="hidden" name="accion" value="asignar_modulos">
+                <input type="hidden" name="id_usuario" id="accesos_id_usuario">
+                <div class="modal-header">
+                    <h5 class="modal-title"><i class="fas fa-shield-halved me-2"></i>Acceso por Modulos</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <p class="mb-2">Usuario: <strong id="accesos_usuario"></strong></p>
+                    <div class="alert alert-info py-2 small">
+                        <i class="fas fa-info-circle me-1"></i>
+                        El rol <strong>Administrador</strong> siempre tiene acceso a todos los modulos.
+                        Marque solo los modulos que este usuario podra abrir; los no marcados le seran
+                        bloqueados y no apareceran en su menu.
+                    </div>
+                    <div class="form-check border-bottom pb-2 mb-2">
+                        <input class="form-check-input" type="checkbox" id="accesos_todos" onchange="toggleTodosModulos('accesos_mod', this.checked)">
+                        <label class="form-check-label fw-semibold" for="accesos_todos">Seleccionar todos / quitar todos</label>
+                    </div>
+                    <div style="max-height:320px;overflow-y:auto;" class="ps-1">
+                        <?php renderCheckboxesModulos('accesos_mod'); ?>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-his"><i class="fas fa-save me-1"></i> Guardar Accesos</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
 <script>
 function editarUsuario(data) {
     document.getElementById('edit_id_usuario').value = data.id_usuario;
@@ -528,7 +716,27 @@ function editarUsuario(data) {
     document.getElementById('edit_nombre_completo').value = data.nombre_completo;
     document.getElementById('edit_rol').value = data.rol;
     document.getElementById('edit_estado').checked = data.estado === 1;
+    marcarModulos('edit_mod', data.modulos || []);
     new bootstrap.Modal(document.getElementById('modalEditar')).show();
+}
+
+function asignarModulos(id, usuario, modulos) {
+    document.getElementById('accesos_id_usuario').value = id;
+    document.getElementById('accesos_usuario').textContent = usuario;
+    marcarModulos('accesos_mod', modulos || []);
+    new bootstrap.Modal(document.getElementById('modalAccesos')).show();
+}
+
+function marcarModulos(prefix, lista) {
+    document.querySelectorAll('input[type="checkbox"][data-prefix="' + prefix + '"]').forEach(function(chk) {
+        chk.checked = lista.indexOf(chk.value) !== -1;
+    });
+}
+
+function toggleTodosModulos(prefix, checked) {
+    document.querySelectorAll('input[type="checkbox"][data-prefix="' + prefix + '"]').forEach(function(chk) {
+        chk.checked = checked;
+    });
 }
 
 function resetearClave(id, usuario) {
