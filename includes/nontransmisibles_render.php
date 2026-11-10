@@ -4,7 +4,7 @@
  * Modulo NO TRANSMISIBLES - Funciones de render del reporte web (layout tipo Excel).
  *
  * Renderizan las secciones devueltas por ntEjecutarReporte() con el mismo
- * diseno de la plantilla oficial "Reporte_Actividades_NoTransmisibles.xlsx"
+ * diseno de la plantilla oficial "Reporte_Actividades_NoTransmisiblesN.xlsx"
  * (hoja "Plantilla", cabeceras moradas #8064A2 como la original):
  *   - filas: etiqueta (1-3 niveles) + unidad de medida
  *   - columnas: TOTAL + grupos etareos (6 u 8) con subcolumnas M/F
@@ -33,7 +33,7 @@ function ntGedadLabel(string $tipo, int $g): string {
 function ntEtiquetaRegla(string $regla): string {
     switch ($regla) {
         case 'personas': return 'count(distinct id_persona) del T-SQL (pares EE.SS|paciente|periodo)';
-        case 'filas':    return 'count(*) del T-SQL (cada fila HIS que cumple)';
+        case 'filas':    return 'count(*) del T-SQL (cada fila HIS que cumple; cuenta todo, sin agrupar por persona)';
         case 'sesiones': return 'count(*) N&ordm; + sum(valor_lab) Participantes (NULL=&gt;1)';
     }
     return '';
@@ -151,7 +151,14 @@ function ntPanelCondiciones(array $sec, string $regla): void {
           <div class="p-2 px-3 bg-white border-top">';
     foreach ($sec['filas'] as $f) {
         $label = trim($f['niv1'] . ' / ' . ($f['niv2'] ?? '') . ' / ' . ($f['niv3'] ?? ''), ' /');
-        echo '<div class="mb-2"><strong class="text-dark">' . $label . '</strong>';
+        // Regla de conteo de la fila cuando difiere de la seccion
+        // (p.ej. "control por consultorio" cuenta todos los registros)
+        $reglaFila = $f['regla'] ?? $regla;
+        $notaRegla = $reglaFila !== $regla
+            ? ' <span class="badge bg-warning text-dark">regla: ' . htmlspecialchars($reglaFila)
+              . ' &mdash; ' . ntEtiquetaRegla($reglaFila) . '</span>'
+            : '';
+        echo '<div class="mb-2"><strong class="text-dark">' . $label . $notaRegla . '</strong>';
         if (!empty($f['cond'])) {
             echo '<div class="nt-cond">' . htmlspecialchars(ntCondicionSQL($f['cond'])) . '</div>';
         } else {

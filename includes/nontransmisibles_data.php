@@ -11,9 +11,10 @@
  *      HTA_Sesiones, DM_Diagnostico01-07, TM_Valoracion01-05)
  *   2) SQL Server: ejecutar "02 Creacion tablas consolidacion" (TRAMA_BASE_NT_*)
  *   3) SQL Server: ejecutar "03 Creacion de Procedimientos" (24 SP)
- *   4) Excel:      refrescar la conexion ODBC de "Reporte_Actividades_NoTransmisibles.xlsx"
+ *   4) Excel:      refrescar la conexion ODBC de "Reporte_Actividades_NoTransmisiblesN.xlsx"
  *
- * SECCIONES (24 procedimientos -> 24 secciones del reporte, en 4 grupos):
+ * SECCIONES (24 procedimientos -> 24 secciones del reporte, en 4 grupos).
+ * Numeros de fila segun la plantilla 2026 "Reporte_Actividades_NoTransmisiblesN.xlsx":
  *   GRUPO 01 VALORACION (gedad 1-6, cols C=TOTAL, D-O):
  *     VR01 usp_..._01_VALORACION_RPT_01_FACTORES_RIESGO   (20 factores, filas 12-31)
  *     VR02 usp_..._01_VALORACION_RPT_02_EVALUACION_PAB    (Normal/Anormal, filas 36-37)
@@ -23,25 +24,31 @@
  *   GRUPO 02 HTA (gedad 1-6, cols C=TOTAL, D-O):
  *     HTA1 usp_..._02_HTA_RPT_01_CASOS          (dx 1-8, filas 62-69)
  *     HTA2 usp_..._02_HTA_RPT_02_EMERGENCIA     (dx 1-3, filas 75-77)
- *     HTA3 usp_..._02_HTA_RPT_03_DISLIPIDEMIAS  (dx 1,   fila 82)
- *     HTA4 usp_..._02_HTA_RPT_04_HIPERTENSO_SIN_DANO    (dx 1-6, filas 87-92)
- *     HTA5 usp_..._02_HTA_RPT_05_HIPERTENSO_TRATAMIENTO (dx 1-10, filas 98-108)
- *     HTA6 usp_..._02_HTA_RPT_06_HIPERTENSO_RIESGO      (riesgo 1-5, filas 113-117)
- *     HTA7 usp_..._02_HTA_RPT_07_SESIONES      (6 filas, filas 122-127; N= count, Part= suma)
+ *     HTA3 usp_..._02_HTA_RPT_03_DISLIPIDEMIAS  (dx 1-2, filas 82-83;
+ *          82 = bajo riesgo CV [99199.23<5 + PA<120/<80], 83 = alto riesgo CV)
+ *     HTA4 usp_..._02_HTA_RPT_04_HIPERTENSO_SIN_DANO    (dx 1-7, filas 88-94;
+ *          90 = control por consultorio [cuenta todo], 91 = al menos 1 control PA)
+ *     HTA5 usp_..._02_HTA_RPT_05_HIPERTENSO_TRATAMIENTO (dx 1-11, filas 100-111;
+ *          102 = control por consultorio, 103 = al menos 1 control PA)
+ *     HTA6 usp_..._02_HTA_RPT_06_HIPERTENSO_RIESGO      (riesgo 1-5, filas 116-120)
+ *     HTA7 usp_..._02_HTA_RPT_07_SESIONES      (6 filas, filas 125-130; N= count, Part= suma;
+ *          APP100 se busca en Id_Paciente, ya NO en Ficha_Familiar)
  *   GRUPO 03 DM (gedad 1-8):
- *     DM01 usp_..._03_DM_RPT_01_CASOS          (dx 1-13, filas 134-146; cols C=TOTAL, D-S)
- *     DM02 usp_..._03_DM_RPT_02_GLUCEMIA       (dx 1-7, filas 152-158; regla count(*))
- *     DM03 usp_..._03_DM_RPT_03_CONTROL        (cat 1-52, filas 163-214; cols E=TOTAL, F-U; RENAES I-2/I-3/I-4)
- *     DM04 usp_..._03_DM_RPT_04_TRATAMIENTO    (cat 1-52, filas 219-270; cols E=TOTAL; RENAES II-1..III-2/III-E)
- *     DM05 usp_..._03_DM_RPT_05_ATENCION       (dx 1-8, filas 275-282; cols C=TOTAL, D-S)
- *     DM06 usp_..._03_DM_RPT_06_VALORACION     (cat 1-88, filas 287-374; cols E=TOTAL; RENAES I-4 + II/III
- *     DM07 usp_..._03_DM_RPT_07_NEFROPATIA     (cat 1-11, filas 379-389; cols C=TOTAL, D-S; RENAES I-1..II-1)
+ *     DM01 usp_..._03_DM_RPT_01_CASOS          (dx 1-13, filas 137-149; cols C=TOTAL, D-S)
+ *     DM02 usp_..._03_DM_RPT_02_GLUCEMIA       (dx 1-7, filas 155-161; regla count(*))
+ *     DM03 usp_..._03_DM_RPT_03_CONTROL        (cat 1-52, filas 166-217; cols E=TOTAL, F-U; RENAES I-2/I-3/I-4)
+ *     DM04 usp_..._03_DM_RPT_04_TRATAMIENTO    (cat 1-52, filas 222-273; cols E=TOTAL; RENAES II-1..III-2/III-E)
+ *     DM05 usp_..._03_DM_RPT_05_ATENCION       (dx 1-10, filas 278-287; cols C=TOTAL, D-S;
+ *          incluye Odontologia 303304 y Psicologia 303802)
+ *     DM06 usp_..._03_DM_RPT_06_VALORACION     (cat 1-88, filas 292-379; cols E=TOTAL; RENAES I-4 + II/III
+ *     DM07 usp_..._03_DM_RPT_07_NEFROPATIA     (cat 1-10, filas 384-393; cols C=TOTAL, D-S; RENAES I-1..II-1;
+ *          tira reactiva solo Categorias 0-3, sin Categoria 4)
  *   GRUPO 04 TM TELESALUD (gedad 1-6, cols C=TOTAL, D-O):
- *     TM01 usp_..._04_TM_RPT_01_TELEORIENTACION (valoracion 1-3, filas 396-398)
- *     TM02 usp_..._04_TM_RPT_02_TELEMONITOREO   (valoracion 1,   fila 403)
- *     TM03 usp_..._04_TM_RPT_03_TELEMONITOREO_HTA (1-2, filas 408-409)
- *     TM04 usp_..._04_TM_RPT_04_TELEMONITOREO_DM (2 filas sin/con glucometro, filas 414-415)
- *     TM05 usp_..._04_TM_RPT_05_TELECONSULTAS   (1 fila, fila 419)
+ *     TM01 usp_..._04_TM_RPT_01_TELEORIENTACION (valoracion 1-3, filas 400-402)
+ *     TM02 usp_..._04_TM_RPT_02_TELEMONITOREO   (valoracion 1,   fila 407)
+ *     TM03 usp_..._04_TM_RPT_03_TELEMONITOREO_HTA (1-2, filas 412-413)
+ *     TM04 usp_..._04_TM_RPT_04_TELEMONITOREO_DM (2 filas sin/con glucometro, filas 418-419)
+ *     TM05 usp_..._04_TM_RPT_05_TELECONSULTAS   (1 fila, fila 423)
  *
  * MAPEO DE COLUMNAS (TRAMAHIS_DTSG SQL Server -> tabla consolidada MySQL):
  *   id_cita         -> Id_Cita
@@ -58,8 +65,9 @@
  *   edad_reg        -> Edad_Reg
  *   id_tipedad_reg  -> Tipo_Edad             ('D','M','A')
  *   renaes          -> Codigo_Unico
- *   id_persona      -> Id_Paciente
- *   fichafam        -> Ficha_Familiar        (APP100 = sesiones GAM)
+ *   id_persona      -> Id_Paciente           (APP100 = sesiones educativas HTA7:
+ *                                             el codigo APP100 se busca en Id_Paciente)
+ *   fichafam        -> Ficha_Familiar        (obsoleto para APP100; ver Id_Paciente)
  *   id_ups          -> Id_Ups                (302701 nefrologia, 300201 cardiologia,
  *                                             303408 oftalmologia, 303101 nutricion, ...)
  *   fg_tipo         -> Fg_Tipo               ('CX' = caso confirmado, DM_RPT_01)
@@ -85,6 +93,11 @@
  *   'filas'    : count(*) (DM02 GLUCEMIA y HTA7 SESIONES - numero de sesiones).
  *   'sesiones' : HTA7: ademas de 'filas' para N, sum(try_convert(int,valor_lab))
  *                con NULL -> 1 (iif del T-SQL) para PARTICIPANTES.
+ *   Una fila puede sobreescribir la regla de su seccion con 'regla' => 'filas'
+ *   (HTA4/HTA5 "Hipertension esencial que recibe control por consultorio":
+ *   misma condicion que "al menos 1 control de PA" pero contando TODOS los
+ *   registros, sin agrupar por persona - un paciente con 2 controles en el
+ *   mismo mes cuenta 2).
  *
  * NOTAS DE ADAPTACION (desviaciones documentadas):
  *   - Los rangos de valor_lab del T-SQL (valor_lab<'140', between '70' and '99')
@@ -102,7 +115,7 @@
 
 require_once __DIR__ . '/../config.php';
 
-define('NT_DATA_VERSION', '2026-09-13-r1');
+define('NT_DATA_VERSION', '2026-11-11-r1');
 
 /** Version del motor de reporte de No Transmisibles (badge del reporte). */
 function ntDataVersion(): string {
@@ -167,6 +180,8 @@ function ntFila(array $r): array {
  *   'pab'         => ['le',88] | ['gt',102]          Perimetro_Abdominal numerico
  *   'ups'         => '302701' | [...]                Id_Ups
  *   'ficha'       => 'APP100'                        Ficha_Familiar
+ *   'pac'         => 'APP100'                        Id_Paciente (sesiones HTA7:
+ *                                                    el APP100 se registra en Id_Paciente)
  *   'fg'          => 'CX'                            Fg_Tipo (caso confirmado)
  *   'renaesCat'   => ['I-2','I-3','I-4']             renaes en catalogo de categorias
  *                                                    MAESTRO_HIS_ESTABLECIMIENTO
@@ -248,6 +263,9 @@ function ntCumple(array $f, array $cond, array $ctx): bool {
     }
     if (isset($cond['ficha'])) {
         if ($f['ficha'] !== strtoupper((string)$cond['ficha'])) return false;
+    }
+    if (isset($cond['pac'])) {
+        if (strtoupper($f['pac']) !== strtoupper((string)$cond['pac'])) return false;
     }
     if (isset($cond['fg'])) {
         if ($f['fg'] !== strtoupper((string)$cond['fg'])) return false;
@@ -396,6 +414,9 @@ function ntCondicionSQL(array $cond, int $nivel = 0): string {
                 break;
             case 'ficha':
                 $partes[] = "fichafam = '{$v}'";
+                break;
+            case 'pac':
+                $partes[] = "id_paciente = '{$v}'";
                 break;
             case 'fg':
                 $partes[] = "fg_tipo = '{$v}'";
@@ -746,8 +767,10 @@ function ntSecciones(): array {
     ],
 
     /* HTA3 - usp_TRAMA_BASE_NT_2025_02_HTA_RPT_03_DISLIPIDEMIAS
-     * Seguimiento dislipidemia + alto riesgo CV. Fila 82.
-     * #DISLIP = 99199.23 D R1 >=10 de citas con E78x R1; #PRESION R1<140 y R2<90. */
+     * Seguimiento dislipidemia + riesgo CV. Filas 82-83 (plantilla 2026).
+     * #DISLIP_BAJO = 99199.23 D R1 <5 de citas con E78x D R1 (40+);
+     *                #PRESION R1<120 y R2<80 (bajo riesgo CV).
+     * #DISLIP_ALTO = 99199.23 D R1 >=10 de citas con E78x R1; #PRESION R1<140 y R2<90. */
     [
         'codigo'        => 'HTA3_DISLIPIDEMIAS',
         'procedimiento' => 'usp_TRAMA_BASE_NT_2025_02_HTA_RPT_03_DISLIPIDEMIAS',
@@ -759,7 +782,14 @@ function ntSecciones(): array {
         'colsX'         => $cols6,
         'columna_label' => 'DIAGN&Oacute;STICO',
         'filas'         => [
-            ['key' => 'DIS1', 'niv1' => 'PERSONA CON DISLIPIDEMIA Y ALTO RIESGO CARDIOVASCULAR EN SEGUIMIENTO', 'niv2' => null, 'niv3' => null, 'unidad' => 'Persona atendida', 'fila' => 82,
+            ['key' => 'DIS0', 'niv1' => 'PERSONA CON DISLIPIDEMIA Y BAJO RIESGO CARDIOVASCULAR', 'niv2' => null, 'niv3' => null, 'unidad' => 'Persona atendida', 'fila' => 82,
+             'cond' => ['cod' => ['E780', 'E781', 'E782', 'E784', 'E785'], 'tip' => 'D', 'rownum' => 1, 'edadA' => [40, null],
+                        'citaTieneTodo' => [
+                            ['cod' => '99199.23', 'tip' => 'D', 'rownum' => 1, 'vlNum' => ['lt', 5]],
+                            ['cod' => '99199.22', 'tip' => 'D', 'rownum' => 1, 'vlNum' => ['lt', 120]],
+                            $presionR2 + ['vlNum' => ['lt', 80]],
+                        ]]],
+            ['key' => 'DIS1', 'niv1' => 'PERSONA CON DISLIPIDEMIA Y ALTO RIESGO CARDIOVASCULAR EN SEGUIMIENTO', 'niv2' => null, 'niv3' => null, 'unidad' => 'Persona atendida', 'fila' => 83,
              'cond' => ['cod' => ['E780', 'E781', 'E782', 'E784', 'E785'], 'tip' => 'D', 'rownum' => 1, 'edadA' => [40, null],
                         'citaTieneTodo' => [
                             ['cod' => '99199.23', 'tip' => 'D', 'rownum' => 1, 'vlNum' => ['ge', 10]],
@@ -770,7 +800,9 @@ function ntSecciones(): array {
     ],
 
     /* HTA4 - usp_TRAMA_BASE_NT_2025_02_HTA_RPT_04_HIPERTENSO_SIN_DANO
-     * Tratamiento HTA sin dano de organo (familias I10). Filas 87-92.
+     * Tratamiento HTA sin dano de organo (familias I10). Filas 88-94
+     * (plantilla 2026; 90 = control por consultorio cuenta-todo,
+     * 91 = al menos 1 control de PA por persona).
      * #TRATAMIENTO = 99199.22 R1 num de citas con I10(R) R1;
      * #PRESION = R1<130 y R2<80; #HIPERTENSION = 99199.23>=10;
      * #CONTROL = 99199.22 R1 de citas con I10 R R1 PC. */
@@ -784,16 +816,18 @@ function ntSecciones(): array {
         'layout'        => '6GC',
         'colsX'         => $cols6,
         'columna_label' => 'DIAGN&Oacute;STICO',
-        'filas'         => ntHtaFilasTratamiento('HTA4', 87, ['I10']),
+        'filas'         => ntHtaFilasTratamiento('HTA4', 88, ['I10']),
     ],
 
     /* HTA5 - usp_TRAMA_BASE_NT_2025_02_HTA_RPT_05_HIPERTENSO_TRATAMIENTO
      * Pacientes hipertensivos con tratamiento especializado (familias I1x).
-     * Filas 98-103 (paciente controlado) + 105-108 (atencion integral). */
+     * Filas 100-106 (paciente controlado; 102 = control por consultorio,
+     * 103 = al menos 1 control de PA) + 108-111 (atencion integral).
+     * Codigo de la actividad: 5001606 (plantilla 2026). */
     [
         'codigo'        => 'HTA5_TRATAMIENTO',
         'procedimiento' => 'usp_TRAMA_BASE_NT_2025_02_HTA_RPT_05_HIPERTENSO_TRATAMIENTO',
-        'titulo'        => 'PACIENTES HIPERTENSIVOS CON TRATAMIENTO ESPECIALIZADO (5001705)',
+        'titulo'        => 'PACIENTES HIPERTENSIVOS CON TRATAMIENTO ESPECIALIZADO (5001606)',
         'grupo'         => 'HTA',
         'gedadTipo'     => 'g6',
         'regla'         => 'personas',
@@ -801,27 +835,28 @@ function ntSecciones(): array {
         'colsX'         => $cols6,
         'columna_label' => 'DIAGN&Oacute;STICO',
         'filas'         => array_merge(
-            ntHtaFilasTratamiento('HTA5', 98, $i1xfam),
+            ntHtaFilasTratamiento('HTA5', 100, $i1xfam),
             [
-                ['key' => 'HTA5_D7', 'niv1' => 'ATENCI&Oacute;N INTEGRAL ESPECIALIZADO', 'niv2' => 'Nefrolog&iacute;a', 'niv3' => null, 'unidad' => null, 'fila' => 105,
+                ['key' => 'HTA5_D7', 'niv1' => 'ATENCI&Oacute;N INTEGRAL ESPECIALIZADO', 'niv2' => 'Nefrolog&iacute;a', 'niv3' => null, 'unidad' => null, 'fila' => 108,
                  'cond' => ['codF' => $i1xfam, 'rownum' => 1, 'edadA' => [5, null], 'ups' => '302701']],
-                ['key' => 'HTA5_D8', 'niv1' => 'ATENCI&Oacute;N INTEGRAL ESPECIALIZADO', 'niv2' => 'Cardiolog&iacute;a', 'niv3' => null, 'unidad' => null, 'fila' => 106,
+                ['key' => 'HTA5_D8', 'niv1' => 'ATENCI&Oacute;N INTEGRAL ESPECIALIZADO', 'niv2' => 'Cardiolog&iacute;a', 'niv3' => null, 'unidad' => null, 'fila' => 109,
                  'cond' => ['codF' => $i1xfam, 'rownum' => 1, 'edadA' => [5, null], 'ups' => '300201']],
-                ['key' => 'HTA5_D9', 'niv1' => 'ATENCI&Oacute;N INTEGRAL ESPECIALIZADO', 'niv2' => 'Oftalmolog&iacute;a', 'niv3' => null, 'unidad' => null, 'fila' => 107,
+                ['key' => 'HTA5_D9', 'niv1' => 'ATENCI&Oacute;N INTEGRAL ESPECIALIZADO', 'niv2' => 'Oftalmolog&iacute;a', 'niv3' => null, 'unidad' => null, 'fila' => 110,
                  'cond' => ['codF' => $i1xfam, 'rownum' => 1, 'edadA' => [5, null], 'ups' => '303408']],
-                ['key' => 'HTA5_D10', 'niv1' => 'ATENCI&Oacute;N INTEGRAL ESPECIALIZADO', 'niv2' => 'Nutrici&oacute;n', 'niv3' => null, 'unidad' => null, 'fila' => 108,
+                ['key' => 'HTA5_D10', 'niv1' => 'ATENCI&Oacute;N INTEGRAL ESPECIALIZADO', 'niv2' => 'Nutrici&oacute;n', 'niv3' => null, 'unidad' => null, 'fila' => 111,
                  'cond' => ['codF' => $i1xfam, 'rownum' => 1, 'edadA' => [5, null], 'ups' => '303101']],
             ]
         ),
     ],
 
     /* HTA6 - usp_TRAMA_BASE_NT_2025_02_HTA_RPT_06_HIPERTENSO_RIESGO
-     * Estratificacion de riesgo cardiovascular (99199.23). Filas 113-117.
+     * Estratificacion de riesgo cardiovascular (99199.23). Filas 116-120
+     * (plantilla 2026). Actividad 5001608.
      * Solo gedad 5-6 (edad>=40). #ATENCION = I10(R) de citas con 99199.23 D. */
     [
         'codigo'        => 'HTA6_RIESGO',
         'procedimiento' => 'usp_TRAMA_BASE_NT_2025_02_HTA_RPT_06_HIPERTENSO_RIESGO',
-        'titulo'        => 'PACIENTES HIPERTENSOS CON ESTRATIFICACI&Oacute;N DE RIESGO CARDIOVASCULAR',
+        'titulo'        => 'PACIENTES HIPERTENSOS CON ESTRATIFICACI&Oacute;N DE RIESGO CARDIOVASCULAR (5001608)',
         'grupo'         => 'HTA',
         'gedadTipo'     => 'g6',
         'regla'         => 'personas',
@@ -829,31 +864,31 @@ function ntSecciones(): array {
         'colsX'         => $cols6,
         'columna_label' => 'DIAGN&Oacute;STICO',
         'filas'         => [
-            ['key' => 'RG1', 'niv1' => 'Bajo', 'niv2' => null, 'niv3' => null, 'unidad' => 'Persona evaluada', 'fila' => 113,
+            ['key' => 'RG1', 'niv1' => 'Bajo', 'niv2' => null, 'niv3' => null, 'unidad' => 'Persona evaluada', 'fila' => 116,
              'cond' => ['cod' => '99199.23', 'rownum' => 1, 'vlNum' => ['lt', 5], 'edadA' => [40, null],
                         'citaTieneTodo' => [
                             ['cod' => '99199.23', 'tip' => 'D', 'vlNum' => ['any']],
                             ['codF' => 'I10', 'tip' => 'R'],
                         ]]],
-            ['key' => 'RG2', 'niv1' => 'Moderado', 'niv2' => null, 'niv3' => null, 'unidad' => 'Persona evaluada', 'fila' => 114,
+            ['key' => 'RG2', 'niv1' => 'Moderado', 'niv2' => null, 'niv3' => null, 'unidad' => 'Persona evaluada', 'fila' => 117,
              'cond' => ['cod' => '99199.23', 'rownum' => 1, 'vlNum' => ['bt', 5, 9], 'edadA' => [40, null],
                         'citaTieneTodo' => [
                             ['cod' => '99199.23', 'tip' => 'D', 'vlNum' => ['any']],
                             ['codF' => 'I10', 'tip' => 'R'],
                         ]]],
-            ['key' => 'RG3', 'niv1' => 'Alto', 'niv2' => null, 'niv3' => null, 'unidad' => 'Persona evaluada', 'fila' => 115,
+            ['key' => 'RG3', 'niv1' => 'Alto', 'niv2' => null, 'niv3' => null, 'unidad' => 'Persona evaluada', 'fila' => 118,
              'cond' => ['cod' => '99199.23', 'rownum' => 1, 'vlNum' => ['bt', 10, 19], 'edadA' => [40, null],
                         'citaTieneTodo' => [
                             ['cod' => '99199.23', 'tip' => 'D', 'vlNum' => ['any']],
                             ['codF' => 'I10', 'tip' => 'R'],
                         ]]],
-            ['key' => 'RG4', 'niv1' => 'Muy Alto', 'niv2' => null, 'niv3' => null, 'unidad' => 'Persona evaluada', 'fila' => 116,
+            ['key' => 'RG4', 'niv1' => 'Muy Alto', 'niv2' => null, 'niv3' => null, 'unidad' => 'Persona evaluada', 'fila' => 119,
              'cond' => ['cod' => '99199.23', 'rownum' => 1, 'vlNum' => ['bt', 20, 29], 'edadA' => [40, null],
                         'citaTieneTodo' => [
                             ['cod' => '99199.23', 'tip' => 'D', 'vlNum' => ['any']],
                             ['codF' => 'I10', 'tip' => 'R'],
                         ]]],
-            ['key' => 'RG5', 'niv1' => 'Cr&iacute;tico', 'niv2' => null, 'niv3' => null, 'unidad' => 'Persona evaluada', 'fila' => 117,
+            ['key' => 'RG5', 'niv1' => 'Cr&iacute;tico', 'niv2' => null, 'niv3' => null, 'unidad' => 'Persona evaluada', 'fila' => 120,
              'cond' => ['cod' => '99199.23', 'rownum' => 1, 'vlNum' => ['ge', 30], 'edadA' => [40, null],
                         'citaTieneTodo' => [
                             ['cod' => '99199.23', 'tip' => 'D', 'vlNum' => ['any']],
@@ -863,13 +898,16 @@ function ntSecciones(): array {
     ],
 
     /* HTA7 - usp_TRAMA_BASE_NT_2025_02_HTA_RPT_07_SESIONES
-     * Sesiones (C0009/C0010/C0012 + APP100). Filas 122-127.
-     * Consolidado: count(*) Num + sum(LAB) Participantes (LAB null -> 1).
+     * Sesiones (C0009/C0010/C0012 + APP100). Filas 125-130 (plantilla 2026).
+     * Actividad 5001605. Consolidado: count(*) Num + sum(LAB) Participantes
+     * (LAB null -> 1).
+     * FIX 2026: el codigo APP100 de las sesiones se busca en Id_Paciente
+     * (antes Ficha_Familiar) - sin ese cambio la seccion quedaba en 0.
      * Layout SES: C=No, D=Participantes. Sin columnas de edad/sexo. */
     [
         'codigo'        => 'HTA7_SESIONES',
         'procedimiento' => 'usp_TRAMA_BASE_NT_2025_02_HTA_RPT_07_SESIONES',
-        'titulo'        => 'PACIENTES CON ENFERMEDAD CARDIOMETAB&Oacute;LICA ORGANIZADOS QUE RECIBEN SESIONES',
+        'titulo'        => 'PACIENTES CON ENFERMEDAD CARDIOMETAB&Oacute;LICA ORGANIZADOS QUE RECIBEN EDUCACI&Oacute;N PARA EL CONTROL DE LA ENFERMEDAD (5001605)',
         'grupo'         => 'HTA',
         'gedadTipo'     => 'g6',
         'regla'         => 'sesiones',
@@ -877,18 +915,18 @@ function ntSecciones(): array {
         'colsX'         => ['num' => 'C', 'part' => 'D'],
         'columna_label' => 'SESI&Oacute;N',
         'filas'         => [
-            ['key' => 'SES_GAM_DM', 'niv1' => 'SESI&Oacute;N DE GRUPO DE AYUDA MUTUA', 'niv2' => 'PERSONAS CON DIABETES', 'niv3' => null, 'unidad' => null, 'fila' => 122,
-             'cond' => ['cod' => 'C0012', 'ficha' => 'APP100', 'rownum' => 1, 'citaTiene' => $e1xr1]],
-            ['key' => 'SES_GAM_HT', 'niv1' => 'SESI&Oacute;N DE GRUPO DE AYUDA MUTUA', 'niv2' => 'PERSONAS CON HIPERTENSI&Oacute;N', 'niv3' => null, 'unidad' => null, 'fila' => 123,
-             'cond' => ['cod' => 'C0012', 'ficha' => 'APP100', 'rownum' => 1, 'citaTiene' => ['cod' => 'I10X', 'rownum' => 1]]],
-            ['key' => 'SES_DEM_DM', 'niv1' => 'SESI&Oacute;N DEMOSTRATIVA', 'niv2' => 'PERSONAS CON DIABETES', 'niv3' => null, 'unidad' => null, 'fila' => 124,
-             'cond' => ['cod' => 'C0010', 'ficha' => 'APP100', 'rownum' => 1, 'citaTiene' => $e1xr1]],
-            ['key' => 'SES_DEM_HT', 'niv1' => 'SESI&Oacute;N DEMOSTRATIVA', 'niv2' => 'PERSONAS CON HIPERTENSI&Oacute;N', 'niv3' => null, 'unidad' => null, 'fila' => 125,
-             'cond' => ['cod' => 'C0010', 'ficha' => 'APP100', 'rownum' => 1, 'citaTiene' => ['cod' => 'I10X', 'rownum' => 1]]],
-            ['key' => 'SES_EDU_DM', 'niv1' => 'SESI&Oacute;N EDUCATIVA', 'niv2' => 'PERSONAS CON DIABETES', 'niv3' => null, 'unidad' => null, 'fila' => 126,
-             'cond' => ['cod' => 'C0009', 'ficha' => 'APP100', 'rownum' => 1, 'citaTiene' => $e1xr1]],
-            ['key' => 'SES_EDU_HT', 'niv1' => 'SESI&Oacute;N EDUCATIVA', 'niv2' => 'PERSONAS CON HIPERTENSI&Oacute;N', 'niv3' => null, 'unidad' => null, 'fila' => 127,
-             'cond' => ['cod' => 'C0009', 'ficha' => 'APP100', 'rownum' => 1, 'citaTiene' => ['cod' => 'I10X', 'rownum' => 1]]],
+            ['key' => 'SES_GAM_DM', 'niv1' => 'SESI&Oacute;N DE GRUPO DE AYUDA MUTUA', 'niv2' => 'PERSONAS CON DIABETES', 'niv3' => null, 'unidad' => null, 'fila' => 125,
+             'cond' => ['cod' => 'C0012', 'pac' => 'APP100', 'rownum' => 1, 'citaTiene' => $e1xr1]],
+            ['key' => 'SES_GAM_HT', 'niv1' => 'SESI&Oacute;N DE GRUPO DE AYUDA MUTUA', 'niv2' => 'PERSONAS CON HIPERTENSI&Oacute;N', 'niv3' => null, 'unidad' => null, 'fila' => 126,
+             'cond' => ['cod' => 'C0012', 'pac' => 'APP100', 'rownum' => 1, 'citaTiene' => ['cod' => 'I10X', 'rownum' => 1]]],
+            ['key' => 'SES_DEM_DM', 'niv1' => 'SESI&Oacute;N DEMOSTRATIVA', 'niv2' => 'PERSONAS CON DIABETES', 'niv3' => null, 'unidad' => null, 'fila' => 127,
+             'cond' => ['cod' => 'C0010', 'pac' => 'APP100', 'rownum' => 1, 'citaTiene' => $e1xr1]],
+            ['key' => 'SES_DEM_HT', 'niv1' => 'SESI&Oacute;N DEMOSTRATIVA', 'niv2' => 'PERSONAS CON HIPERTENSI&Oacute;N', 'niv3' => null, 'unidad' => null, 'fila' => 128,
+             'cond' => ['cod' => 'C0010', 'pac' => 'APP100', 'rownum' => 1, 'citaTiene' => ['cod' => 'I10X', 'rownum' => 1]]],
+            ['key' => 'SES_EDU_DM', 'niv1' => 'SESI&Oacute;N EDUCATIVA', 'niv2' => 'PERSONAS CON DIABETES', 'niv3' => null, 'unidad' => null, 'fila' => 129,
+             'cond' => ['cod' => 'C0009', 'pac' => 'APP100', 'rownum' => 1, 'citaTiene' => $e1xr1]],
+            ['key' => 'SES_EDU_HT', 'niv1' => 'SESI&Oacute;N EDUCATIVA', 'niv2' => 'PERSONAS CON HIPERTENSI&Oacute;N', 'niv3' => null, 'unidad' => null, 'fila' => 130,
+             'cond' => ['cod' => 'C0009', 'pac' => 'APP100', 'rownum' => 1, 'citaTiene' => ['cod' => 'I10X', 'rownum' => 1]]],
         ],
     ],
 
@@ -897,7 +935,8 @@ function ntSecciones(): array {
      * ------------------------------------------------------------ */
 
     /* DM01 - usp_TRAMA_BASE_NT_2025_03_DM_RPT_01_CASOS
-     * Casos diagnosticados (DimNT_DM_Diagnostico01: 1-13). Filas 134-146.
+     * Casos diagnosticados (DimNT_DM_Diagnostico01: 1-13). Filas 137-149
+     * (plantilla 2026).
      * #ATENCION = E1x(R1) de citas con E06/A15/I10 (D,R) R1.
      * Todos exigen fg_tipo='CX' (caso confirmado). */
     [
@@ -911,43 +950,44 @@ function ntSecciones(): array {
         'colsX'         => $cols8C,
         'columna_label' => 'DIAGN&Oacute;STICO',
         'filas'         => [
-            ['key' => 'DM_D1', 'niv1' => 'Casos atendidos de diabetes mellitus tipo 1 atendidos en el periodo de evaluaci&oacute;n', 'niv2' => null, 'niv3' => null, 'unidad' => 'Persona atendida', 'fila' => 134,
+            ['key' => 'DM_D1', 'niv1' => 'Casos atendidos de diabetes mellitus tipo 1 atendidos en el periodo de evaluaci&oacute;n', 'niv2' => null, 'niv3' => null, 'unidad' => 'Persona atendida', 'fila' => 137,
              'cond' => ['codF' => 'E10', 'tip' => ['D', 'R'], 'rownum' => 1, 'fg' => 'CX']],
-            ['key' => 'DM_D2', 'niv1' => 'Casos atendidos de diabetes mellitus tipo 2 atendidos en el periodo de evaluaci&oacute;n', 'niv2' => null, 'niv3' => null, 'unidad' => 'Persona atendida', 'fila' => 135,
+            ['key' => 'DM_D2', 'niv1' => 'Casos atendidos de diabetes mellitus tipo 2 atendidos en el periodo de evaluaci&oacute;n', 'niv2' => null, 'niv3' => null, 'unidad' => 'Persona atendida', 'fila' => 138,
              'cond' => ['codF' => 'E11', 'tip' => ['D', 'R'], 'rownum' => 1, 'fg' => 'CX']],
-            ['key' => 'DM_D3', 'niv1' => 'Casos atendidos de diabetes gestacional atendidos en el periodo de evaluaci&oacute;n', 'niv2' => null, 'niv3' => null, 'unidad' => 'Persona atendida', 'fila' => 136,
+            ['key' => 'DM_D3', 'niv1' => 'Casos atendidos de diabetes gestacional atendidos en el periodo de evaluaci&oacute;n', 'niv2' => null, 'niv3' => null, 'unidad' => 'Persona atendida', 'fila' => 139,
              'cond' => ['codF' => 'O24', 'tip' => ['D', 'R'], 'rownum' => 1, 'fg' => 'CX', 'edadA' => [5, 59]]],
-            ['key' => 'DM_D4', 'niv1' => 'Casos atendidos de otros tipos de diabetes atendidos en el periodo de evaluaci&oacute;n', 'niv2' => null, 'niv3' => null, 'unidad' => 'Persona atendida', 'fila' => 137,
+            ['key' => 'DM_D4', 'niv1' => 'Casos atendidos de otros tipos de diabetes atendidos en el periodo de evaluaci&oacute;n', 'niv2' => null, 'niv3' => null, 'unidad' => 'Persona atendida', 'fila' => 140,
              'cond' => ['codF' => ['E13', 'E14'], 'tip' => ['D', 'R'], 'rownum' => 1, 'fg' => 'CX']],
-            ['key' => 'DM_D5', 'niv1' => 'Casos nuevos de diabetes mellitus tipo 1 atendidos en el periodo de evaluaci&oacute;n', 'niv2' => null, 'niv3' => null, 'unidad' => 'Persona atendida', 'fila' => 138,
+            ['key' => 'DM_D5', 'niv1' => 'Casos nuevos de diabetes mellitus tipo 1 atendidos en el periodo de evaluaci&oacute;n', 'niv2' => null, 'niv3' => null, 'unidad' => 'Persona atendida', 'fila' => 141,
              'cond' => ['codF' => 'E10', 'tip' => 'D', 'rownum' => 1, 'fg' => 'CX']],
-            ['key' => 'DM_D6', 'niv1' => 'Casos nuevos de diabetes mellitus tipo 2 atendidos en el periodo de evaluaci&oacute;n', 'niv2' => null, 'niv3' => null, 'unidad' => 'Persona atendida', 'fila' => 139,
+            ['key' => 'DM_D6', 'niv1' => 'Casos nuevos de diabetes mellitus tipo 2 atendidos en el periodo de evaluaci&oacute;n', 'niv2' => null, 'niv3' => null, 'unidad' => 'Persona atendida', 'fila' => 142,
              'cond' => ['codF' => 'E11', 'tip' => 'D', 'rownum' => 1, 'fg' => 'CX']],
-            ['key' => 'DM_D7', 'niv1' => 'Casos nuevos de diabetes gestacional atendidos en el periodo de evaluaci&oacute;n', 'niv2' => null, 'niv3' => null, 'unidad' => 'Persona atendida', 'fila' => 140,
+            ['key' => 'DM_D7', 'niv1' => 'Casos nuevos de diabetes gestacional atendidos en el periodo de evaluaci&oacute;n', 'niv2' => null, 'niv3' => null, 'unidad' => 'Persona atendida', 'fila' => 143,
              'cond' => ['codF' => 'O24', 'tip' => 'D', 'rownum' => 1, 'fg' => 'CX', 'edadA' => [5, 59]]],
-            ['key' => 'DM_D8', 'niv1' => 'Casos nuevos de otros tipos de diabetes atendidos en el periodo de evaluaci&oacute;n', 'niv2' => null, 'niv3' => null, 'unidad' => 'Persona atendida', 'fila' => 141,
+            ['key' => 'DM_D8', 'niv1' => 'Casos nuevos de otros tipos de diabetes atendidos en el periodo de evaluaci&oacute;n', 'niv2' => null, 'niv3' => null, 'unidad' => 'Persona atendida', 'fila' => 144,
              'cond' => ['codF' => ['E13', 'E14'], 'tip' => 'D', 'rownum' => 1, 'fg' => 'CX']],
-            ['key' => 'DM_D9', 'niv1' => 'Nefropat&iacute;a diab&eacute;tica registrada en el periodo', 'niv2' => null, 'niv3' => null, 'unidad' => 'Persona atendida', 'fila' => 142,
+            ['key' => 'DM_D9', 'niv1' => 'Nefropat&iacute;a diab&eacute;tica registrada en el periodo', 'niv2' => null, 'niv3' => null, 'unidad' => 'Persona atendida', 'fila' => 145,
              'cond' => ['cod' => ['E102', 'E112', 'E132', 'E142'], 'tip' => 'D', 'rownum' => 1, 'fg' => 'CX']],
-            ['key' => 'DM_D10', 'niv1' => 'Retinopat&iacute;a diab&eacute;tica registrada en el periodo', 'niv2' => null, 'niv3' => null, 'unidad' => 'Persona atendida', 'fila' => 143,
+            ['key' => 'DM_D10', 'niv1' => 'Retinopat&iacute;a diab&eacute;tica registrada en el periodo', 'niv2' => null, 'niv3' => null, 'unidad' => 'Persona atendida', 'fila' => 146,
              'cond' => ['cod' => ['E103', 'E113', 'E133', 'E143', 'H360'], 'tip' => 'D', 'rownum' => 1, 'fg' => 'CX']],
-            ['key' => 'DM_D11', 'niv1' => 'Tiroiditis registrada en el periodo', 'niv2' => null, 'niv3' => null, 'unidad' => 'Persona atendida', 'fila' => 144,
+            ['key' => 'DM_D11', 'niv1' => 'Tiroiditis registrada en el periodo', 'niv2' => null, 'niv3' => null, 'unidad' => 'Persona atendida', 'fila' => 147,
              'cond' => ['codF' => 'E06', 'tip' => 'D', 'rownum' => 1, 'fg' => 'CX', 'citaTiene' => $e1xr1]],
-            ['key' => 'DM_D12', 'niv1' => 'Tuberculosis pulmonar registrada en el periodo', 'niv2' => null, 'niv3' => null, 'unidad' => 'Persona atendida', 'fila' => 145,
+            ['key' => 'DM_D12', 'niv1' => 'Tuberculosis pulmonar registrada en el periodo', 'niv2' => null, 'niv3' => null, 'unidad' => 'Persona atendida', 'fila' => 148,
              'cond' => ['codF' => 'A15', 'tip' => 'D', 'rownum' => 1, 'fg' => 'CX', 'citaTiene' => $e1xr1]],
-            ['key' => 'DM_D13', 'niv1' => 'Hipertensi&oacute;n arterial registrada en el periodo', 'niv2' => null, 'niv3' => null, 'unidad' => 'Persona atendida', 'fila' => 146,
+            ['key' => 'DM_D13', 'niv1' => 'Hipertensi&oacute;n arterial registrada en el periodo', 'niv2' => null, 'niv3' => null, 'unidad' => 'Persona atendida', 'fila' => 149,
              'cond' => ['codF' => 'I10', 'tip' => 'D', 'rownum' => 1, 'fg' => 'CX', 'citaTiene' => $e1xr1]],
         ],
     ],
 
     /* DM02 - usp_TRAMA_BASE_NT_2025_03_DM_RPT_02_GLUCEMIA
      * Manejo basico de crisis de glucemia (DimNT_DM_Diagnostico02: 1-7).
-     * Filas 152-158. Consolidado con count(*) (regla 'filas').
+     * Filas 155-161 (plantilla 2026). Consolidado con count(*) (regla 'filas').
+     * Actividad 5001701.
      * #GLUCEMIA = E1x (CX) R1 de citas con E160/E162/R739 R1. */
     [
         'codigo'        => 'DM02_GLUCEMIA',
         'procedimiento' => 'usp_TRAMA_BASE_NT_2025_03_DM_RPT_02_GLUCEMIA',
-        'titulo'        => 'MANEJO B&Aacute;SICO DE CRISIS HIPOGLUCEMIA O HIPERGLUCEMIA EN PACIENTES CON DIAGN&Oacute;STICO DE DIABETES',
+        'titulo'        => 'MANEJO B&Aacute;SICO DE CRISIS HIPOGLUCEMIA O HIPERGLUCEMIA EN PACIENTES DIAB&Eacute;TICOS (5001701)',
         'grupo'         => 'DM',
         'gedadTipo'     => 'g8',
         'regla'         => 'filas',
@@ -955,38 +995,39 @@ function ntSecciones(): array {
         'colsX'         => $cols8C,
         'columna_label' => 'DIAGN&Oacute;STICO',
         'filas'         => [
-            ['key' => 'GLU1', 'niv1' => 'Hipoglicemia en pacientes con diabetes tipo 1', 'niv2' => null, 'niv3' => null, 'unidad' => 'Caso', 'fila' => 152,
+            ['key' => 'GLU1', 'niv1' => 'Hipoglicemia en pacientes con diabetes tipo 1', 'niv2' => null, 'niv3' => null, 'unidad' => 'Caso', 'fila' => 155,
              'cond' => ['cod' => ['E160', 'E162'], 'rownum' => 1,
                         'citaTieneTodo' => [
                             ['codF' => $famE1x, 'rownum' => 1, 'fg' => 'CX'],
                             ['cod' => ['E100', 'E108']],
                         ]]],
-            ['key' => 'GLU2', 'niv1' => 'Hipoglicemia en pacientes con diabetes tipo 2', 'niv2' => null, 'niv3' => null, 'unidad' => 'Caso', 'fila' => 153,
+            ['key' => 'GLU2', 'niv1' => 'Hipoglicemia en pacientes con diabetes tipo 2', 'niv2' => null, 'niv3' => null, 'unidad' => 'Caso', 'fila' => 156,
              'cond' => ['cod' => ['E160', 'E162'], 'rownum' => 1,
                         'citaTieneTodo' => [
                             ['codF' => $famE1x, 'rownum' => 1, 'fg' => 'CX'],
                             ['cod' => ['E110', 'E118']],
                         ]]],
-            ['key' => 'GLU3', 'niv1' => 'Hipoglicemia en pacientes con otros tipos de diabetes', 'niv2' => null, 'niv3' => null, 'unidad' => 'Caso', 'fila' => 154,
+            ['key' => 'GLU3', 'niv1' => 'Hipoglicemia en pacientes con otros tipos de diabetes', 'niv2' => null, 'niv3' => null, 'unidad' => 'Caso', 'fila' => 157,
              'cond' => ['cod' => ['E160', 'E162'], 'rownum' => 1,
                         'citaTieneTodo' => [
                             ['codF' => $famE1x, 'rownum' => 1, 'fg' => 'CX'],
                             ['cod' => ['E130', 'E138', 'E140', 'E148']],
                         ]]],
-            ['key' => 'GLU4', 'niv1' => 'Coma Diab&eacute;tico Seg&uacute;n tipo de diabetes', 'niv2' => null, 'niv3' => null, 'unidad' => 'Caso', 'fila' => 155,
+            ['key' => 'GLU4', 'niv1' => 'Coma Diab&eacute;tico Seg&uacute;n tipo de diabetes', 'niv2' => null, 'niv3' => null, 'unidad' => 'Caso', 'fila' => 158,
              'cond' => ['cod' => ['E100', 'E110', 'E130', 'E140'], 'tip' => 'D', 'rownum' => 1]],
-            ['key' => 'GLU5', 'niv1' => 'Cetoacidosis Seg&uacute;n tipo de diabetes', 'niv2' => null, 'niv3' => null, 'unidad' => 'Caso', 'fila' => 156,
+            ['key' => 'GLU5', 'niv1' => 'Cetoacidosis Seg&uacute;n tipo de diabetes', 'niv2' => null, 'niv3' => null, 'unidad' => 'Caso', 'fila' => 159,
              'cond' => ['cod' => ['E101', 'E111', 'E131', 'E141'], 'tip' => 'D', 'rownum' => 1]],
-            ['key' => 'GLU6', 'niv1' => 'Hipoglicemia inducida por medicamentos seg&uacute;n tipo de diabetes', 'niv2' => null, 'niv3' => null, 'unidad' => 'Caso', 'fila' => 157,
+            ['key' => 'GLU6', 'niv1' => 'Hipoglicemia inducida por medicamentos seg&uacute;n tipo de diabetes', 'niv2' => null, 'niv3' => null, 'unidad' => 'Caso', 'fila' => 160,
              'cond' => ['cod' => 'E160', 'rownum' => 1, 'citaTiene' => ['codF' => $famE1x, 'rownum' => 1, 'fg' => 'CX']]],
-            ['key' => 'GLU7', 'niv1' => 'Hiperglicemia no especificada seg&uacute;n tipo de diabetes', 'niv2' => null, 'niv3' => null, 'unidad' => 'Caso', 'fila' => 158,
+            ['key' => 'GLU7', 'niv1' => 'Hiperglicemia no especificada seg&uacute;n tipo de diabetes', 'niv2' => null, 'niv3' => null, 'unidad' => 'Caso', 'fila' => 161,
              'cond' => ['cod' => 'R739', 'rownum' => 1, 'citaTiene' => ['codF' => $famE1x, 'rownum' => 1, 'fg' => 'CX']]],
         ],
     ],
 
     /* DM03 - usp_TRAMA_BASE_NT_2025_03_DM_RPT_03_CONTROL
      * Paciente diabetico no complicado controlado con tratamiento basico
-     * (52 categorias, DimNT_DM_Diagnostico03). Filas 163-214. Layout 8GE.
+     * (52 categorias, DimNT_DM_Diagnostico03). Filas 166-217 (plantilla
+     * 2026). Actividad 5001703. Layout 8GE.
      * #RENAES = MAESTRO Categoria I-2/I-3/I-4 (nivel 1). */
     [
         'codigo'        => 'DM03_CONTROL',
@@ -998,13 +1039,13 @@ function ntSecciones(): array {
         'layout'        => '8GE',
         'colsX'         => $cols8E,
         'columna_label' => 'PERSONA / DIAGN&Oacute;STICO',
-        'filas'         => ntDmFilasControl(163, ['I-2', 'I-3', 'I-4']),
+        'filas'         => ntDmFilasControl(166, ['I-2', 'I-3', 'I-4']),
     ],
 
     /* DM04 - usp_TRAMA_BASE_NT_2025_03_DM_RPT_04_TRATAMIENTO
      * Pacientes diabeticos con tratamiento especializado (mismas 52
-     * categorias). Filas 219-270. Layout 8GE.
-     * #RENAES = MAESTRO Categoria II/III nivel 2. */
+     * categorias). Filas 222-273 (plantilla 2026). Actividad 5001704.
+     * Layout 8GE. #RENAES = MAESTRO Categoria II/III nivel 2. */
     [
         'codigo'        => 'DM04_TRATAMIENTO',
         'procedimiento' => 'usp_TRAMA_BASE_NT_2025_03_DM_RPT_04_TRATAMIENTO',
@@ -1015,12 +1056,13 @@ function ntSecciones(): array {
         'layout'        => '8GE',
         'colsX'         => $cols8E,
         'columna_label' => 'PERSONA / DIAGN&Oacute;STICO',
-        'filas'         => ntDmFilasControl(219, ['II-1', 'II-2', 'II-E', 'III-1', 'III-2', 'III-E']),
+        'filas'         => ntDmFilasControl(222, ['II-1', 'II-2', 'II-E', 'III-1', 'III-2', 'III-E']),
     ],
 
     /* DM05 - usp_TRAMA_BASE_NT_2025_03_DM_RPT_05_ATENCION
      * Atencion de personas con diabetes segun especialidad (DimNT_DM_
-     * Diagnostico05: 1-8, por id_ups). Filas 275-282.
+     * Diagnostico05, por id_ups). Filas 278-287 (plantilla 2026; incluye
+     * Odontologia 303304 y Psicologia 303802).
      * #NEFROPATIA = N181-N185/R80X de citas con E1x(R) R1 en ups 302701. */
     [
         'codigo'        => 'DM05_ATENCION',
@@ -1033,36 +1075,42 @@ function ntSecciones(): array {
         'colsX'         => $cols8C,
         'columna_label' => 'DIAGN&Oacute;STICO',
         'filas'         => [
-            ['key' => 'ATD1', 'niv1' => 'Cardiolog&iacute;a', 'niv2' => null, 'niv3' => null, 'unidad' => 'Persona atendida', 'fila' => 275,
+            ['key' => 'ATD1', 'niv1' => 'Cardiolog&iacute;a', 'niv2' => null, 'niv3' => null, 'unidad' => 'Persona atendida', 'fila' => 278,
              'cond' => ['codF' => $famE1x, 'tip' => 'R', 'rownum' => 1, 'ups' => '300201']],
-            ['key' => 'ATD2', 'niv1' => 'Endocrinolog&iacute;a', 'niv2' => null, 'niv3' => null, 'unidad' => 'Persona atendida', 'fila' => 276,
+            ['key' => 'ATD2', 'niv1' => 'Endocrinolog&iacute;a', 'niv2' => null, 'niv3' => null, 'unidad' => 'Persona atendida', 'fila' => 279,
              'cond' => ['codF' => $famE1x, 'tip' => 'R', 'rownum' => 1, 'ups' => '301001']],
-            ['key' => 'ATD3', 'niv1' => 'Oftalmolog&iacute;a', 'niv2' => null, 'niv3' => null, 'unidad' => 'Persona atendida', 'fila' => 277,
+            ['key' => 'ATD3', 'niv1' => 'Oftalmolog&iacute;a', 'niv2' => null, 'niv3' => null, 'unidad' => 'Persona atendida', 'fila' => 280,
              'cond' => ['cualquieraDe' => [
                             ['codF' => $famE1x, 'tip' => 'R', 'rownum' => 1, 'ups' => '303408'],
                             ['cod' => 'H360', 'tip' => 'R', 'rownum' => 1, 'ups' => '303408'],
                         ]]],
-            ['key' => 'ATD4', 'niv1' => 'Neurolog&iacute;a', 'niv2' => null, 'niv3' => null, 'unidad' => 'Persona atendida', 'fila' => 278,
+            ['key' => 'ATD4', 'niv1' => 'Neurolog&iacute;a', 'niv2' => null, 'niv3' => null, 'unidad' => 'Persona atendida', 'fila' => 281,
              'cond' => ['codF' => $famE1x, 'tip' => 'R', 'rownum' => 1, 'ups' => '303008']],
-            ['key' => 'ATD5', 'niv1' => 'Atenci&oacute;n por nefrolog&iacute;a', 'niv2' => null, 'niv3' => null, 'unidad' => 'Persona atendida', 'fila' => 279,
+            ['key' => 'ATD5', 'niv1' => 'Atenci&oacute;n por nefrolog&iacute;a', 'niv2' => null, 'niv3' => null, 'unidad' => 'Persona atendida', 'fila' => 282,
              'cond' => ['codF' => $famE1x, 'tip' => 'R', 'rownum' => 1, 'ups' => '302701']],
-            ['key' => 'ATD6', 'niv1' => 'Atenci&oacute;n de nefropat&iacute;a G1 o G2 con proteinuria', 'niv2' => null, 'niv3' => null, 'unidad' => 'Persona atendida', 'fila' => 280,
+            ['key' => 'ATD6', 'niv1' => 'Atenci&oacute;n de nefropat&iacute;a G1 o G2 con proteinuria', 'niv2' => null, 'niv3' => null, 'unidad' => 'Persona atendida', 'fila' => 283,
              'cond' => ['codF' => $famE1x, 'tip' => 'R', 'rownum' => 1, 'ups' => '302701',
                         'citaTieneTodo' => [
                             ['cod' => ['N181', 'N182']],
                             ['cod' => 'R80X'],
                         ]]],
-            ['key' => 'ATD7', 'niv1' => 'Atenci&oacute;n por nefropat&iacute;a con G3, G4 o G5', 'niv2' => null, 'niv3' => null, 'unidad' => 'Persona atendida', 'fila' => 281,
+            ['key' => 'ATD7', 'niv1' => 'Atenci&oacute;n por nefropat&iacute;a con G3, G4 o G5', 'niv2' => null, 'niv3' => null, 'unidad' => 'Persona atendida', 'fila' => 284,
              'cond' => ['codF' => $famE1x, 'tip' => 'R', 'rownum' => 1, 'ups' => '302701',
                         'citaTiene' => ['cod' => ['N183', 'N184', 'N185']]]],
-            ['key' => 'ATD8', 'niv1' => 'Nutrici&oacute;n', 'niv2' => null, 'niv3' => null, 'unidad' => 'Persona atendida', 'fila' => 282,
+            ['key' => 'ATD8', 'niv1' => 'Nutrici&oacute;n', 'niv2' => null, 'niv3' => null, 'unidad' => 'Persona atendida', 'fila' => 285,
              'cond' => ['codF' => $famE1x, 'tip' => 'R', 'rownum' => 1, 'ups' => '303099']],
+            // NUEVAS (plantilla 2026): Odontologia (UPS 303304) y Psicologia (UPS 303802)
+            ['key' => 'ATD9', 'niv1' => 'Odontolog&iacute;a', 'niv2' => null, 'niv3' => null, 'unidad' => 'Persona atendida', 'fila' => 286,
+             'cond' => ['codF' => $famE1x, 'tip' => 'R', 'rownum' => 1, 'ups' => '303304']],
+            ['key' => 'ATD10', 'niv1' => 'Psicolog&iacute;a', 'niv2' => null, 'niv3' => null, 'unidad' => 'Persona atendida', 'fila' => 287,
+             'cond' => ['codF' => $famE1x, 'tip' => 'R', 'rownum' => 1, 'ups' => '303802']],
         ],
     ],
 
     /* DM06 - usp_TRAMA_BASE_NT_2025_03_DM_RPT_06_VALORACION
      * Valoracion de complicaciones en personas con diabetes (88 categorias,
-     * DimNT_DM_Diagnostico06). Filas 287-374. Layout 8GE.
+     * DimNT_DM_Diagnostico06). Filas 292-379 (plantilla 2026). Actividad
+     * 5001706. Layout 8GE.
      * #RENAES = MAESTRO Categoria I-4 + II/III nivel 2. */
     [
         'codigo'        => 'DM06_VALORACION',
@@ -1074,12 +1122,13 @@ function ntSecciones(): array {
         'layout'        => '8GE',
         'colsX'         => $cols8E,
         'columna_label' => 'DIAGN&Oacute;STICO',
-        'filas'         => ntDmFilasValoracion(287, ['I-4', 'II-1', 'II-2', 'II-E', 'III-1', 'III-2', 'III-E']),
+        'filas'         => ntDmFilasValoracion(292, ['I-4', 'II-1', 'II-2', 'II-E', 'III-1', 'III-2', 'III-E']),
     ],
 
     /* DM07 - usp_TRAMA_BASE_NT_2025_03_DM_RPT_07_NEFROPATIA
-     * Enfermedad renal diabetica (DimNT_DM_Diagnostico07: 11 categorias).
-     * Filas 379-389. #RENAES = MAESTRO I-1/I-2/I-3/I-4/II-1.
+     * Enfermedad renal diabetica (DimNT_DM_Diagnostico07: 10 categorias -
+     * plantilla 2026 sin Categoria 4 de tira reactiva).
+     * Filas 384-393. Actividad 5001707. #RENAES = MAESTRO I-1/I-2/I-3/I-4/II-1.
      * #NEFROPATIA = N181-N183(R,R1) de citas con E102/E112/E134/E142(R,R1). */
     [
         'codigo'        => 'DM07_NEFROPATIA',
@@ -1091,7 +1140,7 @@ function ntSecciones(): array {
         'layout'        => '8GC',
         'colsX'         => $cols8C,
         'columna_label' => 'DIAGN&Oacute;STICO',
-        'filas'         => ntDmFilasNefropatia(379, ['I-1', 'I-2', 'I-3', 'I-4', 'II-1']),
+        'filas'         => ntDmFilasNefropatia(384, ['I-1', 'I-2', 'I-3', 'I-4', 'II-1']),
     ],
 
     /* ------------------------------------------------------------
@@ -1099,12 +1148,13 @@ function ntSecciones(): array {
      * ------------------------------------------------------------ */
 
     /* TM01 - usp_TRAMA_BASE_NT_2025_04_TM_RPT_01_TELEORIENTACION
-     * Filas 396-398. #TELEORIENTACION = 99499.08(D) de citas con Z019 D R1;
+     * Filas 400-402 (plantilla 2026).
+     * #TELEORIENTACION = 99499.08(D) de citas con Z019 D R1;
      * #LABORATORIO = 99499.08(D,R1) de citas con Z017 D R1. */
     [
         'codigo'        => 'TM01_TELEORIENTACION',
         'procedimiento' => 'usp_TRAMA_BASE_NT_2025_04_TM_RPT_01_TELEORIENTACION',
-        'titulo'        => 'VALORACI&Oacute;N CL&Iacute;NICA Y TAMIZAJE LABORATORIAL DE ENFERMEDADES CR&Oacute;NICAS (TELEORIENTACI&Oacute;N)',
+        'titulo'        => 'VALORACI&Oacute;N CL&Iacute;NICA Y TAMIZAJE LABORATORIAL DE ENFERMEDADES CR&Oacute;NICAS NO TRANSMISIBLES - TELEORIENTACI&Oacute;N - TELEMONITOREO',
         'grupo'         => 'TM',
         'gedadTipo'     => 'g6',
         'regla'         => 'personas',
@@ -1112,11 +1162,11 @@ function ntSecciones(): array {
         'colsX'         => $cols6,
         'columna_label' => 'DIAGN&Oacute;STICO',
         'filas'         => [
-            ['key' => 'TO1', 'niv1' => 'Valoraci&oacute;n Cl&iacute;nica', 'niv2' => null, 'niv3' => null, 'unidad' => 'Persona', 'fila' => 396,
+            ['key' => 'TO1', 'niv1' => 'Valoraci&oacute;n Cl&iacute;nica', 'niv2' => null, 'niv3' => null, 'unidad' => 'Persona', 'fila' => 400,
              'cond' => $z019dr1 + ['edadA' => [5, null], 'citaTiene' => ['cod' => '99499.08', 'tip' => 'D']]],
-            ['key' => 'TO2', 'niv1' => 'Valoraci&oacute;n Cl&iacute;nica con factores de riesgo', 'niv2' => null, 'niv3' => null, 'unidad' => 'Persona', 'fila' => 397,
+            ['key' => 'TO2', 'niv1' => 'Valoraci&oacute;n Cl&iacute;nica con factores de riesgo', 'niv2' => null, 'niv3' => null, 'unidad' => 'Persona', 'fila' => 401,
              'cond' => $z019alt + ['edadA' => [5, null], 'citaTiene' => ['cod' => '99499.08', 'tip' => 'D']]],
-            ['key' => 'TO3', 'niv1' => 'Valoraci&oacute;n cl&iacute;nica con factores de riesgo y solicitud de laboratorio', 'niv2' => null, 'niv3' => null, 'unidad' => 'Persona', 'fila' => 398,
+            ['key' => 'TO3', 'niv1' => 'Valoraci&oacute;n cl&iacute;nica con factores de riesgo y solicitud de laboratorio', 'niv2' => null, 'niv3' => null, 'unidad' => 'Persona', 'fila' => 402,
              'cond' => $z019alt + ['edadA' => [5, null],
                         'citaTieneTodo' => [
                             ['cod' => '99499.08', 'tip' => 'D', 'rownum' => 1],
@@ -1126,7 +1176,8 @@ function ntSecciones(): array {
     ],
 
     /* TM02 - usp_TRAMA_BASE_NT_2025_04_TM_RPT_02_TELEMONITOREO
-     * Fila 403. #TELEMONITOREO = 99499.10(D) de citas con 82947 D R1 num. */
+     * Fila 407 (plantilla 2026).
+     * #TELEMONITOREO = 99499.10(D) de citas con 82947 D R1 num. */
     [
         'codigo'        => 'TM02_TELEMONITOREO',
         'procedimiento' => 'usp_TRAMA_BASE_NT_2025_04_TM_RPT_02_TELEMONITOREO',
@@ -1138,15 +1189,15 @@ function ntSecciones(): array {
         'colsX'         => $cols6,
         'columna_label' => 'DIAGN&Oacute;STICO',
         'filas'         => [
-            ['key' => 'TMN1', 'niv1' => 'Valoraci&oacute;n Cl&iacute;nica con factores de riesgo Y Entrega de Resultados', 'niv2' => null, 'niv3' => null, 'unidad' => 'Persona', 'fila' => 403,
+            ['key' => 'TMN1', 'niv1' => 'Valoraci&oacute;n Cl&iacute;nica con factores de riesgo Y Entrega de Resultados', 'niv2' => null, 'niv3' => null, 'unidad' => 'Persona', 'fila' => 407,
              'cond' => ['cod' => 'Z019', 'tip' => 'R', 'rownum' => 1, 'edadA' => [5, null],
                         'citaTiene' => ['cod' => '82947', 'tip' => 'D', 'rownum' => 1, 'vlNum' => ['any']]]],
         ],
     ],
 
     /* TM03 - usp_TRAMA_BASE_NT_2025_04_TM_RPT_03_TELEMONITOREO_HTA
-     * Filas 408-409. #TELEMONITOREO = 99499.10/99199.22 (D,R1) de citas con
-     * I10(R,R2,num). */
+     * Filas 412-413 (plantilla 2026). #TELEMONITOREO = 99499.10/99199.22
+     * (D,R1) de citas con I10(R,R2,num). */
     [
         'codigo'        => 'TM03_TELEMONITOREO_HTA',
         'procedimiento' => 'usp_TRAMA_BASE_NT_2025_04_TM_RPT_03_TELEMONITOREO_HTA',
@@ -1158,10 +1209,10 @@ function ntSecciones(): array {
         'colsX'         => $cols6,
         'columna_label' => 'DIAGN&Oacute;STICO',
         'filas'         => [
-            ['key' => 'TH1', 'niv1' => 'Paciente Hipertenso Sin tensi&oacute;metro', 'niv2' => null, 'niv3' => null, 'unidad' => 'Persona', 'fila' => 408,
+            ['key' => 'TH1', 'niv1' => 'Paciente Hipertenso Sin tensi&oacute;metro', 'niv2' => null, 'niv3' => null, 'unidad' => 'Persona', 'fila' => 412,
              'cond' => ['codF' => 'I10', 'tip' => 'R', 'vl' => 'PC', 'rownum' => 1, 'edadA' => [5, null],
                         'citaTiene' => ['cod' => '99499.10', 'tip' => 'D', 'rownum' => 1]]],
-            ['key' => 'TH2', 'niv1' => 'Paciente hipertenso con tensi&oacute;metro', 'niv2' => null, 'niv3' => null, 'unidad' => 'Persona', 'fila' => 409,
+            ['key' => 'TH2', 'niv1' => 'Paciente hipertenso con tensi&oacute;metro', 'niv2' => null, 'niv3' => null, 'unidad' => 'Persona', 'fila' => 413,
              'cond' => ['codF' => 'I10', 'tip' => 'R', 'vl' => 'PC', 'rownum' => 1, 'edadA' => [5, null],
                         'citaTieneTodo' => [
                             ['cod' => '99499.10', 'tip' => 'D', 'rownum' => 1],
@@ -1171,8 +1222,9 @@ function ntSecciones(): array {
     ],
 
     /* TM04 - usp_TRAMA_BASE_NT_2025_04_TM_RPT_04_TELEMONITOREO_DM
-     * Filas 414-415 (sin glucometro = #TELEMONITOREO 99499.10; con glucometro
-     * o resultados = #RESULTADOS 99499.11). El SP marca ambas con Valoracion=1. */
+     * Filas 418-419 (plantilla 2026; sin glucometro = #TELEMONITOREO
+     * 99499.10; con glucometro o resultados = #RESULTADOS 99499.11).
+     * El SP marca ambas con Valoracion=1. */
     [
         'codigo'        => 'TM04_TELEMONITOREO_DM',
         'procedimiento' => 'usp_TRAMA_BASE_NT_2025_04_TM_RPT_04_TELEMONITOREO_DM',
@@ -1184,17 +1236,18 @@ function ntSecciones(): array {
         'colsX'         => $cols6,
         'columna_label' => 'DIAGN&Oacute;STICO',
         'filas'         => [
-            ['key' => 'TD1', 'niv1' => 'Paciente diab&eacute;tico sin gluc&oacute;metro', 'niv2' => null, 'niv3' => null, 'unidad' => 'Persona', 'fila' => 414,
+            ['key' => 'TD1', 'niv1' => 'Paciente diab&eacute;tico sin gluc&oacute;metro', 'niv2' => null, 'niv3' => null, 'unidad' => 'Persona', 'fila' => 418,
              'cond' => ['codF' => $famE1x, 'tip' => 'R', 'rownum' => 1, 'edadA' => [5, null],
                         'citaTiene' => ['cod' => '99499.10', 'tip' => 'D', 'rownum' => 1]]],
-            ['key' => 'TD2', 'niv1' => 'Paciente diab&eacute;tico con gluc&oacute;metro o resultados de laboratorio', 'niv2' => null, 'niv3' => null, 'unidad' => 'Persona', 'fila' => 415,
+            ['key' => 'TD2', 'niv1' => 'Paciente diab&eacute;tico con gluc&oacute;metro o resultados de laboratorio', 'niv2' => null, 'niv3' => null, 'unidad' => 'Persona', 'fila' => 419,
              'cond' => ['codF' => $famE1x, 'tip' => 'R', 'rownum' => 1, 'edadA' => [5, null],
                         'citaTiene' => ['cod' => '99499.11', 'tip' => 'D', 'rownum' => 1]]],
         ],
     ],
 
     /* TM05 - usp_TRAMA_BASE_NT_2025_04_TM_RPT_05_TELECONSULTAS
-     * Fila 419. #TELECONSULTAS = 99499.01(D) de citas con E1x/I10 (R,R1). */
+     * Fila 423 (plantilla 2026).
+     * #TELECONSULTAS = 99499.01(D) de citas con E1x/I10 (R,R1). */
     [
         'codigo'        => 'TM05_TELECONSULTAS',
         'procedimiento' => 'usp_TRAMA_BASE_NT_2025_04_TM_RPT_05_TELECONSULTAS',
@@ -1206,7 +1259,7 @@ function ntSecciones(): array {
         'colsX'         => $cols6,
         'columna_label' => 'DIAGN&Oacute;STICO',
         'filas'         => [
-            ['key' => 'TC1', 'niv1' => 'TELECONSULTAS', 'niv2' => null, 'niv3' => null, 'unidad' => 'Persona', 'fila' => 419,
+            ['key' => 'TC1', 'niv1' => 'TELECONSULTAS', 'niv2' => null, 'niv3' => null, 'unidad' => 'Persona', 'fila' => 423,
              'cond' => ['codF' => array_merge($famE1x, ['I10']), 'tip' => 'R', 'rownum' => 1, 'edadA' => [5, null],
                         'citaTiene' => ['cod' => '99499.01', 'tip' => 'D']]],
         ],
@@ -1354,9 +1407,11 @@ function ntDmFilasValoracion(int $filaBase, array $cats): array {
             $f++;
         }
     }
-    // Proteinuria segun tira reactiva (82044, categorias 0-4 x E1x = 20 filas)
-    foreach ([0, 1, 2, 3, 4] as $c) {
-        foreach ($fam as $famCod) {
+    // Proteinuria segun tira reactiva (82044): Categorias 0-4 POR FAMILIA E1x
+    // (la plantilla agrupa por familia: E10 con Cat 0-4, luego E11, ...;
+    // filas 324-343 de la plantilla 2026 = 20 filas)
+    foreach ($fam as $famCod) {
+        foreach ([0, 1, 2, 3, 4] as $c) {
             $filas[] = ['key' => "DM6_TIRA_{$c}_{$famCod}", 'niv1' => 'Diabetes Mellitus con proteinuria seg&uacute;n tira reactiva',
                         'niv2' => $catLbl[$famCod], 'niv3' => "Categor&iacute;a {$c}", 'unidad' => 'Persona Atendida', 'fila' => $f,
                         'cond' => ['cod' => '82044', 'tip' => 'D', 'rownum' => 1, 'vl' => (string)$c,
@@ -1364,9 +1419,10 @@ function ntDmFilasValoracion(int $filaBase, array $cats): array {
             $f++;
         }
     }
-    // Proteinuria segun albuminuria (82043, A1/A2/A3 x E1x = 12 filas)
-    foreach ([['A1', ['lt', 30]], ['A2', ['bt', 30, 299]], ['A3', ['ge', 300]]] as [$a, $rng]) {
-        foreach ($fam as $famCod) {
+    // Proteinuria segun albuminuria (82043): A1/A2/A3 POR FAMILIA E1x
+    // (la plantilla agrupa por familia: E10 con A1-A3, luego E11, ...)
+    foreach ($fam as $famCod) {
+        foreach ([['A1', ['lt', 30]], ['A2', ['bt', 30, 299]], ['A3', ['ge', 300]]] as [$a, $rng]) {
             $filas[] = ['key' => "DM6_ALB_{$a}_{$famCod}", 'niv1' => 'Diabetes Mellitus con proteinuria seg&uacute;n albuminuria',
                         'niv2' => $catLbl[$famCod], 'niv3' => "Categor&iacute;a {$a}", 'unidad' => 'Persona Atendida', 'fila' => $f,
                         'cond' => ['cod' => '82043', 'tip' => 'D', 'rownum' => 1, 'vlNum' => $rng,
@@ -1429,7 +1485,8 @@ function ntDmFilasNefropatia(int $filaBase, array $cats): array {
                 'cond' => ['cod' => '82565', 'tip' => 'D', 'rownum' => 1, 'vlNum' => ['lt', 45],
                            'renaesCat' => $cats, 'citaTieneTodo' => $citaNefro]];
     $f++;
-    foreach ([0, 1, 2, 3, 4] as $c) {
+    // Plantilla 2026: tira reactiva solo Categorias 0-3 (filas 387-390, sin Categoria 4)
+    foreach ([0, 1, 2, 3] as $c) {
         $filas[] = ['key' => "DM7_TIRA_{$c}", 'niv1' => 'Personas con nefropat&iacute;a diab&eacute;tica en seguimiento en establecimientos nivel I-1 al II-1 seg&uacute;n albuminuria en tira reactiva',
                     'niv2' => "Categor&iacute;a {$c}", 'niv3' => null, 'unidad' => 'Persona Atendida', 'fila' => $f,
                     'cond' => ['cod' => '82044', 'tip' => 'D', 'rownum' => 1, 'vl' => (string)$c,
@@ -1449,11 +1506,25 @@ function ntDmFilasNefropatia(int $filaBase, array $cats): array {
 }
 
 /**
- * Filas de tratamiento HTA (DimNT_HTA_Diagnostico04/05 dx 1-6), compartidas
+ * Filas de tratamiento HTA (DimNT_HTA_Diagnostico04/05), compartidas
  * por HTA4 (familias I10) y HTA5 (familias I10-I13). $filaBase = fila Excel
- * del primer dx (87 para HTA4, 98 para HTA5).
+ * del primer dx (88 para HTA4, 100 para HTA5) segun la plantilla 2026
+ * (Reporte_Actividades_NoTransmisiblesN.xlsx):
+ *   filaBase+0 controlado
+ *   filaBase+1 alto riesgo cardiovascular controlado
+ *   filaBase+2 "que recibe control por consultorio" (NUEVO: misma condicion
+ *              que "al menos 1 control de PA" pero contando TODOS los
+ *              registros, regla 'filas' - un paciente con 2 controles en el
+ *              mismo mes cuenta 2)
+ *   filaBase+3 "con al menos 1 control de PA" (antes "Hipertension esencial
+ *              que recibe controles", regla 'personas' de la seccion)
+ *   filaBase+4..6 tratamiento avance de meta fisica 1/2/3 meses
  */
 function ntHtaFilasTratamiento(string $pref, int $filaBase, array $fams): array {
+    // Condicion de control de PA (compartida por las 2 filas de controles):
+    // dx antecedente I1x (R,R1) + toma de presion arterial en la misma cita
+    $condControlPA = ['codF' => $fams, 'tip' => 'R', 'rownum' => 1, 'edadA' => [5, null],
+                      'citaTiene' => ['cod' => '99199.22', 'rownum' => 1, 'vlNum' => ['any']]];
     return [
         ['key' => "{$pref}_D1", 'niv1' => 'Hipertensi&oacute;n esencial controlado', 'niv2' => null, 'niv3' => null, 'unidad' => 'Persona atendida', 'fila' => $filaBase,
          'cond' => ['cod' => '99199.22', 'tip' => 'D', 'rownum' => 2, 'vlNum' => ['lt', 90], 'edadA' => [5, null],
@@ -1468,22 +1539,28 @@ function ntHtaFilasTratamiento(string $pref, int $filaBase, array $fams): array 
                         ['cod' => '99199.22', 'tip' => 'D', 'rownum' => 2, 'vlNum' => ['lt', 80]],
                         ['cod' => '99199.23', 'tip' => 'D', 'rownum' => 1, 'vlNum' => ['ge', 10]],
                     ]]],
-        ['key' => "{$pref}_D3", 'niv1' => 'Hipertensi&oacute;n esencial que recibe controles', 'niv2' => null, 'niv3' => null, 'unidad' => 'Persona atendida', 'fila' => $filaBase + 2,
-         'cond' => ['codF' => $fams, 'tip' => 'R', 'rownum' => 1, 'edadA' => [5, null],
-                    'citaTiene' => ['cod' => '99199.22', 'rownum' => 1, 'vlNum' => ['any']]]],
-        ['key' => "{$pref}_D4", 'niv1' => 'Tratamiento de la hipertensi&oacute;n arterial (avance de meta f&iacute;sica) (1 mes)', 'niv2' => null, 'niv3' => null, 'unidad' => 'Persona atendida', 'fila' => $filaBase + 3,
+        // NUEVO (plantilla 2026): control por consultorio - cuenta cada registro
+        // de control (regla 'filas', sin agrupar por persona). En la plantilla es
+        // la fila rotulada "Hipertensión esencial que recibe controles".
+        ['key' => "{$pref}_D3C", 'niv1' => 'Hipertensi&oacute;n esencial que recibe control por consultorio', 'niv2' => null, 'niv3' => null, 'unidad' => 'Persona atendida', 'fila' => $filaBase + 2,
+         'regla' => 'filas', 'cond' => $condControlPA],
+        // RENOMBRADO (antes "Hipertensión esencial que recibe controles"):
+        // agrupa por persona (regla de la seccion).
+        ['key' => "{$pref}_D3", 'niv1' => 'Hipertensi&oacute;n esencial con al menos 1 control de PA', 'niv2' => null, 'niv3' => null, 'unidad' => 'Persona atendida', 'fila' => $filaBase + 3,
+         'cond' => $condControlPA],
+        ['key' => "{$pref}_D4", 'niv1' => 'Tratamiento de la hipertensi&oacute;n arterial (avance de meta f&iacute;sica) (1 mes)', 'niv2' => null, 'niv3' => null, 'unidad' => 'Persona atendida', 'fila' => $filaBase + 4,
          'cond' => ['codF' => $fams, 'tip' => 'R', 'rownum' => 2, 'vl' => '1', 'edadA' => [5, null],
                     'citaTieneTodo' => [
                         ['codF' => $fams, 'tip' => 'R', 'rownum' => 1, 'vl' => 'PC'],
                         ['cod' => '99199.22', 'rownum' => 1, 'vlNum' => ['any']],
                     ]]],
-        ['key' => "{$pref}_D5", 'niv1' => 'Tratamiento de la hipertensi&oacute;n arterial (avance de meta f&iacute;sica) (2 meses)', 'niv2' => null, 'niv3' => null, 'unidad' => 'Persona atendida', 'fila' => $filaBase + 4,
+        ['key' => "{$pref}_D5", 'niv1' => 'Tratamiento de la hipertensi&oacute;n arterial (avance de meta f&iacute;sica) (2 meses)', 'niv2' => null, 'niv3' => null, 'unidad' => 'Persona atendida', 'fila' => $filaBase + 5,
          'cond' => ['codF' => $fams, 'tip' => 'R', 'rownum' => 2, 'vl' => '2', 'edadA' => [5, null],
                     'citaTieneTodo' => [
                         ['codF' => $fams, 'tip' => 'R', 'rownum' => 1, 'vl' => 'PC'],
                         ['cod' => '99199.22', 'rownum' => 1, 'vlNum' => ['any']],
                     ]]],
-        ['key' => "{$pref}_D6", 'niv1' => 'Tratamiento de la hipertensi&oacute;n arterial (avance de meta f&iacute;sica) (3 meses)', 'niv2' => null, 'niv3' => null, 'unidad' => 'Persona atendida', 'fila' => $filaBase + 5,
+        ['key' => "{$pref}_D6", 'niv1' => 'Tratamiento de la hipertensi&oacute;n arterial (avance de meta f&iacute;sica) (3 meses)', 'niv2' => null, 'niv3' => null, 'unidad' => 'Persona atendida', 'fila' => $filaBase + 6,
          'cond' => ['codF' => $fams, 'tip' => 'R', 'rownum' => 2, 'vl' => '3', 'edadA' => [5, null],
                     'citaTieneTodo' => [
                         ['codF' => $fams, 'tip' => 'R', 'rownum' => 1, 'vl' => 'PC'],
@@ -1733,6 +1810,8 @@ function ntDiagnosticoEntorno(PDO $pdo): array {
  *   'filas'    : cada fila HIS que cumple cuenta 1 en su gedad (count(*)).
  *   'sesiones' : 'filas' para N y suma del valor numerico de valor_lab
  *                (NULL -> 1, iif del T-SQL) para PARTICIPANTES.
+ * Las secciones usan su regla por defecto; una fila del reporte puede
+ * sobreescribirla con 'regla' (HTA4/HTA5 control por consultorio = 'filas').
  *
  * $conSexo: la seccion desglosa por sexo (M/F en columnas). Las filas con sexo
  * distinto de M/F se excluyen (el T-SQL exige "sexo is not null" y luego
@@ -1934,12 +2013,15 @@ function ntEjecutarDesdeFilas(PDO $pdo, array $filas, float $t0 = 0.0): array {
         $filasOut = [];
 
         foreach ($sec['filas'] as $fr) {
-            $r = ntContar($fr['cond'] ?? null, $sec['regla'], $ctxSec, $conSexo);
+            // La fila puede sobreescribir la regla de conteo de la seccion
+            // (HTA4/HTA5 "control por consultorio" cuentan todos los registros)
+            $reglaFila = $fr['regla'] ?? $sec['regla'];
+            $r = ntContar($fr['cond'] ?? null, $reglaFila, $ctxSec, $conSexo);
             $tot = array_sum($r['gedades']);
             $filasOut[] = [
                 'key' => $fr['key'], 'niv1' => $fr['niv1'], 'niv2' => $fr['niv2'] ?? null,
                 'niv3' => $fr['niv3'] ?? null, 'unidad' => $fr['unidad'] ?? null,
-                'fila' => $fr['fila'] ?? null,
+                'fila' => $fr['fila'] ?? null, 'regla' => $reglaFila,
                 'valores' => $r['gedades'], 'sexo' => $r['sexo'], 'part' => $r['part'],
                 'total' => $tot, 'cond' => $fr['cond'] ?? null,
             ];
