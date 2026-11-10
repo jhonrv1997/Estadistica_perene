@@ -7,13 +7,13 @@ Modulo data-driven de IntelHIS que **reemplaza el flujo manual del Modulo de NoT
 1. SQL Server: ejecutar `01 Creacion tablas iniciales` (tablas dimensionales `DimNT_*`: Factores, EvaluacionPAB, Valoracion01-03, Gedad, HTA_Diagnostico01-06, HTA_Riesgo, HTA_Sesiones, DM_Diagnostico01-07, TM_Valoracion01-05)
 2. SQL Server: ejecutar `02 Creacion tablas consolidacion` (`TRAMA_BASE_NT_2025_*_CONSOLIDADO / _NOMINAL`, 22 pares)
 3. SQL Server: ejecutar `03 Creacion de Procedimientos` (24 procedimientos `usp_TRAMA_BASE_NT_2025_*`)
-4. Excel: abrir `Reporte_Actividades_NoTransmisibles.xlsx` y refrescar la conexion ODBC
+4. Excel: abrir `Reporte_Actividades_NoTransmisiblesN.xlsx` y refrescar la conexion ODBC
 
 ## Flujo nuevo (1 click)
 
 - Entrar a IntelHIS -> **Reportes Operacionales -> NO TRANSMISIBLES -> Generar Reporte**
-- (Opcional) **Exportar Excel**: llena la plantilla oficial
-  `uploads/Reporte_Actividades_NoTransmisibles.xlsx` con el mismo layout
+- (Opcional) **Exportar Excel**: llena la plantilla oficial 2026
+  `uploads/Reporte_Actividades_NoTransmisiblesN.xlsx` con el mismo layout
   (24 secciones en 4 grupos, cabeceras moradas, columnas M/F por grupo etareo).
 
 ## Archivos del modulo
@@ -25,7 +25,7 @@ Modulo data-driven de IntelHIS que **reemplaza el flujo manual del Modulo de NoT
 | `reporte_no_transmisibles.php` | Pagina del reporte (1 click): filtros anio/mes/EE.SS/grupo, proteccion anti HTTP 500, panel "Ver condiciones SQL" (auditoria) |
 | `nontransmisibles_export.php` | Exportacion a la plantilla oficial .xlsx (preserva formato: merges, estilos, formula B8) |
 | `install_no_transmisibles.php` | Asistente de indices de la tabla consolidada + verificacion del maestro de establecimientos (eliminar tras usar) |
-| `uploads/Reporte_Actividades_NoTransmisibles.xlsx` | Plantilla oficial (base del export) |
+| `uploads/Reporte_Actividades_NoTransmisiblesN.xlsx` | Plantilla oficial 2026 (base del export) |
 
 ## Estructura del reporte (24 secciones = 24 procedimientos)
 
@@ -45,11 +45,11 @@ Modulo data-driven de IntelHIS que **reemplaza el flujo manual del Modulo de NoT
 |---|--------|---------------------|--------------------|
 | HTA1 | `HTA1_CASOS` | `usp_..._02_HTA_RPT_01_CASOS` | 8 casos: HTA esencial en controles (I10X D,R), nuevos (I10X D), retinopatia nueva/acumulada (#RETINOPATIA H350), nefropatia con/sin IR nueva/acumulada (I120/I129) |
 | HTA2 | `HTA2_EMERGENCIA` | `usp_..._02_HTA_RPT_02_EMERGENCIA` | Urgencia (R030 URG), crisis no especificada (I16X), emergencia (R030 EMG) + #HIPERTENSION |
-| HTA3 | `HTA3_DISLIPIDEMIAS` | `usp_..._02_HTA_RPT_03_DISLIPIDEMIAS` | Dislipidemia + alto riesgo CV en seguimiento (E78x + 99199.23>=10 + presion <140/<90, 40+) |
-| HTA4 | `HTA4_SIN_DANO` | `usp_..._02_HTA_RPT_04_HIPERTENSO_SIN_DANO` | 6 filas: controlado (PA <140/<90), alto riesgo controlado (PA <130/<80 + riesgo), recibe controles, avance de meta 1/2/3 meses (familias I10) |
-| HTA5 | `HTA5_TRATAMIENTO` | `usp_..._02_HTA_RPT_05_HIPERTENSO_TRATAMIENTO` | Paciente controlado (mismas 6 filas, familias I10-I13) + atencion integral especializado por UPS: Nefrologia 302701, Cardiologia 300201, Oftalmologia 303408, Nutricion 303101 |
+| HTA3 | `HTA3_DISLIPIDEMIAS` | `usp_..._02_HTA_RPT_03_DISLIPIDEMIAS` | Filas 82-83: dislipidemia + **bajo** riesgo CV (E78x D + 99199.23<5 + PA <120/<80, 40+) y dislipidemia + **alto** riesgo CV en seguimiento (E78x + 99199.23>=10 + presion <140/<90, 40+) |
+| HTA4 | `HTA4_SIN_DANO` | `usp_..._02_HTA_RPT_04_HIPERTENSO_SIN_DANO` | 7 filas (88-94): controlado (PA <140/<90), alto riesgo controlado (PA <130/<80 + riesgo), **control por consultorio** (fila 90: cuenta TODOS los registros, regla `filas`), **al menos 1 control de PA** (fila 91: por persona; antes "recibe controles"), avance de meta 1/2/3 meses (familias I10) |
+| HTA5 | `HTA5_TRATAMIENTO` | `usp_..._02_HTA_RPT_05_HIPERTENSO_TRATAMIENTO` | Paciente controlado (mismas 7 filas, familias I10-I13; 102 por consultorio, 103 al menos 1 control) + atencion integral especializado por UPS: Nefrologia 302701, Cardiologia 300201, Oftalmologia 303408, Nutricion 303101. Actividad 5001606 |
 | HTA6 | `HTA6_RIESGO` | `usp_..._02_HTA_RPT_06_HIPERTENSO_RIESGO` | Estratificacion de riesgo CV (99199.23: <5 Bajo, 5-9 Moderado, 10-19 Alto, 20-29 Muy Alto, >=30 Critico; 40+) |
-| HTA7 | `HTA7_SESIONES` | `usp_..._02_HTA_RPT_07_SESIONES` | Sesiones educativa/demostrativa/GAM (C0009/C0010/C0012 + fichafam APP100) x poblacion DM/HTA: N = count(*), Participantes = sum(valor_lab) (NULL=>1). Sin columnas de edad/sexo (C=No, D=Participantes) |
+| HTA7 | `HTA7_SESIONES` | `usp_..._02_HTA_RPT_07_SESIONES` | Sesiones educativa/demostrativa/GAM (C0009/C0010/C0012 + **Id_Paciente = APP100**, ya no Ficha_Familiar) x poblacion DM/HTA: N = count(*), Participantes = sum(valor_lab) (NULL=>1). Sin columnas de edad/sexo (C=No, D=Participantes). Actividad 5001605 |
 
 ### GRUPO 03 - Diabetes Mellitus (gedad MENORES 1a .. 60+; 8 grupos x M/F)
 
@@ -57,11 +57,11 @@ Modulo data-driven de IntelHIS que **reemplaza el flujo manual del Modulo de NoT
 |---|--------|---------------------|--------------------|
 | DM01 | `DM01_CASOS` | `usp_..._03_DM_RPT_01_CASOS` | 13 casos: E10/E11/O24(5-59a)/E13/E14 atendidos y nuevos (fg_tipo=CX), nefropatia (E102/E112/E132/E142), retinopatia (E103/.../H360), tiroiditis E06 + #ATENCION, TBC A15 + #ATENCION, HTA I10 + #ATENCION |
 | DM02 | `DM02_GLUCEMIA` | `usp_..._03_DM_RPT_02_GLUCEMIA` | 7 filas: hipoglicemia DM1/DM2/otros (E160/E162 + E100/E108, E110/E118, E130/.../E148), coma (E100/...), cetoacidosis (E101/...), hipoglicemia ind. medicamentos (E160), hiperglicemia no esp. (R739). Regla count(*) |
-| DM03 | `DM03_CONTROL` | `usp_..._03_DM_RPT_03_CONTROL` | 52 categorias (filas 163-214, TOTAL col E): HbA1c 83036 (<6.5/<7/<8/>=8/>=10), glucosa 82947/82948 (<130/>=130), presion en/fuera de meta (#CONTROL + #PRESION), seguimiento (#SEGUIMIENTO) y tratamiento 1/2/3 meses (#TRATAMIENTO) x E10/E11/E13/E14. Solo RENAES categoria I-2/I-3/I-4 |
-| DM04 | `DM04_TRATAMIENTO` | `usp_..._03_DM_RPT_04_TRATAMIENTO` | Mismas 52 categorias (filas 219-270). Solo RENAES categoria II-1/II-2/II-E/III-1/III-2/III-E |
-| DM05 | `DM05_ATENCION` | `usp_..._03_DM_RPT_05_ATENCION` | 8 filas por especialidad (UPS): Cardiologia 300201, Endocrinologia 301001, Oftalmologia 303408 (E1x + H360), Neurologia 303008, Nefrologia 302701, nefropatia G1-G2 (N181/N182+R80X), G3-G5 (N183-185), Nutricion 303099 |
-| DM06 | `DM06_VALORACION` | `usp_..._03_DM_RPT_06_VALORACION` | 88 categorias (filas 287-374, TOTAL col E): pie diabetico 99214.07 (N/A), TFG 82565 (G1-G5), proteinuria tira 82044 (0-4), albuminuria 82043 (A1-A3), fondo de ojo 92250/92226, LDL 83721 (<70/70-99/100-129/>=130), no especificada (VAL) x E1x. Solo RENAES I-4/II-*/III-* |
-| DM07 | `DM07_NEFROPATIA` | `usp_..._03_DM_RPT_07_NEFROPATIA` | 11 filas (filas 379-389, TOTAL col C): nefropatia en seguimiento (E102/... R + #NEFROPATIA), TFG 82545 (bajo/alto riesgo), tira 82044 (0-4), albuminuria 82043 (A1-A3). Solo RENAES I-1..II-1 |
+| DM03 | `DM03_CONTROL` | `usp_..._03_DM_RPT_03_CONTROL` | 52 categorias (filas 166-217, TOTAL col E): HbA1c 83036 (<6.5/<7/<8/>=8/>=10), glucosa 82947/82948 (<130/>=130), presion en/fuera de meta (#CONTROL + #PRESION), seguimiento (#SEGUIMIENTO) y tratamiento 1/2/3 meses (#TRATAMIENTO) x E10/E11/E13/E14. Solo RENAES categoria I-2/I-3/I-4 |
+| DM04 | `DM04_TRATAMIENTO` | `usp_..._03_DM_RPT_04_TRATAMIENTO` | Mismas 52 categorias (filas 222-273). Solo RENAES categoria II-1/II-2/II-E/III-1/III-2/III-E |
+| DM05 | `DM05_ATENCION` | `usp_..._03_DM_RPT_05_ATENCION` | 10 filas (278-287) por especialidad (UPS): Cardiologia 300201, Endocrinologia 301001, Oftalmologia 303408 (E1x + H360), Neurologia 303008, Nefrologia 302701, nefropatia G1-G2 (N181/N182+R80X), G3-G5 (N183-185), Nutricion 303099, **Odontologia 303304**, **Psicologia 303802** |
+| DM06 | `DM06_VALORACION` | `usp_..._03_DM_RPT_06_VALORACION` | 88 categorias (filas 292-379, TOTAL col E): pie diabetico 99214.07 (N/A), TFG 82565 (G1-G5), proteinuria tira 82044 (0-4), albuminuria 82043 (A1-A3), fondo de ojo 92250/92226, LDL 83721 (<70/70-99/100-129/>=130), no especificada (VAL) x E1x. Solo RENAES I-4/II-*/III-* |
+| DM07 | `DM07_NEFROPATIA` | `usp_..._03_DM_RPT_07_NEFROPATIA` | 10 filas (filas 384-393, TOTAL col C): nefropatia en seguimiento (E102/... R + #NEFROPATIA), TFG 82545 (bajo/alto riesgo), tira 82044 (0-3, **sin Categoria 4** en la plantilla 2026), albuminuria 82043 (A1-A3). Solo RENAES I-1..II-1 |
 
 ### GRUPO 04 - Telesalud (gedad 05-11a .. 60+; TOTAL col C, edades D-O)
 
@@ -82,7 +82,7 @@ Grupos etareos:
 1. Copiar los archivos del modulo a la raiz del sistema (junto a `reporte_zoonosis.php`):
    `reporte_no_transmisibles.php`, `nontransmisibles_export.php`, `install_no_transmisibles.php`,
    `includes/nontransmisibles_data.php`, `includes/nontransmisibles_render.php`.
-2. Copiar la plantilla oficial `Reporte_Actividades_NoTransmisibles.xlsx` a `uploads/`.
+2. Copiar la plantilla oficial 2026 `Reporte_Actividades_NoTransmisiblesN.xlsx` a `uploads/`.
 3. (Recomendado, una sola vez) Abrir como admin `install_no_transmisibles.php` para crear/verificar
    los indices de la tabla consolidada. Luego **eliminar** `install_no_transmisibles.php`.
 4. Entrar a **Reportes Operacionales -> NO TRANSMISIBLES -> Generar Reporte**
@@ -126,7 +126,8 @@ otras 20 funcionan normalmente.
 | `edadA` | `[5, null]` / `[40, null]` / `[5,59]` | `id_tipedad_reg='A' AND edad_reg >= 5` |
 | `pab` | `['le',102]` / `['gt',88]` | `try_convert(int, perimetro_abdominal) <= 102` (Perimetro_Abdominal) |
 | `ups` | `'302701'` | `id_ups = '302701'` (Id_Ups) |
-| `ficha` | `'APP100'` | `fichafam = 'APP100'` (Ficha_Familiar) |
+| `ficha` | `'APP100'` | `fichafam = 'APP100'` (Ficha_Familiar; obsoleto para sesiones) |
+| `pac` | `'APP100'` | `id_paciente = 'APP100'` (Id_Paciente; HTA7 sesiones) |
 | `fg` | `'CX'` | `fg_tipo = 'CX'` (Fg_Tipo, casos confirmados DM) |
 | `renaesCat` | `['I-2','I-3','I-4']` | `renaes IN (SELECT Codigo_Unico FROM MAESTRO_HIS_ESTABLECIMIENTO WHERE Categoria_Establecimiento IN (...))` |
 | `citaTiene` | `<pred>` | `id_cita IN (SELECT id_cita FROM #TEMP WHERE <pred>)` |
@@ -138,7 +139,7 @@ otras 20 funcionan normalmente.
 | Regla | Equivalente T-SQL | Secciones |
 |-------|-------------------|-----------|
 | `personas` | `count(distinct id_persona)` del consolidado, replicado como pares distintos `(renaes|id_paciente|anio|mes)` | 21 secciones (todas menos DM02 y HTA7) |
-| `filas` | `count(*)` | DM02 GLUCEMIA |
+| `filas` | `count(*)` | DM02 GLUCEMIA y las filas "control por consultorio" de HTA4/HTA5 (regla por fila) |
 | `sesiones` | `count(*)` para N + `sum(try_convert(int, valor_lab))` con `iif(null, 1)` para PARTICIPANTES | HTA7 SESIONES |
 
 ### Notas de adaptacion documentadas
@@ -160,7 +161,7 @@ otras 20 funcionan normalmente.
 ## Exportar Excel (plantilla oficial)
 
 - El boton **Exportar Excel** regenera el reporte con los mismos filtros y llena la
-  plantilla `uploads/Reporte_Actividades_NoTransmisibles.xlsx` con `ExcelTemplateFiller`
+  plantilla 2026 `uploads/Reporte_Actividades_NoTransmisiblesN.xlsx` con `ExcelTemplateFiller`
   (preserva merges, estilos morados, anchos y la formula `B8 = +B7*-1`).
 - Cabecera: `B5` = PERIODO, `B7` = CODIGO RENAES (numerico para la formula B8),
   `H7` = IPRESS (H5 trae fija la RED "CHANCHAMAYO" de la plantilla).
@@ -173,4 +174,4 @@ otras 20 funcionan normalmente.
 | HTTP ERROR 500 al Generar | Tabla sin indices / memory_limit | Ejecutar una vez `install_no_transmisibles.php`; filtrar por un mes/EE.SS. |
 | DM03/DM04/DM06/DM07 en 0 | `MAESTRO_HIS_ESTABLECIMIENTO` vacio | Importar el maestro HIS desde **Importar Datos** |
 | Seccion en 0 inesperada | Condicion que difiere del archivo 03 | Activar "Ver SQL (auditoria)", comparar y ajustar `ntSecciones()` |
-| Exportar Excel: "Plantilla oficial no encontrada" | Falta `uploads/Reporte_Actividades_NoTransmisibles.xlsx` | Copiar la plantilla a `uploads/` |
+| Exportar Excel: "Plantilla oficial no encontrada" | Falta `uploads/Reporte_Actividades_NoTransmisiblesN.xlsx` | Copiar la plantilla 2026 a `uploads/` |
