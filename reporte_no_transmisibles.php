@@ -7,19 +7,19 @@
  *   1) SQL Server: ejecutar "01 Creacion tablas iniciales"
  *   2) SQL Server: ejecutar "02 Creacion tablas consolidacion"
  *   3) SQL Server: ejecutar "03 Creacion de Procedimientos"
- *   4) Excel:      abrir "Reporte_Actividades_NoTransmisibles.xlsx" y refrescar
+ *   4) Excel:      abrir "Reporte_Actividades_NoTransmisiblesN.xlsx" y refrescar
  *                  la conexion ODBC
  *
  * FLUJO NUEVO (1 click):
  *   Reportes Operacionales -> NO TRANSMISIBLES -> [Generar Reporte]
  *   (Opcional) [Exportar Excel] -> llena la plantilla oficial
- *   "uploads/Reporte_Actividades_NoTransmisibles.xlsx" con los mismos datos
+ *   "uploads/Reporte_Actividades_NoTransmisiblesN.xlsx" con los mismos datos
  *   (nontransmisibles_export.php).
  *
  * El motor de reglas (includes/nontransmisibles_data.php) adapta los 24
  * procedimientos usp_TRAMA_BASE_NT_2025_* del archivo "03 Creacion de
  * Procedimientos" y los ejecuta contra la tabla consolidada MySQL. El layout
- * replica el Excel "Reporte_Actividades_NoTransmisibles.xlsx" (4 grupos:
+ * replica el Excel "Reporte_Actividades_NoTransmisiblesN.xlsx" (4 grupos:
  * VALORACION, HIPERTENSION ARTERIAL, DIABETES MELLITUS, TELESALUD) con el
  * mismo diseno de cabeceras (morado #8064A2, columnas M/F por grupo etareo).
  */
@@ -199,7 +199,7 @@ include 'includes/header.php';
             <a href="nontransmisibles_export.php?<?= http_build_query(array_filter([
                 'anio' => $fAnio, 'mes' => $fMes, 'establecimiento' => $fEstablecimiento,
                 'generar' => $ejecutar ? 1 : null,
-            ])) ?>" class="btn btn-sm btn-success" title="Exportar Excel con el layout de la plantilla oficial Reporte_Actividades_NoTransmisibles.xlsx">
+            ])) ?>" class="btn btn-sm btn-success" title="Exportar Excel con el layout de la plantilla oficial Reporte_Actividades_NoTransmisiblesN.xlsx">
                 <i class="fas fa-file-excel me-1"></i> Exportar Excel
             </a>
             <button type="submit" form="filterForm" class="btn btn-sm btn-his"><i class="fas fa-play me-1"></i> Generar Reporte</button>
@@ -438,7 +438,7 @@ foreach ($secciones as $sec):
     <i class="fas fa-info-circle me-2"></i>
     <strong>Equivalencia con el flujo original:</strong> este reporte replica los 24 procedimientos
     <code>usp_TRAMA_BASE_NT_2025_*</code> (archivos 01/02/03) sobre la tabla consolidada MySQL y el
-    layout de la plantilla <code>Reporte_Actividades_NoTransmisibles.xlsx</code> (4 grupos: Valoraci&oacute;n,
+    layout de la plantilla <code>Reporte_Actividades_NoTransmisiblesN.xlsx</code> (4 grupos: Valoraci&oacute;n,
     Hipertensi&oacute;n Arterial, Diabetes Mellitus y Telesalud). Ya no necesita SQL Server ni refrescar la
     conexi&oacute;n ODBC: <strong>1 click y (opcional) Exportar Excel</strong>.<br>
     <strong>Desarrollado por JKRV</strong>
