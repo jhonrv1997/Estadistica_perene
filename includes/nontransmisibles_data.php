@@ -17,8 +17,10 @@
  * Numeros de fila segun la plantilla 2026 "Reporte_Actividades_NoTransmisiblesN.xlsx":
  *   GRUPO 01 VALORACION (gedad 1-6, cols C=TOTAL, D-O):
  *     VR01 usp_..._01_VALORACION_RPT_01_FACTORES_RIESGO   (20 factores, filas 12-31)
- *     VR02 usp_..._01_VALORACION_RPT_02_EVALUACION_PAB    (Normal/Anormal, filas 36-37)
- *     VR03 usp_..._01_VALORACION_RPT_03_VALORACION_CLINICA(valoracion 1-2, filas 42-43)
+ *     VR02 usp_..._01_VALORACION_RPT_02_EVALUACION_PAB    (Normal/Anormal, filas 36-37;
+ *          36 NORMAL cuenta todo, regla 'filas')
+ *     VR03 usp_..._01_VALORACION_RPT_03_VALORACION_CLINICA(valoracion 1-2, filas 42-43;
+ *          42 meta fisica cuenta todo, regla 'filas')
  *     VR04 usp_..._01_VALORACION_RPT_04_VALORACION_CLINICA(valoracion 1-4, filas 47-50)
  *     VR05 usp_..._01_VALORACION_RPT_05_VALORACION_CLINICA(valoracion 1,   fila 55)
  *   GRUPO 02 HTA (gedad 1-6, cols C=TOTAL, D-O):
@@ -27,7 +29,8 @@
  *     HTA3 usp_..._02_HTA_RPT_03_DISLIPIDEMIAS  (dx 1-2, filas 82-83;
  *          82 = bajo riesgo CV [99199.23<5 + PA<120/<80], 83 = alto riesgo CV)
  *     HTA4 usp_..._02_HTA_RPT_04_HIPERTENSO_SIN_DANO    (dx 1-7, filas 88-94;
- *          90 = control por consultorio [cuenta todo], 91 = al menos 1 control PA)
+ *          88 = controlado [cuenta todo, regla 'filas'], 90 = control por
+ *          consultorio [cuenta todo], 91 = al menos 1 control PA)
  *     HTA5 usp_..._02_HTA_RPT_05_HIPERTENSO_TRATAMIENTO (dx 1-11, filas 100-111;
  *          102 = control por consultorio, 103 = al menos 1 control PA)
  *     HTA6 usp_..._02_HTA_RPT_06_HIPERTENSO_RIESGO      (riesgo 1-5, filas 116-120)
@@ -94,10 +97,14 @@
  *   'sesiones' : HTA7: ademas de 'filas' para N, sum(try_convert(int,valor_lab))
  *                con NULL -> 1 (iif del T-SQL) para PARTICIPANTES.
  *   Una fila puede sobreescribir la regla de su seccion con 'regla' => 'filas'
- *   (HTA4/HTA5 "Hipertension esencial que recibe control por consultorio":
- *   misma condicion que "al menos 1 control de PA" pero contando TODOS los
- *   registros, sin agrupar por persona - un paciente con 2 controles en el
- *   mismo mes cuenta 2).
+ *   (cuenta TODOS los registros, sin agrupar por persona - un paciente con 2
+ *   atenciones en el mismo mes cuenta 2):
+ *     - VR02 "NORMAL" (fila 36)
+ *     - VR03 "PERSONAS QUE HAN RECIBIDO VALORACION CLINICA DE FACTORES DE
+ *       RIESGO (meta fisica)" (fila 42)
+ *     - HTA4 "Hipertension esencial controlado" (fila 88, via $d1Regla)
+ *     - HTA4/HTA5 "Hipertension esencial que recibe control por consultorio"
+ *       (filas 90/102)
  *
  * NOTAS DE ADAPTACION (desviaciones documentadas):
  *   - Los rangos de valor_lab del T-SQL (valor_lab<'140', between '70' and '99')
@@ -115,7 +122,7 @@
 
 require_once __DIR__ . '/../config.php';
 
-define('NT_DATA_VERSION', '2026-11-11-r1');
+define('NT_DATA_VERSION', '2026-11-11-r2');
 
 /** Version del motor de reporte de No Transmisibles (badge del reporte). */
 function ntDataVersion(): string {
@@ -601,6 +608,10 @@ function ntSecciones(): array {
      * VR02 - usp_TRAMA_BASE_NT_2025_01_VALORACION_RPT_02_EVALUACION_PAB
      * Evaluacion de perimetro abdominal: Normal/Anormal por sexo.
      * Filas Excel 36-37. Solo adultos (gedad 3-6 por el WHERE edad>=18).
+     * NORMAL (fila 36) cuenta TODOS los registros (regla 'filas'): un
+     * paciente atendido en fechas distintas del mismo mes cuenta una vez
+     * por cada atencion, sin agrupar por persona. ANORMAL mantiene la
+     * regla de la seccion ('personas').
      * ------------------------------------------------------------ */
     [
         'codigo'        => 'VR02_EVALUACION_PAB',
@@ -614,6 +625,7 @@ function ntSecciones(): array {
         'columna_label' => 'EVALUACI&Oacute;N',
         'filas'         => [
             ['key' => 'PAB1', 'niv1' => 'NORMAL', 'niv2' => null, 'niv3' => null, 'unidad' => 'PERSONA', 'fila' => 36,
+             'regla' => 'filas',
              'cond' => ['cod' => 'Z019', 'tip' => 'D', 'edadA' => [18, null],
                         'cualquieraDe' => [
                             ['sexo' => 'M', 'pab' => ['le', 102]],
@@ -631,6 +643,11 @@ function ntSecciones(): array {
     /* ------------------------------------------------------------
      * VR03 - usp_TRAMA_BASE_NT_2025_01_VALORACION_RPT_03_VALORACION_CLINICA
      * Valoracion 1-2 (DimNT_Valoracion01). Filas Excel 42-43.
+     * "PERSONAS QUE HAN RECIBIDO VALORACION CLINICA DE FACTORES DE RIESGO
+     * (meta fisica)" (fila 42) cuenta TODOS los registros (regla 'filas'):
+     * un paciente atendido en fechas distintas del mismo mes cuenta una
+     * vez por cada atencion, sin agrupar por persona. La fila 43 mantiene
+     * la regla de la seccion ('personas').
      * ------------------------------------------------------------ */
     [
         'codigo'        => 'VR03_VALORACION_CLINICA',
@@ -644,6 +661,7 @@ function ntSecciones(): array {
         'columna_label' => 'CLASIFICACI&Oacute;N',
         'filas'         => [
             ['key' => 'VC1', 'niv1' => 'PERSONAS QUE HAN RECIBIDO VALORACI&Oacute;N CL&Iacute;NICA DE FACTORES DE RIESGO (meta f&iacute;sica)', 'niv2' => null, 'niv3' => null, 'unidad' => 'PERSONA', 'fila' => 42,
+             'regla' => 'filas',
              'cond' => $z019dr1 + ['edadA' => [5, null]]],
             ['key' => 'VC2', 'niv1' => 'VALORACI&Oacute;N CL&Iacute;NICA CON FACTORES DE RIESGO', 'niv2' => null, 'niv3' => null, 'unidad' => 'PERSONA', 'fila' => 43,
              'cond' => $z019alt + ['edadA' => [5, null], 'rownum' => 1]],
@@ -801,8 +819,10 @@ function ntSecciones(): array {
 
     /* HTA4 - usp_TRAMA_BASE_NT_2025_02_HTA_RPT_04_HIPERTENSO_SIN_DANO
      * Tratamiento HTA sin dano de organo (familias I10). Filas 88-94
-     * (plantilla 2026; 90 = control por consultorio cuenta-todo,
-     * 91 = al menos 1 control de PA por persona).
+     * (plantilla 2026; 88 = Hipertension esencial controlado cuenta TODOS los
+     * registros con regla 'filas' - un paciente atendido en fechas distintas
+     * del mismo mes cuenta una vez por cada atencion; 90 = control por
+     * consultorio cuenta-todo, 91 = al menos 1 control de PA por persona).
      * #TRATAMIENTO = 99199.22 R1 num de citas con I10(R) R1;
      * #PRESION = R1<130 y R2<80; #HIPERTENSION = 99199.23>=10;
      * #CONTROL = 99199.22 R1 de citas con I10 R R1 PC. */
@@ -816,7 +836,7 @@ function ntSecciones(): array {
         'layout'        => '6GC',
         'colsX'         => $cols6,
         'columna_label' => 'DIAGN&Oacute;STICO',
-        'filas'         => ntHtaFilasTratamiento('HTA4', 88, ['I10']),
+        'filas'         => ntHtaFilasTratamiento('HTA4', 88, ['I10'], 'filas'),
     ],
 
     /* HTA5 - usp_TRAMA_BASE_NT_2025_02_HTA_RPT_05_HIPERTENSO_TRATAMIENTO
@@ -1510,7 +1530,9 @@ function ntDmFilasNefropatia(int $filaBase, array $cats): array {
  * por HTA4 (familias I10) y HTA5 (familias I10-I13). $filaBase = fila Excel
  * del primer dx (88 para HTA4, 100 para HTA5) segun la plantilla 2026
  * (Reporte_Actividades_NoTransmisiblesN.xlsx):
- *   filaBase+0 controlado
+ *   filaBase+0 controlado ($d1Regla: 'filas' en HTA4 - cuenta TODOS los
+ *              registros, un paciente con 2 atenciones en el mismo mes
+ *              cuenta 2; 'personas' por defecto como HTA5)
  *   filaBase+1 alto riesgo cardiovascular controlado
  *   filaBase+2 "que recibe control por consultorio" (NUEVO: misma condicion
  *              que "al menos 1 control de PA" pero contando TODOS los
@@ -1520,13 +1542,14 @@ function ntDmFilasNefropatia(int $filaBase, array $cats): array {
  *              que recibe controles", regla 'personas' de la seccion)
  *   filaBase+4..6 tratamiento avance de meta fisica 1/2/3 meses
  */
-function ntHtaFilasTratamiento(string $pref, int $filaBase, array $fams): array {
+function ntHtaFilasTratamiento(string $pref, int $filaBase, array $fams, string $d1Regla = 'personas'): array {
     // Condicion de control de PA (compartida por las 2 filas de controles):
     // dx antecedente I1x (R,R1) + toma de presion arterial en la misma cita
     $condControlPA = ['codF' => $fams, 'tip' => 'R', 'rownum' => 1, 'edadA' => [5, null],
                       'citaTiene' => ['cod' => '99199.22', 'rownum' => 1, 'vlNum' => ['any']]];
     return [
         ['key' => "{$pref}_D1", 'niv1' => 'Hipertensi&oacute;n esencial controlado', 'niv2' => null, 'niv3' => null, 'unidad' => 'Persona atendida', 'fila' => $filaBase,
+         'regla' => $d1Regla,
          'cond' => ['cod' => '99199.22', 'tip' => 'D', 'rownum' => 2, 'vlNum' => ['lt', 90], 'edadA' => [5, null],
                     'citaTieneTodo' => [
                         ['codF' => $fams, 'tip' => 'R', 'rownum' => 1],
@@ -1811,7 +1834,8 @@ function ntDiagnosticoEntorno(PDO $pdo): array {
  *   'sesiones' : 'filas' para N y suma del valor numerico de valor_lab
  *                (NULL -> 1, iif del T-SQL) para PARTICIPANTES.
  * Las secciones usan su regla por defecto; una fila del reporte puede
- * sobreescribirla con 'regla' (HTA4/HTA5 control por consultorio = 'filas').
+ * sobreescribirla con 'regla' (VR02 NORMAL, VR03 meta fisica, HTA4 controlado
+ * y HTA4/HTA5 control por consultorio = 'filas').
  *
  * $conSexo: la seccion desglosa por sexo (M/F en columnas). Las filas con sexo
  * distinto de M/F se excluyen (el T-SQL exige "sexo is not null" y luego
