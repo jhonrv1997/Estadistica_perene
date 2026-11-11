@@ -1118,7 +1118,7 @@ function ntSecciones(): array {
              'cond' => ['codF' => $famE1x, 'tip' => 'R', 'rownum' => 1, 'ups' => '302701',
                         'citaTiene' => ['cod' => ['N183', 'N184', 'N185']]]],
             ['key' => 'ATD8', 'niv1' => 'Nutrici&oacute;n', 'niv2' => null, 'niv3' => null, 'unidad' => 'Persona atendida', 'fila' => 285,
-             'cond' => ['codF' => $famE1x, 'tip' => 'R', 'rownum' => 1, 'ups' => '303099']],
+             'cond' => ['codF' => $famE1x, 'tip' => 'R', 'rownum' => 1, 'ups' => '303101']],
             // NUEVAS (plantilla 2026): Odontologia (UPS 303304) y Psicologia (UPS 303802)
             ['key' => 'ATD9', 'niv1' => 'Odontolog&iacute;a', 'niv2' => null, 'niv3' => null, 'unidad' => 'Persona atendida', 'fila' => 286,
              'cond' => ['codF' => $famE1x, 'tip' => 'R', 'rownum' => 1, 'ups' => '303304']],
