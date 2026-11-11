@@ -15,6 +15,10 @@ Modulo data-driven de IntelHIS que **reemplaza el flujo manual del Modulo de NoT
 - (Opcional) **Exportar Excel**: llena la plantilla oficial 2026
   `uploads/Reporte_Actividades_NoTransmisiblesN.xlsx` con el mismo layout
   (24 secciones en 4 grupos, cabeceras moradas, columnas M/F por grupo etareo).
+- (Opcional) **Exportar Plano**: deposita los mismos datos en el plano
+  consolidado horizontal `uploads/Notransmisibles_Plano.xlsx` (fila 7 =
+  numeracion A7:GHG7 de columnas 1..4947, fila 8 = datos) siguiendo los
+  numeros de destino de `uploads/Ubicacion_Filas_NoTransmisibles.xlsx`.
 
 ## Archivos del modulo
 
@@ -24,6 +28,10 @@ Modulo data-driven de IntelHIS que **reemplaza el flujo manual del Modulo de NoT
 | `includes/nontransmisibles_render.php` | Funciones de render web (layout tipo Excel) y mapa de celdas para el export (`ntCeldasExport`) |
 | `reporte_no_transmisibles.php` | Pagina del reporte (1 click): filtros anio/mes/EE.SS/grupo, proteccion anti HTTP 500, panel "Ver condiciones SQL" (auditoria) |
 | `nontransmisibles_export.php` | Exportacion a la plantilla oficial .xlsx (preserva formato: merges, estilos, formula B8) |
+| `nontransmisibles_export_plano.php` | NUEVO: Exportacion al plano consolidado `Notransmisibles_Plano.xlsx` (misma data, destino horizontal) |
+| `includes/nontransmisibles_plano.php` | NUEVO: Logica de mapeo del plano (espejo -> numero de destino -> columna A7:GHG7), con cache en `cache/plano/` |
+| `uploads/Notransmisibles_Plano.xlsx` | NUEVO: Plantilla del plano consolidado (fila 7 = numeros 1..4947, fila 8 = datos) |
+| `uploads/Ubicacion_Filas_NoTransmisibles.xlsx` | NUEVO: Espejo del reporte con el numero de destino de cada celda (4..4947, 4944 numeros secuenciales) |
 | `install_no_transmisibles.php` | Asistente de indices de la tabla consolidada + verificacion del maestro de establecimientos (eliminar tras usar) |
 | `uploads/Reporte_Actividades_NoTransmisiblesN.xlsx` | Plantilla oficial 2026 (base del export) |
 
@@ -80,12 +88,15 @@ Grupos etareos:
 ## Instalacion
 
 1. Copiar los archivos del modulo a la raiz del sistema (junto a `reporte_zoonosis.php`):
-   `reporte_no_transmisibles.php`, `nontransmisibles_export.php`, `install_no_transmisibles.php`,
-   `includes/nontransmisibles_data.php`, `includes/nontransmisibles_render.php`.
+   `reporte_no_transmisibles.php`, `nontransmisibles_export.php`, `nontransmisibles_export_plano.php`,
+   `install_no_transmisibles.php`, `includes/nontransmisibles_data.php`,
+   `includes/nontransmisibles_render.php`, `includes/nontransmisibles_plano.php`.
 2. Copiar la plantilla oficial 2026 `Reporte_Actividades_NoTransmisiblesN.xlsx` a `uploads/`.
-3. (Recomendado, una sola vez) Abrir como admin `install_no_transmisibles.php` para crear/verificar
+3. Copiar las plantillas del plano a `uploads/`: `Notransmisibles_Plano.xlsx` y
+   `Ubicacion_Filas_NoTransmisibles.xlsx` (numeros de destino de cada celda).
+4. (Recomendado, una sola vez) Abrir como admin `install_no_transmisibles.php` para crear/verificar
    los indices de la tabla consolidada. Luego **eliminar** `install_no_transmisibles.php`.
-4. Entrar a **Reportes Operacionales -> NO TRANSMISIBLES -> Generar Reporte**
+5. Entrar a **Reportes Operacionales -> NO TRANSMISIBLES -> Generar Reporte**
    (la tarjeta No Transmisibles y `?sub=no_transmisibles` redirigen automaticamente al nuevo reporte).
 
 No requiere tablas nuevas: el motor consulta la misma tabla consolidada MySQL que ya usan
@@ -173,6 +184,31 @@ otras 20 funcionan normalmente.
   `H7` = IPRESS (H5 trae fija la RED "CHANCHAMAYO" de la plantilla).
 - Nombre del archivo: `Reporte_Actividades_NoTransmisibles_{anio}_{mes}_{renaes}.xlsx`.
 
+## Exportar Plano (plano consolidado)
+
+- El boton **Exportar Plano** regenera el reporte con los mismos filtros y deposita los
+  mismos datos de `ntCeldasExport()` en el plano horizontal `Notransmisibles_Plano.xlsx`
+  (misma mecanica que los planos de ITS/Zoonosis/Materno):
+
+  | Archivo | Contenido |
+  |---------|-----------|
+  | `uploads/Ubicacion_Filas_NoTransmisibles.xlsx` | Espejo del reporte: cada celda de datos trae el NUMERO DE DESTINO (ej: `C12` = 4). Trae 4944 numeros unicos 4..4947 secuenciales. |
+  | `Notransmisibles_Plano.xlsx` | Destino: fila 7 (`A7:GHG7`) = numeracion de columnas 1..4947; fila 8 (`A8:GHG8`) = datos. El numero 4 => columna D => el dato de `C12` se escribe en `D8`. |
+
+- Identificacion del registro (fila 8): `B8` = Codigo RENAES, `C8` = Dpto/Red/Provincia/Distrito/EE.SS
+  (o "TODOS LOS ESTABLECIMIENTOS DE LA LISTA"). La columna `A8` (Ubigeo) se deja vacia porque el
+  catalogo `ZSPERENE` no trae ubigeo (mismo criterio que el plano de Zoonosis).
+- Periodo: la celda `B3` de la cabecera del plano se actualiza con el periodo exportado
+  (ej: `2025 - OCTUBRE`, `2025 - ACUMULADO`, `TODOS LOS PERIODOS`).
+- Excepciones documentadas: el espejo numera 2 filas que el motor 2026 ya no produce, cuyas
+  columnas del plano quedan vacias (26 columnas): fila 99 "PACIENTE CONTROLADO" (numeros
+  641-653) y fila 107 "ATENCION INTEGRAL ESPECIALIZADO" (numeros 745-757). Las 4918 celdas
+  de datos que produce el motor cubren el 100% de los numeros restantes (verificado
+  automaticamente).
+- Rendimiento: el mapeo espejo/plano se cachea en `cache/plano/` (JSON invalidado por
+  mtime/size); si la carpeta no es escribible, el sistema sigue leyendo los xlsx directamente.
+- Nombre del archivo: `Notransmisibles_Plano_{anio}_{mes}_{renaes}.xlsx`.
+
 ## Diagnostico de problemas
 
 | Problema | Causa probable | Solucion |
@@ -181,3 +217,6 @@ otras 20 funcionan normalmente.
 | DM03/DM04/DM06/DM07 en 0 | `MAESTRO_HIS_ESTABLECIMIENTO` vacio | Importar el maestro HIS desde **Importar Datos** |
 | Seccion en 0 inesperada | Condicion que difiere del archivo 03 | Activar "Ver SQL (auditoria)", comparar y ajustar `ntSecciones()` |
 | Exportar Excel: "Plantilla oficial no encontrada" | Falta `uploads/Reporte_Actividades_NoTransmisiblesN.xlsx` | Copiar la plantilla 2026 a `uploads/` |
+| Exportar Plano: "Plantilla del plano no encontrada" | Falta `uploads/Notransmisibles_Plano.xlsx` | Copiar la plantilla del plano a `uploads/` |
+| Exportar Plano: "Archivo de ubicacion no encontrado" | Falta `uploads/Ubicacion_Filas_NoTransmisibles.xlsx` | Copiar el espejo de ubicacion a `uploads/` |
+| Exportar Plano: columnas 641-653 y 745-757 vacias | Filas 99/107 del espejo sin dato en el motor 2026 | Esperado (excepcion documentada); el resto del plano se llena completo |

@@ -15,6 +15,11 @@
  *   (Opcional) [Exportar Excel] -> llena la plantilla oficial
  *   "uploads/Reporte_Actividades_NoTransmisiblesN.xlsx" con los mismos datos
  *   (nontransmisibles_export.php).
+ *   (Opcional) [Exportar Plano] -> deposita los mismos datos en el plano
+ *   consolidado horizontal "uploads/Notransmisibles_Plano.xlsx" (fila 7 =
+ *   numeracion A7:GHG7 de columnas 1..4947, fila 8 = datos) siguiendo los
+ *   numeros de destino de "uploads/Ubicacion_Filas_NoTransmisibles.xlsx"
+ *   (nontransmisibles_export_plano.php).
  *
  * El motor de reglas (includes/nontransmisibles_data.php) adapta los 24
  * procedimientos usp_TRAMA_BASE_NT_2025_* del archivo "03 Creacion de
@@ -196,6 +201,11 @@ include 'includes/header.php';
     <div class="card-header bg-white d-flex justify-content-between align-items-center flex-wrap gap-2">
         <h6 class="mb-0 fw-bold"><i class="fas fa-filter me-2 text-primary"></i>Filtros del Reporte</h6>
         <div class="d-flex gap-2">
+            <a href="nontransmisibles_export_plano.php?<?= http_build_query(array_filter([
+                'anio' => $fAnio, 'mes' => $fMes, 'establecimiento' => $fEstablecimiento,
+            ])) ?>" class="btn btn-sm btn-warning" title="Exportar al plano consolidado Notransmisibles_Plano.xlsx (numeros de destino de Ubicacion_Filas_NoTransmisibles.xlsx; fila 7 = numeracion 1..4947, fila 8 = datos)">
+                <i class="fas fa-table me-1"></i> Exportar Plano
+            </a>
             <a href="nontransmisibles_export.php?<?= http_build_query(array_filter([
                 'anio' => $fAnio, 'mes' => $fMes, 'establecimiento' => $fEstablecimiento,
                 'generar' => $ejecutar ? 1 : null,
@@ -440,7 +450,7 @@ foreach ($secciones as $sec):
     <code>usp_TRAMA_BASE_NT_2025_*</code> (archivos 01/02/03) sobre la tabla consolidada MySQL y el
     layout de la plantilla <code>Reporte_Actividades_NoTransmisiblesN.xlsx</code> (4 grupos: Valoraci&oacute;n,
     Hipertensi&oacute;n Arterial, Diabetes Mellitus y Telesalud). Ya no necesita SQL Server ni refrescar la
-    conexi&oacute;n ODBC: <strong>1 click y (opcional) Exportar Excel</strong>.<br>
+    conexi&oacute;n ODBC: <strong>1 click y (opcional) Exportar Excel / Exportar Plano</strong>.<br>
     <strong>Desarrollado por JKRV</strong>
 </div>
 
