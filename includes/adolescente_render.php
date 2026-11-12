@@ -10,9 +10,10 @@
  *
  * adoCeldasExport() construye el mapa [celda => valor] para llenar la
  * plantilla oficial con el mismo layout que el flujo ODBC original:
- *   Encabezado: C6 = PERIODO ("JUNIO 2026" o el anio), H6 = MICRO RED
- *   ("PERENE"), H7 = ESTABLECIMIENTO (nombre o "TODOS"). La RED y el
- *   RENIPRESS ya vienen fijos en la plantilla (C5 / H5).
+ *   Encabezado: C6 = solo el MES ("JUNIO"), D6 = el ANIO ("2026"),
+ *   H5 = CODIGO del establecimiento (Codigo_Unico RENAES, vacio si
+ *   "-- Todos --"), H6 = MICRO RED ("PERENE"), H7 = ESTABLECIMIENTO
+ *   (nombre o "TODOS"). La RED (C5:D5) ya viene fija en la plantilla.
  *   Datos: por cada fila de reporte, celdas segun el layout de su seccion
  *   (el campo 'fila' de cada fila + el mapa 'cols' de la seccion).
  */
@@ -218,20 +219,25 @@ function adoPanelCondiciones(array $sec): void {
  * @param string $anioTxt  Año del filtro
  * @param string $mesTxt   Mes del filtro ('' = todos)
  * @param string $estTxt   Nombre del establecimiento (H7) o ''
+ * @param string $estCod   Codigo del establecimiento (H5, Codigo_Unico
+ *                         RENAES) o '' cuando el filtro es "-- Todos --"
  * @return array<string,int|string|float> Mapa [refCelda => valor]
  */
-function adoCeldasExport(array $reporte, string $anioTxt, string $mesTxt, string $estTxt): array {
+function adoCeldasExport(array $reporte, string $anioTxt, string $mesTxt, string $estTxt, string $estCod = ''): array {
     $cells = [];
 
     // ---- Cabecera de la plantilla ----
-    // A6:B6 = "PERIODO:" -> C6 = periodo ("JUNIO 2026" / "2026" / "TODOS")
-    $periodo = 'TODOS LOS PERIODOS';
-    if ($anioTxt !== '' && $mesTxt !== '') {
-        $periodo = strtoupper(getNombreMes((int)$mesTxt)) . ' ' . $anioTxt;
-    } elseif ($anioTxt !== '') {
-        $periodo = (string)$anioTxt;
+    // A6:B6 = "PERIODO:" -> C6 = solo el MES ("JUNIO") y D6 = el ANIO ("2026")
+    // (antes C6 llevaba el periodo completo "JUNIO 2026": se separa en dos
+    // celdas, mes y año, como pide el formato oficial del reporte)
+    $cells['C6'] = $mesTxt !== '' ? strtoupper(getNombreMes((int)$mesTxt)) : '';
+    $cells['D6'] = $anioTxt !== '' ? (string)$anioTxt : '';
+    // F5 = "CODIGO RENIPRESS:" -> H5 = codigo del establecimiento
+    // (Codigo_Unico RENAES; se omite cuando el filtro es "-- Todos --",
+    // porque no existe un unico codigo para todos los EE.SS)
+    if ($estCod !== '') {
+        $cells['H5'] = $estCod;
     }
-    $cells['C6'] = $periodo;
     // F6 = "MICRO RED:" -> H6 (combinada H6:I6)
     $cells['H6'] = 'PERENE';
     // F7 = "EE.SS:" -> H7 (combinada H7:I7)
