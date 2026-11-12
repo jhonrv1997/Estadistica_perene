@@ -4,6 +4,10 @@
 
 Reemplaza el flujo manual (SQL Server + 3 archivos .txt + Excel con conexión ODBC) por una solución web **data-driven**, igual que ESNI, Cancer, Materno, Zoonosis, No Transmisibles e ITS/VIH.
 
+> **v1.1 — corrección del error fatal "No se pudo generar el reporte ADOLESCENTE"**
+> 1. **Bug corregido:** un closure de `adoSecciones()` (sección 03 Visita Domiciliaria) usaba variables externas sin `use (...)` → `TypeError` fatal en TODA generación, con cualquier filtro.
+> 2. **Límites del hosting (512M / 60s):** con filtros amplios ("Todos") la consulta única agotaba memoria/tiempo. Ahora el módulo genera **por trozos** (asistente con barra de progreso) y el resultado es idéntico al de la consulta única (verificado con pruebas automatizadas de equivalencia). Motor `adolescente_data.php` **v2.0.0-trozos**. Detalle en la sección [Generación por trozos](#generación-por-trozos-v11-hosting-512m--60s).
+
 ## Flujo anterior (4 pasos manuales)
 
 1. SQL Server: ejecutar `01 Creacion tablas iniciales` (DimAdolescente2020_*)
@@ -113,14 +117,14 @@ Los números de fila corresponden a la hoja `Plantilla` del Excel oficial:
    - `reporte_adolescente.php`, `adolescente_export.php`, `install_adolescente.php`
    - `includes/adolescente_data.php`, `includes/adolescente_render.php`
    - `uploads/Reporte_Actividades_Adolescentes.xlsx` (plantilla oficial; solo la necesita el export)
-2. **Índices (una sola vez):** abrir `install_adolescente.php` como administrador y esperar el resultado. Crea `idx_ado_anio`, `idx_ado_codigo_item`, `idx_ado_codigo_unico`, `idx_ado_id_ups` y `idx_ado_anio_mesint` (si existe `Mes_Int`). Tras ver el resultado, **eliminar `install_adolescente.php`**.
+2. **Índices (una sola vez):** abrir `install_adolescente.php` como administrador y esperar el resultado. Crea `idx_ado_anio`, `idx_ado_codigo_item`, `idx_ado_codigo_unico`, `idx_ado_id_ups`, `idx_ado_anio_mesint` (si existe `Mes_Int`) y la tabla `ADOLESCENTE_RPT_CACHE` del asistente por trozos (esta tabla también se crea sola al generar). Tras ver el resultado, **eliminar `install_adolescente.php`**.
 3. (Opcional) **Verificar:** Reportes Operacionales → Adolescente → Generar Reporte con un mes acotado.
 
 ## Uso
 
 1. Entrar a IntelHIS → **Reportes Operacionales** → tarjeta **Adolescente** (destacada).
 2. Seleccionar Año / Mes / Establecimiento (opcional: grupo del reporte, mostrar filas en 0, modo auditoría SQL).
-3. Pulsar **Generar Reporte** → los 27 bloques se calculan en ~1-3 s con índices.
+3. Pulsar **Generar Reporte** → los 27 bloques se calculan en ~1-3 s con índices. Si el rango es amplio (varios meses/EE.SS), arranca solo el **asistente por partes** con barra de progreso (ver la sección siguiente); al terminar muestra el mismo reporte, con un distintivo "N pasos".
 4. Pulsar **Exportar Excel** → descarga `Reporte_Actividades_Adolescentes_<año>[_<mes>][_<renaes>].xlsx` con el diseño oficial (cabecera C6=PERIODO, H6=MICRO RED, H7=EE.SS; la RED y el RENIPRESS ya vienen fijos en la plantilla).
 
 ## Mantenimiento (auditoría contra el archivo 03)
@@ -147,3 +151,35 @@ Los números de fila corresponden a la hoja `Plantilla` del Excel oficial:
 - Sin índices la consulta recorre toda la tabla (minutos + HTTP 500 en hostings compartidos). Con `install_adolescente.php` pasa a segundos.
 - La consulta trae solo las filas de los ~150 códigos de interés + las filas de los UPS 302304/301903 (una sola consulta unbuffered) y todo el matching se resuelve en PHP con índices por cita/código/ficha/UPS.
 - Si el reporte excede 2,000,000 de filas devuelve un error pidiendo acotar filtros (evita HTTP 500).
+
+## Generación por trozos (v1.1: hosting 512M / 60s)
+
+El hosting gratuito (InfinityFree) fija `memory_limit=512M` y `max_execution_time=60s` por petición. Un rango amplio (p. ej. "todos los años, todos los EE.SS") puede implicar cientos de miles de filas y la consulta única muere con error fatal. El módulo v1.1 lo resuelve así:
+
+| Rango elegido | Estrategia |
+|---|---|
+| Año + Mes (con o sin EE.SS), o Año + un EE.SS | **Consulta única directa** (volumen pequeño; como siempre) |
+| Cualquier rango más amplio | **Asistente por trozos**: un mes por petición (subdividido por EE.SS si el mes supera ~400k filas), con barra de progreso |
+
+- **Exactitud garantizada:** la suma de los trozos es idéntica a la consulta única. Todas las condiciones que cruzan filas (`citaTiene`/`citaSin` de los SP: #EDA_COMP, #PAI, #EVALUACION, PSA/SSI/PSI…) se resuelven dentro de una misma cita, y una cita vive completa en un único (Año, Mes, EE.SS), así que ningún trozo parte una cita. Verificado con pruebas automatizadas: partición por (año, mes), por cita y por HTTP end-to-end — casos, filas, grupos y celdas del Excel idénticos.
+- **Casos borde cubiertos:** filas con `Anio` NULL o vacío, `Mes` NULL/0/13 (trozos de complemento); la partición es exacta y sin solapes.
+- **Buffer en BD:** los parciales se acumulan como JSON en `ADOLESCENTE_RPT_CACHE` (token por usuario; limpieza automática > 24 h).
+- **Auto-reparación:** si un paso agota memoria/tiempo, el servidor lo subdivide por establecimiento y el asistente reintenta; fallos de red se reintentan solos.
+- **Reutilización:** una generación idéntica < 12 h se reusa (el segundo clic es instantáneo).
+- **Exportar Excel:** con token usa el resultado ya calculado; sin token solo acepta rangos angostos (nunca lanza una consulta fatal; muestra guía si el rango es amplio).
+- **Sin JavaScript:** la página no ejecuta la consulta amplia; muestra la advertencia y cómo acotar filtros.
+
+### Endpoints AJAX del asistente (en `reporte_adolescente.php`)
+
+| `?ajax=` | Rol |
+|---|---|
+| `plan` | decide modo `directo` / `trozos` / `cache` y guarda el plan en `ADOLESCENTE_RPT_CACHE` |
+| `trozo` | ejecuta el trozo `i` (exige orden estricto; reintentos idempotentes) y lo suma al acumulador |
+| `dividir` | subdivide el trozo en curso por EE.SS (auto-reparación) |
+| `resultado` | devuelve la URL con token para renderizar el reporte terminado |
+
+### Pruebas automatizadas incluidas (desarrollo)
+
+- `test_ado_trozos.php` — equivalencia merge de N trozos == consulta única (particiones por año/mes y por cita) + render y celdas del export desde el JSON del buffer.
+- `test_ado_wizard_sim.php` — simulación del flujo completo del asistente contra un PDO falso (plan, trozos, cache, división, complementos NULL/atípicos, con y sin `Mes_Int`).
+- `test_ado_http_setup.sh/.php` + `test_ado_http_run.py` — prueba HTTP end-to-end real (servidor PHP embebido): plan → 36 trozos → resultado → página → export .xlsx → guardas anti-fatal.

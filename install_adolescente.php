@@ -22,7 +22,11 @@
  *        idx_ado_anio_mesint  (Anio, Mes_Int)   [solo si Mes_Int existe]
  *        idx_ado_codigo_unico (Codigo_Unico)
  *        idx_ado_id_ups       (Id_Ups)          [UPS 302304/301903, SP 16_2/16_3/25]
- *   3. Muestra el diagnostico del entorno (limites PHP y tamano de tabla).
+ *   3. Crea (si no existe) la tabla ADOLESCENTE_RPT_CACHE que usa el
+ *      asistente de generación por partes para rangos amplios (varios
+ *      meses/EE.SS): acumula los parciales sin agotar los limites del
+ *      hosting (512M / 60s).
+ *   4. Muestra el diagnostico del entorno (limites PHP y tamano de tabla).
  *
  * Uso: abra este archivo en el navegador como administrador (una sola vez).
  * NOTA: sobre tablas grandes ALTER TABLE puede tardar 1-3 minutos; no cierre
@@ -109,6 +113,21 @@ if ($resultado['ok']) {
     }
 }
 
+// 3b) Tabla de cache del ASISTENTE POR TROZOS (rangos amplios)
+// Los endpoints AJAX del reporte tambien la crean solos; dejarla aqui la
+// registra en la instalacion y permite verificarla.
+if ($resultado['ok']) {
+    try {
+        if (adoCacheCrearTablaSiFalta($pdo)) {
+            $resultado['pasos'][] = 'Tabla de generación por partes `' . adoTablaCache() . '` verificada/creada (asistente para rangos amplios: 512M/60s).';
+        } else {
+            $resultado['errores'][] = 'No se pudo crear la tabla ' . adoTablaCache() . ' (el asistente por partes la necesita).';
+        }
+    } catch (Throwable $e) {
+        $resultado['errores'][] = adoTablaCache() . ': ' . $e->getMessage();
+    }
+}
+
 // 4) Diagnostico del entorno
 $diag = adoDiagnosticoEntorno($pdo);
 
@@ -117,7 +136,7 @@ include 'includes/header.php';
 ?>
 <div class="page-header-section">
     <h4><i class="fas fa-user-graduate me-2 text-primary"></i>Instalador del M&oacute;dulo ADOLESCENTE</h4>
-    <p class="subtitle">Crea los &iacute;ndices de la tabla consolidada que aceleran el reporte Adolescente (ejecutar una sola vez).</p>
+    <p class="subtitle">Crea los &iacute;ndices de la tabla consolidada y la tabla de generaci&oacute;n por partes (ejecutar una sola vez).</p>
 </div>
 
 <div class="card shadow-sm mb-4">

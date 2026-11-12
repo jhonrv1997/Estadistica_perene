@@ -62,12 +62,61 @@ require_once 'includes/adolescente_data.php';
 require_once 'includes/adolescente_render.php';
 require_once 'includes/ExcelTemplateFiller.php';
 
+// ====== PROTECCION ANTI HTTP 500 (errores fatales de PHP) ======
+ob_start();
+register_shutdown_function(function () {
+    $e = error_get_last();
+    if (!$e || !in_array($e['type'], [E_ERROR, E_PARSE, E_CORE_ERROR, E_COMPILE_ERROR], true)) return;
+    while (ob_get_level() > 0) { @ob_end_clean(); }
+    if (!headers_sent()) http_response_code(200);
+    header('Content-Type: text/html; charset=utf-8');
+    $msg   = $e['message'];
+    $esMem = (stripos($msg, 'memory') !== false);
+    $esTmp = (stripos($msg, 'execution time') !== false || stripos($msg, 'time limit') !== false);
+    $causa = $esMem ? 'Se agotó la memoria (memory_limit) al calcular el reporte para el Excel.'
+            : ($esTmp ? 'Se agotó el tiempo de ejecución (max_execution_time) al calcular el reporte.'
+                      : 'Ocurrió un error fatal de PHP durante el export.');
+    echo '<!DOCTYPE html><html lang="es"><head><meta charset="utf-8"><title>Error</title></head><body style="font-family:system-ui,sans-serif">'
+       . '<h3 style="color:#c0392b">No se pudo exportar el reporte ADOLESCENTE</h3>'
+       . '<p>' . htmlspecialchars($causa) . '</p>'
+       . '<p class="small">Sugerencias: genere primero el reporte en <a href="reporte_adolescente.php">reporte_adolescente.php</a> '
+       . '(el asistente lo construye por partes) y luego pulse <em>Exportar Excel</em> desde ahí, o acote los filtros '
+       . '(un mes y/o un establecimiento).</p>'
+       . '</body></html>';
+});
+
 // ==================== FILTROS (mismos parametros que reporte_adolescente.php) ====================
 $fAnio            = trim($_GET['anio'] ?? '');
 $fMes             = trim($_GET['mes'] ?? '');
 $fEstablecimiento = trim($_GET['establecimiento'] ?? '');
+$fToken           = trim($_GET['token'] ?? '');   // token del asistente por trozos
+$reporte          = null;
 
-if ($fAnio === '') {
+// ---- Camino 1: reporte YA generado por el asistente (buffer por token) ----
+// Evita recalcular rangos amplios (que agotarian memoria/tiempo del hosting).
+if ($fToken !== '') {
+    $pdo  = getDBConnection();
+    $rowT = adoCacheLeer($pdo, $fToken);
+    if ($rowT
+        && (int)$rowT['id_usuario'] === (int)($_SESSION['usuario_id'] ?? 0)
+        && $rowT['estado'] === 'listo'
+        && $rowT['payload'] !== null && $rowT['payload'] !== '') {
+        $reporte = json_decode((string)$rowT['payload'], true) ?: null;
+        if (!is_array($reporte) || !empty($reporte['error'])) {
+            $reporte = null;
+        } else {
+            // los filtros reales del reporte cacheado mandan sobre la URL
+            $fRow = json_decode((string)$rowT['filtros'], true);
+            if (is_array($fRow)) {
+                $fAnio            = (string)($fRow['anio'] ?? $fAnio);
+                $fMes             = (string)($fRow['mes'] ?? $fMes);
+                $fEstablecimiento = (string)($fRow['establecimiento'] ?? $fEstablecimiento);
+            }
+        }
+    }
+}
+
+if ($fAnio === '' && $reporte === null) {
     $pdo = getDBConnection();
     $anios = adoGetAniosDisponibles($pdo);
     $fAnio = $anios[0] ?? date('Y');
@@ -80,7 +129,26 @@ $filtros = [
 ];
 
 // ==================== EJECUTAR REPORTE ====================
-$reporte = adoEjecutarReporte(getDBConnection(), $filtros);
+if ($reporte === null) {
+    if (!adoAmbitoDirecto($filtros)) {
+        // Rango amplio SIN token: la consulta unica agotaria los limites del
+        // hosting. Generar antes el reporte en la pagina (asistente por
+        // trozos) y exportar desde ahi, o acotar los filtros.
+        http_response_code(200);
+        echo '<!DOCTYPE html><html lang="es"><head><meta charset="utf-8"><title>Rango demasiado amplio</title></head><body style="font-family:system-ui,sans-serif">';
+        echo '<h3 style="color:#e67e22">Rango demasiado amplio para exportar de una sola vez</h3>';
+        echo '<p>El periodo seleccionado (' . htmlspecialchars($fAnio !== '' ? $fAnio : 'todos los años')
+           . ($fMes !== '' ? ' / mes ' . htmlspecialchars($fMes) : '')
+           . ($fEstablecimiento !== '' ? ' / EE.SS ' . htmlspecialchars($fEstablecimiento) : ' / todos los EE.SS')
+           . ') requiere el asistente por partes.</p>';
+        echo '<ol><li>Abra <a href="reporte_adolescente.php?' . http_build_query($filtros) . '">reporte_adolescente.php</a> y pulse <em>Generar Reporte</em>: el sistema lo construye por pasos.</li>';
+        echo '<li>Al terminar, pulse <em>Exportar Excel</em> desde esa misma p&aacute;gina (usar&aacute; el resultado ya calculado).</li></ol>';
+        echo '<p>O bien acote los filtros: seleccione un <strong>mes</strong> y/o un <strong>establecimiento</strong>.</p>';
+        echo '</body></html>';
+        exit;
+    }
+    $reporte = adoEjecutarReporte(getDBConnection(), $filtros);
+}
 if (!empty($reporte['error'])) {
     http_response_code(500);
     echo '<!DOCTYPE html><html><head><meta charset="utf-8"><title>Error</title></head><body style="font-family:sans-serif">';

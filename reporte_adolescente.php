@@ -39,6 +39,8 @@ require_once 'includes/adolescente_render.php';
 // La generacion del reporte es pesada: en hostings compartidos puede agotar el
 // memory_limit o el max_execution_time. Esos errores FATALES no se capturan con
 // try/catch; sin este handler el navegador muestra "HTTP ERROR 500".
+// Si la peticion es AJAX (asistente por trozos), se responde JSON para que el
+// asistente pueda reintentar/subdividir en lugar de romper la pagina.
 ob_start();
 register_shutdown_function(function () {
     $e = error_get_last();
@@ -47,12 +49,22 @@ register_shutdown_function(function () {
     if (!headers_sent()) {
         http_response_code(200);
     }
-    header('Content-Type: text/html; charset=utf-8');
     $msg     = $e['message'];
     $esMem   = (stripos($msg, 'memory') !== false);
     $esTiempo= (stripos($msg, 'execution time') !== false || stripos($msg, 'time limit') !== false);
     $causa   = $esMem ? 'Se agotó la memoria disponible de PHP (memory_limit) al procesar los datos del reporte.'
               : ($esTiempo ? 'Se agotó el tiempo de ejecución permitido por el hosting (max_execution_time).' : 'Ocurrió un error fatal de PHP durante la generación del reporte.');
+    if (($_GET['ajax'] ?? '') !== '') {
+        header('Content-Type: application/json; charset=utf-8');
+        echo json_encode([
+            'ok'      => false,
+            'error'   => 'fatal',
+            'causa'   => $esMem ? 'memoria' : ($esTiempo ? 'tiempo' : 'fatal'),
+            'detalle' => 'Se agotó la memoria (memory_limit) o el tiempo (max_execution_time) del servidor en este paso. ' . substr($msg, 0, 180),
+        ], JSON_UNESCAPED_UNICODE);
+        return;
+    }
+    header('Content-Type: text/html; charset=utf-8');
     $ml      = (string)ini_get('memory_limit');
     $met     = (string)ini_get('max_execution_time');
     echo '<!DOCTYPE html><html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">'
@@ -93,6 +105,153 @@ if (($_GET['ajax'] ?? '') === 'filtros') {
     exit; // respuesta JSON: no continuar con el HTML del reporte
 }
 
+/* ============================================================
+ * AJAX: ASISTENTE DE GENERACION POR TROZOS (hosting 512M / 60s)
+ * ------------------------------------------------------------
+ * Reemplaza la consulta unica (que agota memoria/tiempo con filtros
+ * amplios) por varios pasos pequenos acumulados en ADOLESCENTE_RPT_CACHE:
+ *   ajax=plan      -> modo directo / trozos / cache + plan guardado
+ *   ajax=trozo     -> ejecuta el trozo i y lo suma al acumulador
+ *   ajax=dividir   -> auto-reparacion: subdivide el trozo en curso por EE.SS
+ *   ajax=resultado -> URL con token para renderizar el reporte terminado
+ * ============================================================ */
+
+if (($_GET['ajax'] ?? '') === 'plan') {
+    header('Content-Type: application/json; charset=utf-8');
+    $fPlan = [
+        'anio'            => trim($_GET['anio'] ?? ''),
+        'mes'             => trim($_GET['mes'] ?? ''),
+        'establecimiento' => trim($_GET['establecimiento'] ?? ''),
+    ];
+    try {
+        if (adoAmbitoDirecto($fPlan)) {
+            // rango angosto (anio+mes o anio+EE.SS): la consulta unica es segura
+            echo json_encode(['ok' => true, 'modo' => 'directo']);
+            exit;
+        }
+        if (!adoCacheCrearTablaSiFalta($pdo)) {
+            echo json_encode(['ok' => false, 'error' => 'No se pudo preparar la tabla de generación ADOLESCENTE_RPT_CACHE en la base de datos.']);
+            exit;
+        }
+        if (mt_rand(0, 9) === 0) adoCacheLimpiar($pdo); // limpieza oportunista ~10%
+
+        $cacheKey = md5(json_encode($fPlan));
+        $idUsu    = (int)($_SESSION['usuario_id'] ?? 0);
+
+        // reutilizar una generacion identica terminada hace menos de 12 h
+        $rowListo = adoCacheBuscarListo($pdo, $cacheKey, $idUsu);
+        if ($rowListo) {
+            $qs = $fPlan + ['generar' => 1, 'token' => $rowListo['token']];
+            echo json_encode(['ok' => true, 'modo' => 'cache', 'token' => $rowListo['token'],
+                              'url' => 'reporte_adolescente.php?' . http_build_query($qs)]);
+            exit;
+        }
+
+        $plan = adoPlanTrozos($pdo, $fPlan);
+        if (empty($plan['trozos'])) {
+            echo json_encode(['ok' => false, 'error' => 'No hay datos en la tabla consolidada para los filtros seleccionados.']);
+            exit;
+        }
+        $token = adoCacheNuevo($pdo, $fPlan, $plan['trozos'], $idUsu, $cacheKey);
+        if ($token === null) {
+            echo json_encode(['ok' => false, 'error' => 'No se pudo crear el búfer de generación. Intente nuevamente.']);
+            exit;
+        }
+        echo json_encode([
+            'ok'             => true,
+            'modo'           => 'trozos',
+            'token'          => $token,
+            'total'          => count($plan['trozos']),
+            'filas_estimadas'=> $plan['filas_estimadas'],
+            'con_conteo'     => $plan['conConteo'],
+            'indices'        => $plan['indices'],
+            'trozos'         => $plan['trozos'],
+        ], JSON_UNESCAPED_UNICODE);
+    } catch (Throwable $e) {
+        echo json_encode(['ok' => false, 'error' => 'Error al planificar la generación: ' . $e->getMessage()]);
+    }
+    exit;
+}
+
+if (($_GET['ajax'] ?? '') === 'trozo') {
+    header('Content-Type: application/json; charset=utf-8');
+    $token = trim($_GET['token'] ?? '');
+    $i     = (int)($_GET['i'] ?? -1);
+    $row   = adoCacheLeer($pdo, $token);
+    if (!$row || (int)$row['id_usuario'] !== (int)($_SESSION['usuario_id'] ?? 0)) {
+        echo json_encode(['ok' => false, 'error' => 'Buffer de generación no encontrado o sesión cambiada. Vuelva a pulsar Generar Reporte.']);
+        exit;
+    }
+    $trozos = json_decode((string)$row['plan'], true);
+    if (!is_array($trozos) || $i < 0 || $i >= count($trozos)) {
+        echo json_encode(['ok' => false, 'error' => 'Trozo inválido (i=' . $i . ').']);
+        exit;
+    }
+    $hechos = (int)$row['hechos'];
+    $etq    = (string)($trozos[$i]['etiqueta'] ?? ('Trozo ' . ($i + 1)));
+    if ($i < $hechos) {
+        // reenvio/reintento de un trozo ya procesado: nada que hacer
+        echo json_encode(['ok' => true, 'ya' => true, 'hechos' => $hechos, 'total' => (int)$row['total'],
+                          'seg' => 0, 'filas' => 0, 'etiqueta' => $etq]);
+        exit;
+    }
+    if ($i > $hechos) {
+        echo json_encode(['ok' => false, 'error' => "Trozo fuera de orden: el servidor esperaba el trozo $hechos y llegó el $i. Reinicie la generación."]);
+        exit;
+    }
+    try {
+        $r = adoEjecutarReporte($pdo, adoFiltrosTrozo($trozos[$i]));
+    } catch (Throwable $e) {
+        echo json_encode(['ok' => false, 'error' => 'Error SQL en el trozo: ' . $e->getMessage(), 'etiqueta' => $etq]);
+        exit;
+    }
+    if (!empty($r['error'])) {
+        echo json_encode(['ok' => false, 'error' => $r['error'], 'etiqueta' => $etq]);
+        exit;
+    }
+    $acum  = ($row['payload'] !== null && $row['payload'] !== '') ? json_decode((string)$row['payload'], true) : null;
+    if (!is_array($acum)) $acum = null;
+    $acum  = adoMergeReporte($acum, $r);
+    $hechosN = $i + 1;
+    adoCacheGuardarAvance($pdo, $token, json_encode($acum, JSON_UNESCAPED_UNICODE), $hechosN, (int)$row['total']);
+    echo json_encode(['ok' => true, 'hechos' => $hechosN, 'total' => (int)$row['total'],
+                      'seg' => (float)$r['tiempo_ejecucion'], 'filas' => (int)$r['filas_leidas'],
+                      'etiqueta' => $etq]);
+    exit;
+}
+
+if (($_GET['ajax'] ?? '') === 'dividir') {
+    header('Content-Type: application/json; charset=utf-8');
+    $token = trim($_GET['token'] ?? '');
+    $i     = (int)($_GET['i'] ?? -1);
+    $row   = adoCacheLeer($pdo, $token);
+    if (!$row || (int)$row['id_usuario'] !== (int)($_SESSION['usuario_id'] ?? 0)) {
+        echo json_encode(['ok' => false, 'mensaje' => 'Buffer de generación no encontrado. Vuelva a generar.']);
+        exit;
+    }
+    echo json_encode(adoCacheDividirTrozo($pdo, $token, $i), JSON_UNESCAPED_UNICODE);
+    exit;
+}
+
+if (($_GET['ajax'] ?? '') === 'resultado') {
+    header('Content-Type: application/json; charset=utf-8');
+    $token = trim($_GET['token'] ?? '');
+    $row   = adoCacheLeer($pdo, $token);
+    if (!$row || (int)$row['id_usuario'] !== (int)($_SESSION['usuario_id'] ?? 0)) {
+        echo json_encode(['ok' => false, 'error' => 'Buffer de generación no encontrado. Vuelva a generar.']);
+        exit;
+    }
+    if ($row['estado'] !== 'listo') {
+        echo json_encode(['ok' => false, 'error' => 'La generación aún no termina.', 'hechos' => (int)$row['hechos'], 'total' => (int)$row['total']]);
+        exit;
+    }
+    $fRow  = json_decode((string)$row['filtros'], true);
+    if (!is_array($fRow)) $fRow = [];
+    $qs    = $fRow + ['generar' => 1, 'token' => $token];
+    echo json_encode(['ok' => true, 'url' => 'reporte_adolescente.php?' . http_build_query($qs)], JSON_UNESCAPED_UNICODE);
+    exit;
+}
+
 // ==================== FILTROS ====================
 $fAnio            = trim($_GET['anio'] ?? '');
 $fMes             = trim($_GET['mes'] ?? '');
@@ -119,18 +278,46 @@ if (empty($mesesDisponibles)) $mesesDisponibles = range(1, 12);
 $ejecutar = isset($_GET['generar']);
 $reporte = null;
 $debugSQL = null;
+$fToken  = trim($_GET['token'] ?? '');   // token del asistente por trozos
+$ambitoAmplio = false;                   // true = el asistente JS debe hacerse cargo
+$infoTrozos   = null;                    // info del reporte generado por trozos
 
-if ($ejecutar) {
+if ($ejecutar && $fToken !== '') {
+    // ---- Reporte YA generado por el asistente: cargar del buffer ----
+    $rowT = adoCacheLeer($pdo, $fToken);
+    if ($rowT
+        && (int)$rowT['id_usuario'] === (int)($_SESSION['usuario_id'] ?? 0)
+        && $rowT['estado'] === 'listo'
+        && $rowT['payload'] !== null && $rowT['payload'] !== '') {
+        $reporte = json_decode((string)$rowT['payload'], true) ?: null;
+        if (is_array($reporte) && empty($reporte['error'])) {
+            $infoTrozos = ['pasos' => max(1, (int)$rowT['total'])];
+        } else {
+            $reporte = null;
+        }
+    }
+    // token caducado/invalido: cae al flujo normal (o al asistente si el ambito es amplio)
+}
+
+if ($ejecutar && $reporte === null) {
     $filtros = [
         'anio'            => $fAnio,
         'mes'             => $fMes,
         'establecimiento' => $fEstablecimiento,
     ];
-    $t0 = microtime(true);
-    $reporte = adoEjecutarReporte($pdo, $filtros);
-    $reporte['tiempo_ejecucion'] = round(microtime(true) - $t0 + ($reporte['tiempo_ejecucion'] ?? 0), 2);
-    if (!empty($reporte['error']) && !empty($reporte['sql_debug'])) {
-        $debugSQL = ['sql' => $reporte['sql_debug'] ?? '', 'params' => $reporte['params_debug'] ?? []];
+    if (!adoAmbitoDirecto($filtros)) {
+        // Rango amplio (varios meses de varios EE.SS): la consulta unica agota
+        // memory_limit/max_execution_time en el hosting. NO ejecutarla aqui:
+        // el asistente por trozos (JS) genera el reporte paso a paso; si el
+        // navegador no tiene JS se muestra la advertencia para acotar filtros.
+        $ambitoAmplio = true;
+    } else {
+        $t0 = microtime(true);
+        $reporte = adoEjecutarReporte($pdo, $filtros);
+        $reporte['tiempo_ejecucion'] = round(microtime(true) - $t0 + ($reporte['tiempo_ejecucion'] ?? 0), 2);
+        if (!empty($reporte['error']) && !empty($reporte['sql_debug'])) {
+            $debugSQL = ['sql' => $reporte['sql_debug'] ?? '', 'params' => $reporte['params_debug'] ?? []];
+        }
     }
 }
 
@@ -201,10 +388,11 @@ include 'includes/header.php';
             <a href="adolescente_export.php?<?= http_build_query(array_filter([
                 'anio' => $fAnio, 'mes' => $fMes, 'establecimiento' => $fEstablecimiento,
                 'generar' => $ejecutar ? 1 : null,
+                'token' => ($ejecutar && $fToken !== '') ? $fToken : null,
             ])) ?>" class="btn btn-sm btn-success" title="Exportar Excel con el layout de la plantilla oficial Reporte_Actividades_Adolescentes.xlsx">
                 <i class="fas fa-file-excel me-1"></i> Exportar Excel
             </a>
-            <button type="submit" form="filterForm" class="btn btn-sm btn-his"><i class="fas fa-play me-1"></i> Generar Reporte</button>
+            <button type="submit" form="filterForm" class="btn btn-sm btn-his" id="btnGenerar"><i class="fas fa-play me-1"></i> Generar Reporte</button>
         </div>
     </div>
     <div class="card-body">
@@ -317,6 +505,248 @@ include 'includes/header.php';
     </div>
 </div>
 
+<?php if ($ejecutar && $ambitoAmplio && $reporte === null): ?>
+<!-- Rango amplio sin JS: el asistente trocea la generacion; sin JS se pide acotar -->
+<div class="alert alert-warning d-flex" id="adoAutoWizard">
+    <i class="fas fa-tasks me-3 mt-1 fa-2x"></i>
+    <div>
+        <strong>Rango amplio detectado.</strong> Para no agotar la memoria ni el tiempo del servidor
+        (512&nbsp;MB / 60&nbsp;s), el reporte se genera <strong>por partes</strong> (un mes por paso,
+        subdividido por establecimiento si hiciera falta). El asistente comenzar&aacute; autom&aacute;ticamente&hellip;
+        <div class="small text-muted mt-1">
+            Si no se inicia: active JavaScript en su navegador, o acote los filtros (un <strong>mes</strong>
+            y/o un <strong>establecimiento</strong>) y vuelva a pulsar <em>Generar Reporte</em>.
+        </div>
+    </div>
+</div>
+<?php endif; ?>
+
+<!-- ==================== ASISTENTE DE GENERACION POR TROZOS ==================== -->
+<div id="adoWizard" class="card shadow-sm mb-4 d-none">
+    <div class="card-header bg-white d-flex justify-content-between align-items-center">
+        <h6 class="mb-0 fw-bold"><i class="fas fa-cogs me-2 text-primary"></i>Generando el reporte por partes</h6>
+        <span class="badge bg-secondary" id="adoWizCont">0 / 0</span>
+    </div>
+    <div class="card-body">
+        <div class="progress mb-2" style="height:22px;">
+            <div id="adoWizBar" class="progress-bar progress-bar-striped progress-bar-animated bg-success" role="progressbar" style="width:0%" aria-valuemin="0" aria-valuemax="100">0%</div>
+        </div>
+        <div class="d-flex justify-content-between flex-wrap gap-2">
+            <span id="adoWizEstado" class="small text-muted">Preparando&hellip;</span>
+            <span id="adoWizStats" class="small text-muted"></span>
+        </div>
+        <div class="small text-muted mt-2">
+            <i class="fas fa-info-circle me-1"></i>Cada paso procesa un mes (y, si hace falta, un establecimiento)
+            para respetar los l&iacute;mites del hosting (512&nbsp;MB / 60&nbsp;s por petici&oacute;n). Puede tardar unos
+            minutos: <strong>no cierre ni recargue esta pesta&ntilde;a</strong>.
+        </div>
+        <div id="adoWizError" class="alert alert-danger mt-3 mb-0 d-none">
+            <h6 class="alert-heading mb-2"><i class="fas fa-exclamation-triangle me-1"></i>No se pudo terminar la generaci&oacute;n</h6>
+            <p class="mb-2 small" id="adoWizErrMsg"></p>
+            <div class="d-flex gap-2">
+                <button type="button" class="btn btn-sm btn-primary" id="adoWizRetry"><i class="fas fa-redo me-1"></i> Reintentar</button>
+                <button type="button" class="btn btn-sm btn-outline-secondary" id="adoWizCancel">Cancelar</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+/* Asistente: Generar Reporte -> plan -> trozos secuenciales -> resultado.
+   Un rango angosto se envia directo (formulario normal). Un rango amplio se
+   trocea: cada paso es una peticion pequena que el hosting si puede servir. */
+(function () {
+    var form    = document.getElementById('filterForm');
+    var panel   = document.getElementById('adoWizard');
+    var barra   = document.getElementById('adoWizBar');
+    var cont    = document.getElementById('adoWizCont');
+    var estado  = document.getElementById('adoWizEstado');
+    var stats   = document.getElementById('adoWizStats');
+    var errBox  = document.getElementById('adoWizError');
+    var errMsg  = document.getElementById('adoWizErrMsg');
+    var btnGen  = document.getElementById('btnGenerar');
+    var btnRetry= document.getElementById('adoWizRetry');
+    var btnCanc = document.getElementById('adoWizCancel');
+    if (!form) return;
+
+    var corriendo = false;
+    var cancelado = false;
+    var plan = null;              /* {token, total, trozos} */
+    var acumSeg = 0, acumFilas = 0;
+
+    function espera(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
+
+    function getJson(url) {
+        return fetch(url, { credentials: 'same-origin' })
+            .then(function (r) { return r.text(); })
+            .then(function (t) {
+                try { return JSON.parse(t); }
+                catch (e) { throw new Error('Respuesta no válida del servidor (¿expiró la sesión?).'); }
+            });
+    }
+
+    function paramsFiltros() {
+        var u = new URLSearchParams();
+        u.set('ajax', 'plan');
+        u.set('anio', document.getElementById('selAnio').value);
+        u.set('mes', document.getElementById('selMes').value);
+        u.set('establecimiento', document.getElementById('selEst').value);
+        return u.toString();
+    }
+
+    /* Conserva las opciones de vista (filas en 0 / Ver SQL / grupo) al
+       redirigir a la URL del reporte generado por el asistente. */
+    function conOpcionesVista(url) {
+        var extra = new URLSearchParams();
+        var chkDet = document.getElementById('chkDetalle');
+        if (chkDet && !chkDet.checked) extra.set('detalle', '0');
+        var chkSql = document.getElementById('chkSQL');
+        if (chkSql && chkSql.checked) extra.set('versql', '1');
+        var selG = document.getElementById('selGrupo');
+        if (selG && selG.value) extra.set('grupo', selG.value);
+        var qs = extra.toString();
+        return url + (qs ? (url.indexOf('?') >= 0 ? '&' : '?') + qs : '');
+    }
+
+    function progreso(hechos, total) {
+        var pct = total > 0 ? Math.round(hechos * 100 / total) : 0;
+        if (barra) { barra.style.width = pct + '%'; barra.textContent = pct + '%'; }
+        if (cont) cont.textContent = hechos + ' / ' + total;
+    }
+
+    function ocultarError() {
+        if (errBox) errBox.classList.add('d-none');
+        if (barra) {
+            barra.classList.add('bg-success', 'progress-bar-animated');
+            barra.classList.remove('bg-danger');
+        }
+    }
+
+    function errorPanel(msg) {
+        if (errMsg) errMsg.textContent = msg || 'Error desconocido.';
+        if (errBox) errBox.classList.remove('d-none');
+        if (barra) {
+            barra.classList.remove('bg-success', 'progress-bar-animated');
+            barra.classList.add('bg-danger');
+        }
+        if (btnGen) btnGen.disabled = false;
+        corriendo = false;
+    }
+
+    async function correr() {
+        acumSeg = 0; acumFilas = 0;
+        var i = 0;
+        while (!cancelado) {
+            if (i >= plan.total) break;
+            progreso(i, plan.total);
+            var etiqueta = (plan.trozos && plan.trozos[i] && plan.trozos[i].etiqueta)
+                            ? plan.trozos[i].etiqueta : ('paso ' + (i + 1));
+            if (estado) estado.textContent = 'Procesando: ' + etiqueta + '…';
+
+            var res = null;
+            try {
+                res = await getJson('reporte_adolescente.php?ajax=trozo&token=' +
+                        encodeURIComponent(plan.token) + '&i=' + i);
+            } catch (e) {
+                var intentos = 0, okNet = false;
+                while (intentos < 2 && !okNet && !cancelado) {
+                    await espera(2500);
+                    try {
+                        res = await getJson('reporte_adolescente.php?ajax=trozo&token=' +
+                                encodeURIComponent(plan.token) + '&i=' + i);
+                        okNet = true;
+                    } catch (e2) { intentos++; }
+                }
+                if (!okNet) { errorPanel('No se pudo comunicar con el servidor tras varios intentos: ' + e.message); return; }
+            }
+            if (cancelado) return;
+
+            if (!res || res.ok === false) {
+                if (res && (res.causa === 'memoria' || res.causa === 'tiempo')) {
+                    /* Auto-reparacion: subdividir el paso por establecimiento */
+                    var dv = null;
+                    try {
+                        dv = await getJson('reporte_adolescente.php?ajax=dividir&token=' +
+                                encodeURIComponent(plan.token) + '&i=' + i);
+                    } catch (e2) { /* sigue al error */ }
+                    if (dv && dv.ok) {
+                        plan.total = dv.total;
+                        if (estado) estado.textContent = 'Paso subdividido por establecimiento (' + plan.total + ' pasos)…';
+                        continue;                 /* repetir el mismo i, ya subdividido */
+                    }
+                    errorPanel('El paso «' + etiqueta + '» agotó la memoria/tiempo del servidor y no se pudo subdividir. ' +
+                               ((dv && dv.mensaje) || (res.detalle || '')));
+                    return;
+                }
+                errorPanel('Paso «' + etiqueta + '»: ' + ((res && res.error) || 'error desconocido.'));
+                return;
+            }
+
+            acumSeg   += (res.seg || 0);
+            acumFilas += (res.filas || 0);
+            if (stats) stats.textContent = acumFilas.toLocaleString('es-PE') + ' filas · ' + Math.round(acumSeg) + ' s';
+            i = res.hechos;                        /* el servidor dicta el avance real */
+        }
+        if (cancelado) return;
+
+        progreso(plan.total, plan.total);
+        if (estado) estado.textContent = 'Completado. Preparando el reporte…';
+        try {
+            var fin = await getJson('reporte_adolescente.php?ajax=resultado&token=' + encodeURIComponent(plan.token));
+            if (fin && fin.ok && fin.url) { window.location.href = conOpcionesVista(fin.url); return; }
+            errorPanel((fin && fin.error) || 'No se pudo recuperar el reporte final.');
+        } catch (e) {
+            errorPanel(e.message);
+        }
+    }
+
+    async function iniciar() {
+        if (corriendo) return;
+        corriendo = true;
+        cancelado = false;
+        plan = null;
+        if (btnGen) btnGen.disabled = true;
+        try {
+            var d = await getJson('reporte_adolescente.php?' + paramsFiltros());
+            if (!d || d.ok === false) { errorPanel((d && d.error) || 'No se pudo iniciar la generación.'); return; }
+            if (d.modo === 'directo') { form.submit(); return; }        /* rango angosto: normal */
+            if (d.modo === 'cache' && d.url) { window.location.href = conOpcionesVista(d.url); return; }  /* ya generado */
+            plan = d;
+            if (panel) panel.classList.remove('d-none');
+            ocultarError();
+            progreso(0, plan.total);
+            if (estado) estado.textContent = plan.total + ' pasos en cola…';
+            if (stats) stats.textContent = '';
+            await correr();
+        } catch (e) {
+            errorPanel(e.message);
+        }
+    }
+
+    form.addEventListener('submit', function (ev) {
+        ev.preventDefault();
+        iniciar();
+    });
+    if (btnRetry) btnRetry.addEventListener('click', function () {
+        if (corriendo) return;
+        ocultarError();
+        if (btnGen) btnGen.disabled = true;
+        corriendo = true;
+        cancelado = false;
+        if (plan) { correr(); } else { iniciar(); }
+    });
+    if (btnCanc) btnCanc.addEventListener('click', function () {
+        cancelado = true;
+        corriendo = false;
+        if (panel) panel.classList.add('d-none');
+        if (btnGen) btnGen.disabled = false;
+    });
+
+    /* Auto-arranque cuando el servidor marco el rango como amplio */
+    if (document.getElementById('adoAutoWizard')) { iniciar(); }
+})();
+</script>
+
 <?php if ($ejecutar && $reporte): ?>
 
 <?php if (!empty($reporte['error'])): ?>
@@ -371,6 +801,9 @@ include 'includes/header.php';
         <strong><?= number_format($reporte['totales']['total_casos']) ?></strong> casos totales /
         <?= number_format($reporte['totales']['secciones_con_datos']) ?> de 27 bloques con datos /
         <?= number_format($reporte['filas_leidas']) ?> filas HIS le&iacute;das / <?= $reporte['tiempo_ejecucion'] ?>s<br>
+        <?php if ($infoTrozos): ?>
+        <span class="badge bg-success mb-0 me-1" title="Generado por pasos (asistente por trozos) para respetar los l&iacute;mites de memoria/tiempo del hosting."><i class="fas fa-cogs me-1"></i><?= (int)$infoTrozos['pasos'] ?> pasos</span>
+        <?php endif; ?>
         <span class="badge bg-dark mb-0" title="Versión del motor includes/adolescente_data.php en ejecución.">Motor adolescente_data.php v<?= htmlspecialchars($reporte['version'] ?? adoDataVersion()) ?></span>
     </div>
 </div>
@@ -427,6 +860,9 @@ foreach ($secciones as $sec):
     Salud Mental, Tamizajes, Actividades Preventivo Promocionales, Sesiones Educativas por grupo etareo,
     COVID-19, Seguimiento y Medicina Alternativa). Ya no necesita SQL Server ni refrescar la
     conexi&oacute;n ODBC: <strong>1 click y (opcional) Exportar Excel</strong>.<br>
+    Si el rango elegido es amplio (varios meses/establecimientos), el sistema lo genera <strong>por partes</strong>
+    con el asistente, para respetar los l&iacute;mites del hosting gratuito sin perder exactitud: la suma de las partes
+    es id&eacute;ntica al total.<br>
     <strong>Desarrollado por JKRV</strong>
 </div>
 
@@ -441,7 +877,9 @@ foreach ($secciones as $sec):
             Seleccione el periodo y pulse <strong>Generar Reporte</strong>. El informe incluye los 27 bloques del reporte
             operacional Adolescente (morbilidad, control y seguimiento, visitas, evaluaciones, inmunizaciones, planificaci&oacute;n
             familiar, cl&iacute;nica, consejer&iacute;as, salud mental, actividades preventivo promocionales, sesiones educativas,
-            COVID-19 y medicina alternativa) con los grupos etareos 12a-14a y 15a-17a. Desarrollado por JKRV
+            COVID-19 y medicina alternativa) con los grupos etareos 12a-14a y 15a-17a.
+            Rangos amplios (&quot;Todos&quot;): el sistema los genera autom&aacute;ticamente por partes para respetar los
+            l&iacute;mites del hosting. Desarrollado por JKRV
         </div>
     </div>
 </div>
