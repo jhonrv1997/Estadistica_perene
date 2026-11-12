@@ -99,7 +99,7 @@
  *          todas las secciones salvo 16_2/16_3 (sus SP no filtran sexo).
  */
 
-define('ADO_DATA_VERSION', '1.0.0');
+define('ADO_DATA_VERSION', '2.0.0-trozos');
 
 function adoDataVersion(): string {
     return ADO_DATA_VERSION;
@@ -597,7 +597,7 @@ function adoSecciones(): array {
      * 03 - usp_TRAMA_BASE_ADOLESCENTE_2020_RPT_03_VISITA
      * VISITA DOMICILIARIA (filas Excel 31-36)
      * ------------------------------------------------------------ */
-    $visita = function (string $cod, string $vlKey, int $keyBase, int $filaBase, string $grupo): array {
+    $visita = function (string $cod, string $vlKey, int $keyBase, int $filaBase, string $grupo) use ($e1217, $D): array {
         $out = [];
         $lbl = [1 => ['1° visita', ''], 2 => ['2° visita', ''], 3 => ['Con 3 a + visitas', '']];
         foreach ([1 => '1', 2 => '2'] as $k => $vl) {
@@ -1671,18 +1671,39 @@ function adoEjecutarReporte(PDO $pdo, array $filtros): array {
     $MAX_FILAS = 2000000;
 
     // ---- 1) Clausula WHERE comun (filtros del usuario) ----
+    // Se admiten dos formas de filtrar el periodo:
+    //   'anio'/'mes'          : las amigables del formulario (valor vacio = sin filtro)
+    //   'anioRaw'/'mesRaw'    : las exactas de los TROZOS del asistente (soportan
+    //                           '' y null: Anio/Mes vacios o NULL de la tabla)
+    //   'mesFuera'            : filas con Mes fuera de 1..12 o NULL (complemento)
     $where = ["1=1"];
     $params = [];
-    if (!empty($filtros['anio'])) {
+    $colMesQ = adoTieneColumnaMesInt($pdo) ? 'Mes_Int' : 'CAST(TRIM(Mes) AS UNSIGNED)';
+    if (!empty($filtros['anioNonNull'])) {
+        // solo trozos del plan: filas con Anio NO NULL (complemento exacto)
+        $where[] = "Anio IS NOT NULL";
+    } elseif (array_key_exists('anioRaw', $filtros)) {
+        if ($filtros['anioRaw'] === null) {
+            $where[] = "Anio IS NULL";
+        } else {
+            $where[] = "Anio = :anioRaw";
+            $params[':anioRaw'] = (string)$filtros['anioRaw'];
+        }
+    } elseif (!empty($filtros['anio'])) {
         $where[] = "Anio = :anio";
         $params[':anio'] = (string)$filtros['anio'];
     }
-    if (!empty($filtros['mes'])) {
-        if (adoTieneColumnaMesInt($pdo)) {
-            $where[] = "Mes_Int = :mes";
+    if (!empty($filtros['mesFuera'])) {
+        $where[] = "({$colMesQ} IS NULL OR {$colMesQ} NOT BETWEEN 1 AND 12)";
+    } elseif (array_key_exists('mesRaw', $filtros)) {
+        if ($filtros['mesRaw'] === null) {
+            $where[] = "{$colMesQ} IS NULL";
         } else {
-            $where[] = "CAST(TRIM(Mes) AS UNSIGNED) = :mes";
+            $where[] = "{$colMesQ} = :mesRaw";
+            $params[':mesRaw'] = $filtros['mesRaw'];
         }
+    } elseif (!empty($filtros['mes'])) {
+        $where[] = "{$colMesQ} = :mes";
         $params[':mes'] = intval($filtros['mes']);
     }
     $whereEst = adoWhereEstablecimientos($pdo, (string)($filtros['establecimiento'] ?? ''), $params);
@@ -1821,4 +1842,416 @@ function adoEjecutarDesdeFilas(array $filas, float $t0 = 0.0): array {
         'filas_leidas'     => count($filas),
         'tiempo_ejecucion' => round(microtime(true) - $t0, 2),
     ];
+}
+
+/* ============================================================
+ * 6) GENERACION POR TROZOS (hosting con limites: 512M / 60s)
+ * ============================================================
+ *
+ * PROBLEMA: con filtros amplios ("Todos" los anios/meses/EE.SS) la consulta
+ * unica de adoEjecutarReporte devuelve cientos de miles de filas y PHP agota
+ * memory_limit (512M) o max_execution_time (60s) en InfinityFree -> error
+ * fatal (el famoso "No se pudo generar el reporte ADOLESCENTE").
+ *
+ * SOLUCION: dividir la generacion en TROZOS pequenos (un anio-mes, o un
+ * anio-mes-EE.SS), ejecutarlos en peticiones HTTP separadas (asistente con
+ * barra de progreso) y acumular los parciales en la tabla de cache
+ * ADOLESCENTE_RPT_CACHE. La union de los trozos es EXACTAMENTE igual al
+ * resultado de la consulta unica porque:
+ *   - Todas las condiciones que cruzan filas (citaTiene / citaSin de los SP)
+ *     se resuelven DENTRO de una misma cita, y una cita vive completa en un
+ *     unico (Anio, Mes, Establecimiento).
+ *   - adoContar es puramente aditivo por fila: sumar por partes = sumar todo.
+ *
+ * Flujo (reporte_adolescente.php):
+ *   ajax=plan       -> decide modo directo/trozos y guarda el plan en cache
+ *   ajax=trozo      -> ejecuta el trozo i y lo suma al acumulador
+ *   ajax=dividir    -> auto-reparacion: subdivide un trozo que agoto limites
+ *   ajax=resultado  -> URL con token para renderizar el reporte terminado
+ */
+
+/** Umbral: filas TOTALES por (anio, mes) antes de subdividir por EE.SS. */
+define('ADO_TROZO_MAX_FILAS', 400000);
+
+/** Nombre de la tabla de cache/buffer del asistente. */
+function adoTablaCache(): string {
+    return 'ADOLESCENTE_RPT_CACHE';
+}
+
+/** Crea la tabla de cache si no existe (idempotente, sin install previo). */
+function adoCacheCrearTablaSiFalta(PDO $pdo): bool {
+    static $ok = null;
+    if ($ok !== null) return $ok;
+    try {
+        $pdo->exec("CREATE TABLE IF NOT EXISTS `" . adoTablaCache() . "` (
+            token        VARCHAR(40)  NOT NULL,
+            id_usuario   INT          NOT NULL,
+            cache_key    VARCHAR(32)  NOT NULL,
+            filtros      TEXT         NOT NULL,
+            plan         LONGTEXT     NOT NULL,
+            payload      LONGTEXT     NULL,
+            hechos       INT          NOT NULL DEFAULT 0,
+            total        INT          NOT NULL DEFAULT 0,
+            estado       VARCHAR(8)   NOT NULL DEFAULT 'curso',
+            creado       DATETIME     NOT NULL,
+            actualizado  DATETIME     NOT NULL,
+            PRIMARY KEY (token),
+            INDEX idx_ado_cache_key (cache_key),
+            INDEX idx_ado_cache_creado (creado)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+        $ok = true;
+    } catch (Throwable $e) {
+        $ok = false;
+    }
+    return $ok;
+}
+
+/** Limpieza oportunista de buffers viejos (> 24 h). */
+function adoCacheLimpiar(PDO $pdo): void {
+    try {
+        $pdo->exec("DELETE FROM `" . adoTablaCache() . "`
+                    WHERE creado < (NOW() - INTERVAL 1 DAY)");
+    } catch (Throwable $e) { /* tabla ausente: la crea plan */ }
+}
+
+/** Inserta un buffer nuevo y devuelve su token (null si fallo). */
+function adoCacheNuevo(PDO $pdo, array $filtros, array $trozos, int $idUsuario, string $cacheKey): ?string {
+    if (!adoCacheCrearTablaSiFalta($pdo)) return null;
+    try {
+        // higiene: descartar intentos abandonados del mismo usuario/filtros
+        $st = $pdo->prepare("DELETE FROM `" . adoTablaCache() . "`
+                             WHERE cache_key = :ck AND id_usuario = :idu AND estado = 'curso'");
+        $st->execute([':ck' => $cacheKey, ':idu' => $idUsuario]);
+
+        $token = bin2hex(random_bytes(16));
+        $now   = date('Y-m-d H:i:s');
+        $st = $pdo->prepare("INSERT INTO `" . adoTablaCache() . "`
+                (token, id_usuario, cache_key, filtros, plan, payload, hechos, total, estado, creado, actualizado)
+                VALUES (:token, :idu, :ck, :filtros, :plan, NULL, 0, :total, 'curso', :now, :now)");
+        $st->execute([
+            ':token'  => $token,
+            ':idu'    => $idUsuario,
+            ':ck'     => $cacheKey,
+            ':filtros'=> json_encode($filtros, JSON_UNESCAPED_UNICODE),
+            ':plan'   => json_encode($trozos, JSON_UNESCAPED_UNICODE),
+            ':total'  => count($trozos),
+            ':now'    => $now,
+        ]);
+        return $token;
+    } catch (Throwable $e) {
+        return null;
+    }
+}
+
+/** Lee un buffer por token (null si no existe / token invalido). */
+function adoCacheLeer(PDO $pdo, string $token): ?array {
+    $token = trim($token);
+    if (!preg_match('/^[0-9a-f]{32}$/', $token)) return null;
+    try {
+        $st = $pdo->prepare("SELECT * FROM `" . adoTablaCache() . "` WHERE token = :t");
+        $st->execute([':t' => $token]);
+        $row = $st->fetch(PDO::FETCH_ASSOC);
+        return $row ?: null;
+    } catch (Throwable $e) {
+        return null;
+    }
+}
+
+/** Busca una generacion IDENTICA ya terminada (< 12 h) para reutilizarla. */
+function adoCacheBuscarListo(PDO $pdo, string $cacheKey, int $idUsuario): ?array {
+    if (!adoCacheCrearTablaSiFalta($pdo)) return null;
+    try {
+        $st = $pdo->prepare("SELECT * FROM `" . adoTablaCache() . "`
+                WHERE cache_key = :ck AND id_usuario = :idu AND estado = 'listo'
+                  AND actualizado >= (NOW() - INTERVAL 12 HOUR)
+                ORDER BY actualizado DESC LIMIT 1");
+        $st->execute([':ck' => $cacheKey, ':idu' => $idUsuario]);
+        $row = $st->fetch(PDO::FETCH_ASSOC);
+        return $row ?: null;
+    } catch (Throwable $e) {
+        return null;
+    }
+}
+
+/** Persiste el acumulador y el avance (estado 'listo' al terminar). */
+function adoCacheGuardarAvance(PDO $pdo, string $token, string $payloadJson, int $hechos, int $total): bool {
+    try {
+        $st = $pdo->prepare("UPDATE `" . adoTablaCache() . "`
+                SET payload = :payload, hechos = :hechos, estado = :estado, actualizado = :now
+                WHERE token = :token");
+        $st->execute([
+            ':payload' => $payloadJson,
+            ':hechos'  => $hechos,
+            ':estado'  => ($hechos >= $total) ? 'listo' : 'curso',
+            ':now'     => date('Y-m-d H:i:s'),
+            ':token'   => $token,
+        ]);
+        return $st->rowCount() > 0;
+    } catch (Throwable $e) {
+        return false;
+    }
+}
+
+/**
+ * Reemplaza el plan por una version donde el trozo $i queda subdividido por
+ * establecimiento (auto-reparacion cuando un trozo agoto memoria/tiempo).
+ * Devuelve ['ok'=>bool, 'total'=>n, 'mensaje'=>s].
+ */
+function adoCacheDividirTrozo(PDO $pdo, string $token, int $i): array {
+    $row = adoCacheLeer($pdo, $token);
+    if (!$row) return ['ok' => false, 'mensaje' => 'Buffer de generación no encontrado (¿caducó?). Vuelva a generar.'];
+    $trozos = json_decode((string)$row['plan'], true);
+    if (!is_array($trozos) || !isset($trozos[$i])) {
+        return ['ok' => false, 'mensaje' => 'Trozo inválido.'];
+    }
+    if ((int)$row['hechos'] !== $i) {
+        return ['ok' => false, 'mensaje' => 'Solo se puede dividir el trozo en curso.'];
+    }
+    $t = $trozos[$i];
+    if (trim((string)($t['establecimiento'] ?? '')) !== '') {
+        return ['ok' => false, 'mensaje' => 'El trozo ya está acotado a un establecimiento; no se puede subdividir más. Acote los filtros (mes y/o establecimiento).'];
+    }
+    $lista = adoGetEstablecimientosZS($pdo);
+    if (empty($lista)) {
+        return ['ok' => false, 'mensaje' => 'No hay catálogo ZSPERENE para subdividir por establecimiento.'];
+    }
+    $sub = [];
+    foreach ($lista as $cod => $nom) {
+        $u = $t;
+        $u['establecimiento'] = $cod;
+        $u['etiqueta'] = ($t['etiqueta'] ?? '') . ' — ' . $nom;
+        $sub[] = $u;
+    }
+    array_splice($trozos, $i, 1, $sub);
+    try {
+        $st = $pdo->prepare("UPDATE `" . adoTablaCache() . "`
+                SET plan = :plan, total = :total, actualizado = :now
+                WHERE token = :token");
+        $st->execute([
+            ':plan'  => json_encode($trozos, JSON_UNESCAPED_UNICODE),
+            ':total' => count($trozos),
+            ':now'   => date('Y-m-d H:i:s'),
+            ':token' => $token,
+        ]);
+        return ['ok' => true, 'total' => count($trozos), 'mensaje' => 'Trozo subdividido en ' . count($sub) . ' establecimientos.'];
+    } catch (Throwable $e) {
+        return ['ok' => false, 'mensaje' => 'No se pudo actualizar el plan: ' . $e->getMessage()];
+    }
+}
+
+/**
+ * ¿El ambito cabe en UNA consulta directa (sin asistente)?
+ *   - un anio y un mes (con o sin EE.SS), o
+ *   - un anio de un solo establecimiento.
+ * En esos casos el volumen de filas es pequeno y no hace falta trocear.
+ */
+function adoAmbitoDirecto(array $filtros): bool {
+    $anio = trim((string)($filtros['anio'] ?? ''));
+    $mes  = trim((string)($filtros['mes'] ?? ''));
+    $est  = trim((string)($filtros['establecimiento'] ?? ''));
+    return ($anio !== '' && $mes !== '') || ($anio !== '' && $est !== '');
+}
+
+/**
+ * Construye el plan de trozos para un ambito amplio.
+ *
+ * Con columna Mes_Int: una sola pasada GROUP BY (Anio, Mes_Int) — indexada
+ * por idx_ado_anio_mesint, cubre TODOS los grupos existentes (incluidos
+ * Anio NULL/'', Mes NULL/0/13) => la union de trozos es exacta.
+ * Sin Mes_Int (o si falla): anios disponibles x meses 1..12 + trozos de
+ * complemento (Anio NULL, Mes fuera de 1..12).
+ *
+ * Si un (anio, mes) supera ADO_TROZO_MAX_FILAS filas TOTALES, se subdivide
+ * en un trozo por establecimiento del catalogo ZSPERENE.
+ *
+ * @return array ['trozos'=>[...], 'conConteo'=>bool, 'filas_estimadas'=>?int, 'indices'=>bool]
+ */
+function adoPlanTrozos(PDO $pdo, array $filtros): array {
+    $tabla = 'T_CONSOLIDADO_NUEVA_TRAMA_HISMINSA_DETALLADO';
+    $est   = trim((string)($filtros['establecimiento'] ?? ''));
+    $fAnio = trim((string)($filtros['anio'] ?? ''));
+
+    $out = ['trozos' => [], 'conConteo' => false, 'filas_estimadas' => null, 'indices' => true];
+
+    // Indices presentes? (SHOW INDEX es metadata pura: instantaneo)
+    try {
+        $n = 0;
+        foreach ($pdo->query("SHOW INDEX FROM {$tabla}") as $r) { $n++; }
+        $out['indices'] = ($n > 0);
+    } catch (Throwable $e) { $out['indices'] = true; }
+
+    $nombresEst = adoGetEstablecimientosZS($pdo);
+    $colMes     = adoTieneColumnaMesInt($pdo) ? 'Mes_Int' : null;
+
+    // ---- 1) Grupos (anio, mes) con conteo de filas totales ----
+    $grupos = [];
+    if ($colMes !== null) {
+        try {
+            $sql = "SELECT Anio, {$colMes} AS m, COUNT(*) AS c
+                    FROM {$tabla}
+                    GROUP BY Anio, {$colMes}";
+            foreach ($pdo->query($sql) as $r) {
+                $grupos[] = ['anio' => $r['Anio'], 'mes' => $r['m'], 'c' => (int)$r['c']];
+            }
+            $out['conConteo'] = true;
+        } catch (Throwable $e) {
+            $grupos = [];
+        }
+    }
+    if (!$out['conConteo']) {
+        // Fallback sin Mes_Int: anios del ambito x 12 meses + complementos
+        $anios = adoGetAniosDisponibles($pdo, $est);
+        if ($fAnio !== '') $anios = [$fAnio];
+        foreach ($anios as $a) {
+            for ($m = 1; $m <= 12; $m++) {
+                $grupos[] = ['anio' => $a, 'mes' => $m, 'c' => null];
+            }
+        }
+    }
+
+    // ---- 2) Trozos a partir de los grupos ----
+    $totFilas = 0;
+    $hayConteo = $out['conConteo'];
+    foreach ($grupos as $g) {
+        $anioV = $g['anio'];
+        if ($fAnio !== '' && (string)$anioV !== $fAnio) continue;   // ambito del usuario
+        if ($hayConteo) $totFilas += (int)$g['c'];
+
+        $base = ['anioRaw' => ($anioV === null) ? null : (string)$anioV];
+        if ($g['mes'] === null) {
+            $base['mesRaw'] = null;
+        } elseif (is_numeric($g['mes'])) {
+            $base['mesRaw'] = (int)$g['mes'];
+        } else {
+            $base['mesFuera'] = true;
+        }
+
+        $etiqueta = ($anioV === null ? 'SIN AÑO' : (string)$anioV)
+                  . ' — ' . adoEtiquetaMes($g['mes']);
+
+        if ($est !== '') {
+            // ambito ya acotado por el filtro de EE.SS del usuario
+            $out['trozos'][] = $base + [
+                'establecimiento' => $est,
+                'etiqueta' => $etiqueta . ' — ' . ($nombresEst[$est] ?? $est),
+            ];
+        } elseif ($g['c'] !== null && $g['c'] > ADO_TROZO_MAX_FILAS && !empty($nombresEst)) {
+            foreach ($nombresEst as $cod => $nom) {
+                $out['trozos'][] = $base + [
+                    'establecimiento' => $cod,
+                    'etiqueta' => $etiqueta . ' — ' . $nom,
+                ];
+            }
+        } else {
+            $out['trozos'][] = $base + ['establecimiento' => '', 'etiqueta' => $etiqueta];
+        }
+    }
+
+    // ---- 3) Complementos del fallback (solo cuando no hubo conteos) ----
+    // La particion debe ser EXACTA y sin solapes:
+    //   (A, mes 1..12) para cada Anio NO-NULL del ambito  |  Anio IS NULL
+    //   (cualquier mes)  |  mes fuera de 1..12 y Anio NO NULL
+    if (!$out['conConteo']) {
+        if ($fAnio === '') {
+            // TODAS las filas con Anio NULL (cualquier Mes)
+            $out['trozos'][] = ['anioRaw' => null,
+                                'establecimiento' => $est, 'etiqueta' => 'SIN AÑO (complemento)'];
+        }
+        // filas con Mes NULL / fuera de 1..12 y Anio NO NULL (las de Anio
+        // NULL ya las cubre el trozo anterior; evitar el doble conteo)
+        $comp = ['mesFuera' => true, 'establecimiento' => $est, 'etiqueta' => 'MES ATÍPICO (complemento)'];
+        if ($fAnio !== '') $comp['anioRaw'] = $fAnio;
+        else                $comp['anioNonNull'] = true;
+        $out['trozos'][] = $comp;
+    }
+
+    if ($out['conConteo']) $out['filas_estimadas'] = $totFilas;
+    return $out;
+}
+
+/** Etiqueta corta de mes para el asistente ("MARZO", "MES 0", "MES NULL"). */
+function adoEtiquetaMes($mes): string {
+    if ($mes === null) return 'MES NULL';
+    if (!is_numeric($mes)) return 'MES ' . (string)$mes;
+    $m = (int)$mes;
+    if ($m >= 1 && $m <= 12 && function_exists('getNombreMes')) {
+        $n = getNombreMes($m);
+        return $n !== '' ? $n : ('MES ' . $m);
+    }
+    return 'MES ' . $m;
+}
+
+/** Traduce un trozo del plan a los filtros de adoEjecutarReporte. */
+function adoFiltrosTrozo(array $t): array {
+    $f = ['establecimiento' => (string)($t['establecimiento'] ?? '')];
+    if (!empty($t['anioNonNull'])) {
+        $f['anioNonNull'] = true;
+    } elseif (array_key_exists('anioRaw', $t)) {
+        $f['anioRaw'] = $t['anioRaw'];
+    } elseif (!empty($t['anio'])) {
+        $f['anio'] = (string)$t['anio'];
+    }
+    if (!empty($t['mesFuera'])) {
+        $f['mesFuera'] = true;
+    } elseif (array_key_exists('mesRaw', $t)) {
+        $f['mesRaw'] = $t['mesRaw'];
+    } elseif (!empty($t['mes'])) {
+        $f['mes'] = (string)$t['mes'];
+    }
+    return $f;
+}
+
+/** Suma recursiva de mapas de valores (vals por combo / eje etareo). */
+function adoSumaVals(array &$dest, array $src): void {
+    foreach ($src as $k => $v) {
+        if (is_array($v)) {
+            if (!isset($dest[$k]) || !is_array($dest[$k])) $dest[$k] = [];
+            adoSumaVals($dest[$k], $v);
+        } else {
+            $dest[$k] = ($dest[$k] ?? 0) + $v;
+        }
+    }
+}
+
+/**
+ * Fusiona el reporte $nuevo (un trozo) dentro del acumulador $acum.
+ * La estructura de secciones/filas es fija (adoSecciones()), asi que el
+ * merge es posicional y puramente aditivo.
+ *
+ * @param array|null $acum  acumulador previo (null = primer trozo)
+ * @param array      $nuevo reporte del trozo recien ejecutado
+ */
+function adoMergeReporte(?array $acum, array $nuevo): array {
+    if ($acum === null || empty($acum['secciones'])) {
+        return $nuevo;
+    }
+    foreach ($nuevo['secciones'] as $i => $secN) {
+        if (!isset($acum['secciones'][$i]) || !is_array($acum['secciones'][$i])) {
+            $acum['secciones'][$i] = $secN;
+            continue;
+        }
+        $secA =& $acum['secciones'][$i];
+        foreach ($secN['filas'] as $j => $fN) {
+            if (!isset($secA['filas'][$j]) || !is_array($secA['filas'][$j])) {
+                $secA['filas'][$j] = $fN;
+                continue;
+            }
+            $fA =& $secA['filas'][$j];
+            if (!is_array($fA['vals'])) $fA['vals'] = [];
+            adoSumaVals($fA['vals'], is_array($fN['vals']) ? $fN['vals'] : []);
+            $fA['total'] = ($fA['total'] ?? 0) + ($fN['total'] ?? 0);
+        }
+        $secA['total'] = ($secA['total'] ?? 0) + ($secN['total'] ?? 0);
+    }
+    $acum['totales']['total_casos'] = ($acum['totales']['total_casos'] ?? 0)
+                                    + ($nuevo['totales']['total_casos'] ?? 0);
+    foreach (($nuevo['totales']['grupos'] ?? []) as $g => $v) {
+        $acum['totales']['grupos'][$g] = ($acum['totales']['grupos'][$g] ?? 0) + $v;
+    }
+    $acum['totales']['secciones_con_datos'] =
+        count(array_filter($acum['secciones'], fn($s) => ($s['total'] ?? 0) > 0));
+    $acum['filas_leidas']     = ($acum['filas_leidas'] ?? 0) + ($nuevo['filas_leidas'] ?? 0);
+    $acum['tiempo_ejecucion'] = round(($acum['tiempo_ejecucion'] ?? 0) + ($nuevo['tiempo_ejecucion'] ?? 0), 2);
+    $acum['version']          = $nuevo['version'] ?? ($acum['version'] ?? ADO_DATA_VERSION);
+    return $acum;
 }
