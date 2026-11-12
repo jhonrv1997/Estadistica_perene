@@ -611,9 +611,9 @@ function aduSecciones(): array {
         'layout' => 'FMT', 'eje' => 'sexo', 'regla' => 'filas', 'conSexo' => true,
         'filas' => [
             ['key' => 1, 'label' => 'PLAN DE ATENCION EJECUTADO',  'fila' => 29,
-             'cond' => aduY($e3059, $D, ['cod' => 'C8002'], ['vl' => 'TA'])],
+             'cond' => aduY($e3059, $D, ['cod' => '99801'], ['vl' => 'TA'])],
             ['key' => 2, 'label' => 'PLAN DE ATENCION ELABORADO', 'fila' => 30,
-             'cond' => aduY($e3059, $D, ['cod' => 'C8002'], ['vlNumEq' => 1])],
+             'cond' => aduY($e3059, $D, ['cod' => '99801'], ['vlNumEq' => 1])],
         ],
     ];
 
@@ -1269,7 +1269,7 @@ function aduCodigosInteres(): array {
     return [
         'exactos' => [
             // ---- 02: PAI ----
-            'C8002',
+            '99801',
             // ---- 03: IMC ----
             'E46X3','E46X2','E46X1','Z006','E660','E669','E6692','E6693',
             // ---- 04: PAB ----
