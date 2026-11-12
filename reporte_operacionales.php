@@ -142,14 +142,16 @@ include 'includes/header.php';
 </div>
 
 <?php if ($sub === ''): ?>
-<!-- Pagina indice: 17 tarjetas -->
+<!-- Pagina indice: 18 tarjetas -->
 <div class="row g-3">
     <?php foreach ($estrategias as $key => $est):
-        // ESNI, Cancer, Materno, Zoonosis, No Transmisibles e ITS ahora tienen su
-        // propio reporte completo data-driven (reporte_esni.php / reporte_cancer.php /
-        // reporte_materno.php / reporte_zoonosis.php / reporte_no_transmisibles.php /
-        // reporte_its.php) - reemplazan el flujo manual SQL Server + Excel ODBC.
-        $esAvanzado = in_array($key, ['esni', 'cancer', 'materno', 'zoonosis', 'no_transmisibles', 'its']);
+        // ESNI, Cancer, Materno, Zoonosis, No Transmisibles, ITS y Adolescente
+        // ahora tienen su propio reporte completo data-driven
+        // (reporte_esni.php / reporte_cancer.php / reporte_materno.php /
+        // reporte_zoonosis.php / reporte_no_transmisibles.php /
+        // reporte_its.php / reporte_adolescente.php) - reemplazan el flujo
+        // manual SQL Server + Excel ODBC.
+        $esAvanzado = in_array($key, ['esni', 'cancer', 'materno', 'zoonosis', 'no_transmisibles', 'its', 'adolescente']);
         if ($key === 'esni') {
             $href = 'reporte_esni.php';
             $desc = 'Reporte Operacional completo';
@@ -168,6 +170,9 @@ include 'includes/header.php';
         } elseif ($key === 'its') {
             $href = 'reporte_its.php';
             $desc = 'Hoja de Monitoreo Mensual ITS, VIH/SIDA y Hepatitis (16 bloques)';
+        } elseif ($key === 'adolescente') {
+            $href = 'reporte_adolescente.php';
+            $desc = 'Reporte de Actividades del Adolescente (27 bloques, 12a-14a / 15a-17a)';
         } else {
             $href = 'reporte_operacionales.php?sub=' . $key;
             $desc = 'Atenciones y atendidos por establecimiento';
@@ -187,6 +192,13 @@ include 'includes/header.php';
 <?php elseif ($sub === 'esni'):
     // Redirigir a la pagina de reporte ESNI completo (data-driven)
     header('Location: reporte_esni.php');
+    exit;
+?>
+
+<?php elseif ($sub === 'adolescente'):
+    // Redirigir al reporte completo de Adolescente (data-driven, 1 click):
+    // Reporte de Actividades del Adolescente (25 SP adaptados, 27 bloques)
+    header('Location: reporte_adolescente.php');
     exit;
 ?>
 

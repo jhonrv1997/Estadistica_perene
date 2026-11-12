@@ -30,20 +30,20 @@ El sistema soporta dos roles:
 | 04 | Control de Calidad | `control_calidad.php` | Todos | Reporte de observaciones encontradas en los datos consolidados. |
 | 05 | Reporte de Atenciones | `reporte_atenciones.php` | Todos | 4 sub-reportes: Atenciones y Atendidos, Produccion Diario, Produccion Mensual, Reporte 40A. |
 | 06 | Reportes Operacionales | `reporte_operacionales.php` | Todos | 18 sub-reportes por estrategia: Adolescente, Adulto, Adulto Mayor, Cancer, ESNI, ITS, Joven, Materno, Medicina Alternativa, Metaxenicas, Nino, No Transmisibles, Planificacion Familiar, Salud Bucal, Salud Mental, Salud Ocular, TBC, Zoonosis. |
-| 07 | **Reporte ESNI (Inmunizaciones)** | `reporte_esni.php` | Todos | Reporte Operacional completo de Inmunizaciones con 14 secciones (A-VPH), data-driven, con exportacion a Excel. Reemplaza el flujo manual SQL Server + Excel. |
-| 08 | Importar Datos | `import.php` | Solo Admin | Carga de archivos ZIP (MaestroRegistrador, MaestroPersonal, MaestroPaciente, NominalTrama). |
+| 07 | **Reporte ESNI (Inmunizaciones)** | `reporte_esni.php` | Todos | Reporte Operacional completo de Inmunizaciones con 14 secciones (A-VPH), data-driven, con exportacion a Excel. Reemplaza el flujo manual SQL Server + Excel. || 08 | Importar Datos | `import.php` | Solo Admin | Carga de archivos ZIP (MaestroRegistrador, MaestroPersonal, MaestroPaciente, NominalTrama). |
 | 09 | **Configurar ESNI** | `esni_config.php` | Solo Admin | Gestion data-driven de vacunas, dosis, grupos de edad, secciones, lineas y reglas de mapeo. Reemplaza los stored procedures T-SQL hard-codeados. |
 | 10 | **Reporte MATERNO (Salud Sexual y Reproductiva)** | `reporte_materno.php` | Todos | **NUEVO** Reporte de Actividades de la Direccion de Salud Sexual y Reproductiva con 10 secciones (I-X), data-driven, 1 click + Excel. Reemplaza el flujo manual SQL Server + Excel ODBC. |
 | 12 | **Reporte ZOONOSIS (Informe Mensual de Zoonosis)** | `reporte_zoonosis.php` | Todos | **NUEVO** Informe Mensual de Zoonosis con 15 bloques (Ponzoñosos + Rabia Urbana 1-11), data-driven, 1 click + Excel. Reemplaza el flujo manual SQL Server + Excel ODBC. |
 | 13 | **Reporte NO TRANSMISIBLES (Actividades de ENT)** | `reporte_no_transmisibles.php` | Todos | **NUEVO** Actividades de Enfermedades No Trasmisibles con 24 secciones en 4 grupos (Valoracion 5 + Hipertension Arterial 7 + Diabetes Mellitus 7 + Telesalud 5), data-driven, 1 click + Excel. Reemplaza el flujo manual SQL Server + Excel ODBC. |
 | 14 | **Reporte ITS/VIH (Hoja de Monitoreo Mensual de la ESN Prevencion y Control de ITS, VIH/SIDA y Hepatitis)** | `reporte_its.php` | Todos | **NUEVO** Reporte con 16 bloques (Poblacion General ITS, Hepatitis B/C, Tamizaje VIH, Exposicion, Violencia Sexual, PVV, Gestantes por grupo etareo y trimestre, Recien Nacidos, Poblacion Clave HSH/Trans/TS, ITS en Poblacion Clave, Brigadas MCC/BMA y Telemedicina), data-driven, 1 click + Excel. Reemplaza el flujo manual SQL Server + Excel ODBC. |
+| 15 | **Reporte ADOLESCENTE (Reporte de Actividades del Adolescente)** | `reporte_adolescente.php` | Todos | **NUEVO** Reporte de Actividades del Adolescente con 27 bloques (Morbilidad, Control y Seguimiento, Visita Domiciliaria, Evaluaciones Nutricional/Visual/Auditiva/Odonto/Postural, Inmunizaciones, Planificacion Familiar, Clinica, Consejerias, Pruebas, Salud Mental, Tamizajes, Actividades Promocionales, Sesiones Educativas 12-14/15-17, COVID-19, Seguimiento y Medicina Alternativa) con grupos etareos 12a-14a / 15a-17a, data-driven, 1 click + Excel. Reemplaza el flujo manual SQL Server + Excel ODBC. |
 | 11 | Gestion de Usuarios | `usuarios.php` | Solo Admin | CRUD completo de usuarios: crear, editar, activar/desactivar, resetear clave, eliminar. |
 
 ### Sub-paginas
 
 - **Consulta de Atenciones** (`?sub=general` | `?sub=preventivas`)
 - **Reporte de Atenciones** (`?sub=atendidos` | `?sub=diario` | `?sub=mensual` | `?sub=40a`)
-- **Reportes Operacionales** (`?sub=adolescente`, `?sub=adulto`, `?sub=adulto_mayor`, `?sub=cancer`, `?sub=esni` [redirige a `reporte_esni.php`], `?sub=its` [redirige a `reporte_its.php`], `?sub=joven`, `?sub=materno` [redirige a `reporte_materno.php`], `?sub=medicina_alternativa`, `?sub=metaxenicas`, `?sub=nino`, `?sub=no_transmisibles` [redirige a `reporte_no_transmisibles.php`], `?sub=planificacion_familiar`, `?sub=salud_bucal`, `?sub=salud_mental`, `?sub=salud_ocular`, `?sub=tbc`, `?sub=zoonosis` [redirige a `reporte_zoonosis.php`])
+- **Reportes Operacionales** (`?sub=adolescente` [redirige a `reporte_adolescente.php`], `?sub=adulto`, `?sub=adulto_mayor`, `?sub=cancer`, `?sub=esni` [redirige a `reporte_esni.php`], `?sub=its` [redirige a `reporte_its.php`], `?sub=joven`, `?sub=materno` [redirige a `reporte_materno.php`], `?sub=medicina_alternativa`, `?sub=metaxenicas`, `?sub=nino`, `?sub=no_transmisibles` [redirige a `reporte_no_transmisibles.php`], `?sub=planificacion_familiar`, `?sub=salud_bucal`, `?sub=salud_mental`, `?sub=salud_ocular`, `?sub=tbc`, `?sub=zoonosis` [redirige a `reporte_zoonosis.php`])
 
 ### Otras paginas
 
@@ -86,6 +86,9 @@ El sistema soporta dos roles:
 |-- reporte_its.php              # Pagina 14: Reporte ITS/VIH - 16 bloques data-driven [NUEVO]
 |-- its_export.php               # Exportar reporte ITS a la plantilla oficial .xlsx [NUEVO]
 |-- install_its.php              # Asistente instalacion modulo ITS (indices; eliminar despues) [NUEVO]
+|-- reporte_adolescente.php      # Pagina 15: Reporte ADOLESCENTE - 27 bloques data-driven [NUEVO]
+|-- adolescente_export.php       # Exportar reporte ADOLESCENTE a la plantilla oficial .xlsx [NUEVO]
+|-- install_adolescente.php      # Asistente instalacion modulo ADOLESCENTE (indices; eliminar despues) [NUEVO]
 |-- import.php                  # Pagina 08: Importar Datos (admin)
 |-- usuarios.php                # Pagina 11: Gestion de Usuarios (admin)
 |-- log.php                     # Log de auditoria
@@ -99,6 +102,7 @@ El sistema soporta dos roles:
 |-- INSTALL_zoonosis.md         # Documentacion detallada del modulo ZOONOSIS [NUEVO]
 |-- INSTALL_notransmisibles.md # Documentacion detallada del modulo NO TRANSMISIBLES [NUEVO]
 |-- INSTALL_its.md               # Documentacion detallada del modulo ITS/VIH [NUEVO]
+|-- INSTALL_adolescente.md       # Documentacion detallada del modulo ADOLESCENTE [NUEVO]
 |-- includes/
 |   |-- auth.php                # Autenticacion y verificacion de roles
 |   |-- functions.php           # Funciones comunes (consolidacion, importacion, etc.)
@@ -111,6 +115,8 @@ El sistema soporta dos roles:
 |   |-- nontransmisibles_render.php # Render web + mapa de celdas del export NO TRANSMISIBLES [NUEVO]
 |   |-- its_data.php            # Motor de reglas data-driven ITS/VIH (15 SP adaptados) [NUEVO]
 |   |-- its_render.php          # Render web + mapa de celdas del export ITS [NUEVO]
+|   |-- adolescente_data.php    # Motor de reglas data-driven ADOLESCENTE (25 SP adaptados) [NUEVO]
+|   |-- adolescente_render.php  # Render web + mapa de celdas del export ADOLESCENTE [NUEVO]
 |   |-- header.php              # Navbar reorganizado con dropdowns
 |   |-- footer.php              # Footer comun
 |   `-- ExcelWriter.php         # Generador de Excel
@@ -259,6 +265,41 @@ Reemplaza el flujo manual anterior (SQL Server + 3 archivos .txt + Excel con con
 
 Ver [INSTALL_its.md](INSTALL_its.md) para instrucciones detalladas de instalacion y uso.
 
+## Modulo ADOLESCENTE (v8.0)
+
+Reemplaza el flujo manual anterior (SQL Server + 3 archivos .txt + Excel con conexion ODBC) por una solucion web data-driven, igual que ESNI, Cancer, Materno, Zoonosis, No Transmisibles e ITS/VIH.
+
+**Flujo anterior (4 pasos manuales):**
+1. SQL Server: ejecutar `01 Creacion tablas iniciales` (DimAdolescente2020_*)
+2. SQL Server: ejecutar `02 Creacion tablas consolidacion` (TRAMA_BASE_ADOLESCENTE_2020_RPT_*)
+3. SQL Server: ejecutar `03 Creacion de Procedimientos` (25 SP usp_TRAMA_BASE_ADOLESCENTE_2020_RPT_*)
+4. Excel: abrir `Reporte_Actividades_Adolescentes.xlsx` y refrescar conexion ODBC
+
+**Flujo nuevo (1 click):**
+- Entrar a IntelHIS -> Reportes Operacionales -> ADOLESCENTE -> Generar Reporte
+- (Opcional) Exportar Excel (llena la plantilla oficial con el mismo layout)
+
+**Ventajas:**
+- No requiere SQL Server (usa la misma tabla consolidada MySQL que los otros modulos)
+- No requiere Excel con conexion ODBC (exporta directamente desde la web)
+- 27 bloques con el mismo layout que el Excel oficial (filas 11-337 de la hoja
+  Plantilla): Morbilidad, Control y Seguimiento (paquetes x EE.SS/II.EE),
+  Visita Domiciliaria, Evaluaciones Fisica Nutricional/Visual/Auditiva/
+  Odontologica/Fisico Postural, Inmunizaciones, Desarrollo Sexual /
+  Planificacion Familiar (con cantidades de metodos), Evaluacion Clinica,
+  Consejerias, Pruebas Rapidas, Salud Mental, Tamizajes, Actividades
+  Preventivo Promocionales (APP + comunitarias), Sesiones Educativas por
+  grupo etareo (marcadores PSA/SSI/PSI del C0009), COVID-19, Seguimiento y
+  Medicina Alternativa
+- Adaptacion fiel de los 25 procedimientos `usp_TRAMA_BASE_ADOLESCENTE_2020_RPT_*`:
+  grupos etareos 12a-14a/15a-17a (e12_14/e15_17), CASE C8002/99801 por anio,
+  #EDA_COMP (R571/E86), #PAI/#EVALUACION (pos 2/3 del plan), cantidades de
+  anticonceptivos (valor_lab), fichafam APP93..APP150 (UPS 302304) y UPS
+  301903 de medicina alternativa replicados como reglas auditables
+- Modo auditoria "Ver SQL" para comparar con el archivo 03 y ajustar en 1 solo archivo
+
+Ver [INSTALL_adolescente.md](INSTALL_adolescente.md) para instrucciones detalladas de instalacion y uso.
+
 ## Base de Datos
 
 ### Tablas principales
@@ -328,6 +369,8 @@ define('MAX_FILE_SIZE', 100 * 1024 * 1024);  // 100 MB
 7. **Auditoria:** Revisar `log.php` para auditoria de operaciones.
 
 ## Version
+
+**v8.0.0** - Modulo ADOLESCENTE data-driven: reemplaza el flujo manual SQL Server + Excel ODBC por una solucion web completa. Incluye motor de reglas en PHP con DSL auditable (27 bloques = 25 procedimientos usp_TRAMA_BASE_ADOLESCENTE_2020_RPT_*), 2 reglas de conteo (filas / total_vl con cantidades de metodos anticonceptivos), grupos etareos 12a-14a y 15a-17a, CASE C8002/99801 por anio, tablas #EDA_COMP/#PAI/#EVALUACION/#PSA/#SSI/#PSI del T-SQL replicadas con citaTiene, actividades por ficha familiar (APP93..APP150, UPS 302304) y UPS 301903 de medicina alternativa, pagina de reporte 1 click con panel de auditoria de condiciones, exportacion a la plantilla oficial (Reporte_Actividades_Adolescentes.xlsx) y asistente de indices.
 
 **v7.0.0** - Modulo ITS/VIH data-driven: reemplaza el flujo manual SQL Server + Excel ODBC por una solucion web completa. Incluye motor de reglas en PHP con DSL auditable (16 bloques = 15 procedimientos usp_TRAMA_BASE_ITS_VIH_2022_*: Poblacion General ITS, Hepatitis B/C, Tamizaje VIH, Exposicion, Violencia Sexual, PVV, Gestantes por grupo etareo y trimestre, Recien Nacidos, Poblacion Clave, ITS en Poblacion Clave, Brigadas MCC/BMA y Telemedicina), 2 reglas de conteo (count(*) filas / count distinct id_cita para ATENDIDOS/ATENCIONES de brigadas), dimensiones Etapa/Trimestre/Grupo/Brigada con los CASE del T-SQL, pagina de reporte 1 click con panel de auditoria de condiciones, exportacion a la plantilla oficial (Reporte_Actividades_ITS.xlsx) y asistente de indices.
 
