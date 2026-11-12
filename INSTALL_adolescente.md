@@ -19,6 +19,7 @@ Reemplaza el flujo manual (SQL Server + 3 archivos .txt + Excel con conexión OD
 
 - Entrar a IntelHIS → **Reportes Operacionales → Adolescente → Generar Reporte**
 - (Opcional) **Exportar Excel** → llena la plantilla oficial `uploads/Reporte_Actividades_Adolescentes.xlsx` con los mismos datos y layout.
+- (Opcional) **Exportar Plano** → deposita los mismos datos en el plano consolidado horizontal `uploads/Adolescentes_Plano.xlsx` (fila 13, `C13:PK13`), usando los numeros de destino de `Ubicacion_Filas_Adolescentes.xlsx`.
 
 ## Archivos del módulo
 
@@ -26,10 +27,14 @@ Reemplaza el flujo manual (SQL Server + 3 archivos .txt + Excel con conexión OD
 |---------|-----|
 | `reporte_adolescente.php` | Página del reporte (1 click): filtros año/mes/EE.SS + 27 bloques + panel de auditoría |
 | `adolescente_export.php` | Exporta a Excel con el layout de la plantilla oficial |
+| `adolescente_export_plano.php` | NUEVO: exportación al plano consolidado `Adolescentes_Plano.xlsx` (botón "Exportar Plano") |
+| `includes/adolescente_plano.php` | NUEVO: lógica de mapeo del plano (espejo + fila 12 del plano, con cache en disco) |
 | `install_adolescente.php` | Asistente de índices (ejecutar UNA vez como admin; eliminar después) |
 | `includes/adolescente_data.php` | Motor de reglas data-driven (25 SP adaptados + dimensiones) |
 | `includes/adolescente_render.php` | Render web + mapa de celdas del export |
 | `uploads/Reporte_Actividades_Adolescentes.xlsx` | Plantilla oficial (copiar ahí para el export) |
+| `uploads/Adolescentes_Plano.xlsx` | NUEVO: plantilla del plano consolidado (fila 12 = números 1..427 en `A12:PK12`; fila 13 = datos) |
+| `uploads/Ubicacion_Filas_Adolescentes.xlsx` | NUEVO: espejo del reporte con los números de destino de cada celda |
 | `INSTALL_adolescente.md` | Este archivo |
 
 ## Estructura del reporte (27 bloques = 25 procedimientos)
@@ -114,9 +119,10 @@ Los números de fila corresponden a la hoja `Plantilla` del Excel oficial:
 ## Instalación
 
 1. **Subir los archivos** del módulo al hosting (misma carpeta que `index.php`):
-   - `reporte_adolescente.php`, `adolescente_export.php`, `install_adolescente.php`
-   - `includes/adolescente_data.php`, `includes/adolescente_render.php`
-   - `uploads/Reporte_Actividades_Adolescentes.xlsx` (plantilla oficial; solo la necesita el export)
+   - `reporte_adolescente.php`, `adolescente_export.php`, `adolescente_export_plano.php`, `install_adolescente.php`
+   - `includes/adolescente_data.php`, `includes/adolescente_render.php`, `includes/adolescente_plano.php`
+   - `uploads/Reporte_Actividades_Adolescentes.xlsx` (plantilla oficial; solo la necesita el export Excel)
+   - `uploads/Adolescentes_Plano.xlsx` y `uploads/Ubicacion_Filas_Adolescentes.xlsx` (solo las necesita el export Plano)
 2. **Índices (una sola vez):** abrir `install_adolescente.php` como administrador y esperar el resultado. Crea `idx_ado_anio`, `idx_ado_codigo_item`, `idx_ado_codigo_unico`, `idx_ado_id_ups`, `idx_ado_anio_mesint` (si existe `Mes_Int`) y la tabla `ADOLESCENTE_RPT_CACHE` del asistente por trozos (esta tabla también se crea sola al generar). Tras ver el resultado, **eliminar `install_adolescente.php`**.
 3. (Opcional) **Verificar:** Reportes Operacionales → Adolescente → Generar Reporte con un mes acotado.
 
@@ -126,6 +132,7 @@ Los números de fila corresponden a la hoja `Plantilla` del Excel oficial:
 2. Seleccionar Año / Mes / Establecimiento (opcional: grupo del reporte, mostrar filas en 0, modo auditoría SQL).
 3. Pulsar **Generar Reporte** → los 27 bloques se calculan en ~1-3 s con índices. Si el rango es amplio (varios meses/EE.SS), arranca solo el **asistente por partes** con barra de progreso (ver la sección siguiente); al terminar muestra el mismo reporte, con un distintivo "N pasos".
 4. Pulsar **Exportar Excel** → descarga `Reporte_Actividades_Adolescentes_<año>[_<mes>][_<renaes>].xlsx` con el diseño oficial (cabecera C6=PERIODO, H6=MICRO RED, H7=EE.SS; la RED y el RENIPRESS ya vienen fijos en la plantilla).
+5. Pulsar **Exportar Plano** → descarga `Adolescentes_Plano_<año>[_<mes>][_<renaes>].xlsx` con los mismos datos en formato horizontal (ver sección siguiente).
 
 ## Mantenimiento (auditoría contra el archivo 03)
 
@@ -151,6 +158,32 @@ Los números de fila corresponden a la hoja `Plantilla` del Excel oficial:
 - Sin índices la consulta recorre toda la tabla (minutos + HTTP 500 en hostings compartidos). Con `install_adolescente.php` pasa a segundos.
 - La consulta trae solo las filas de los ~150 códigos de interés + las filas de los UPS 302304/301903 (una sola consulta unbuffered) y todo el matching se resuelve en PHP con índices por cita/código/ficha/UPS.
 - Si el reporte excede 2,000,000 de filas devuelve un error pidiendo acotar filtros (evita HTTP 500).
+
+## Exportar Plano (plano consolidado)
+
+- El botón **Exportar Plano** usa el mismo reporte ya calculado (`adoCeldasExport()`, idéntico a *Exportar Excel*) y lo deposita en el plano horizontal `Adolescentes_Plano.xlsx` (misma mecánica que los planos de Zoonosis/ITS/Materno/NoTransmisibles):
+
+  | Archivo | Contenido |
+  |---------|-----------|
+  | `uploads/Ubicacion_Filas_Adolescentes.xlsx` | Espejo del reporte: cada celda de datos trae el NUMERO DE DESTINO (ej: `C11` = 4). Trae 424 números únicos 4..427, secuenciales y sin duplicados. |
+  | `Adolescentes_Plano.xlsx` | Destino: fila 12 (`A12:PK12`) = numeración de columnas 1..427; fila 13 = datos (`C13:PK13`). El número 4 ⇒ columna D ⇒ el dato de `C11` (12a-14a de IRA Complicadas) se escribe en `D13`. |
+
+- Correspondencia espejo ⇔ motor: el espejo calza **fila por fila y columna por columna** con las coordenadas de `adoCeldasExport()` (offset 0, como NoTransmisibles/Zoonosis). Verificación automática: las 424 celdas de datos del motor (layouts STD/CTRL/CASOS, excluidas las 150 columnas *Total*) tienen su número en el espejo, **cobertura 100%**, sin colisiones ni números faltantes.
+- Identificación del registro (fila 13): `B13` = Código RENAES, `C13` = nombre del EE.SS (o "TODOS LOS ESTABLECIMIENTOS DE LA LISTA"). La columna `A13` (Ubigeo) se deja vacía porque el catálogo `ZSPERENE` no trae ubigeo (mismo criterio que los planos de Zoonosis y NoTransmisibles).
+- Periodo: la celda `B5` de la cabecera del plano ("MES:") se actualiza con el periodo exportado (ej: `2026 - OCTUBRE`, `2026 - ACUMULADO`, `TODOS LOS PERIODOS`).
+- Secciones sin columna Total en el plano: los números 1-3 son las columnas de identificación (Ubigeo/RENAES/EE.SS) y el espejo solo numera 12a-14a y 15a-17a (los *Total* de la plantilla oficial no existen en el plano). El resto del plano se llena completo.
+- Rendimiento: el mapeo espejo/plano se cachea en `cache/plano/` (JSON invalidado por mtime/size); si la carpeta no es escribible, el sistema sigue leyendo los xlsx directamente.
+- Rango amplio: con token del asistente usa el resultado ya calculado; sin token solo acepta rangos angostos (nunca lanza una consulta fatal; muestra guía si el rango es amplio).
+- Nombre del archivo: `Adolescentes_Plano_{anio}_{mes}_{renaes}.xlsx`.
+
+### Diagnóstico de problemas del Plano
+
+| Problema | Causa probable | Solución |
+|----------|----------------|----------|
+| "Plantilla del plano no encontrada" | Falta `uploads/Adolescentes_Plano.xlsx` | Copiar la plantilla del plano a `uploads/` |
+| "Archivo de ubicacion no encontrado" | Falta `uploads/Ubicacion_Filas_Adolescentes.xlsx` | Copiar el espejo de ubicación a `uploads/` |
+| "El plano quedaria vacio" | El espejo no corresponde a la plantilla actual | Verificar que el espejo es el oficial de Adolescente 2026 |
+| "Rango demasiado amplio" | Plano sin token y filtros amplios | Generar primero el reporte (asistente) y exportar desde ahí, o acotar filtros |
 
 ## Generación por trozos (v1.1: hosting 512M / 60s)
 
