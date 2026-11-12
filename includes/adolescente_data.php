@@ -645,10 +645,10 @@ function adoSecciones(): array {
         [14, 'E785 - Hiperlipidemia No Especificada (Dislipidemia)', '--------------', ['cod' => 'E785']],
         [15, 'E65X - Adiposidad Localizada', '--------------', ['cod' => 'E65X']],
         [16, 'Z728 - Otros Problemas relacionados al Estilo de Vida', '--------------', ['cod' => 'Z728']],
-        [17, '85018 - Dosaje de Hemoglobina/85018.01', '--------------', ['cod' => '85018', 'vl' => '1']],
+        [17, '85018 - Dosaje de Hemoglobina/85018.01', '--------------', ['cod' => ['85018', '85018.01'], 'vl' => '1']],
         [18, '99199.26 - Suplementación de sulfato ferroso y ácido fólico', '--------------', ['cod' => '99199.26', 'vl' => 'TA']],
     ];
-    // Filas del CASE sin filtro I_ROWNUM_LAB (99209.04, Z006, 85018, 99199.26)
+    // Filas del CASE sin filtro I_ROWNUM_LAB (99209.04, Z006, 85018/85018.01, 99199.26)
     $sinRownum = [3, 4, 5, 8, 12, 17, 18];
     $filas04 = [];
     foreach ($evNut as [$k, $g, $ev, $c]) {
@@ -1327,7 +1327,7 @@ function adoCodigosInteres(): array {
             'C0011','99509',
             // ---- 04: evaluacion nutricional ----
             'Z000','Z019','99209.04','E660','E669','Z006','E440','E43X','E344X','E45X',
-            'E785','E65X','Z728','85018','99199.26',
+            'E785','E65X','Z728','85018','85018.01','99199.26',
             // ---- 05/06: visual / auditiva ----
             '99173','Z010','99401.16','H919','Z011',
             // ---- 07/08: odontologica / fisico postural ----
