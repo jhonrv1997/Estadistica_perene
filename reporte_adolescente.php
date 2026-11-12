@@ -17,6 +17,11 @@
  *   (Opcional) [Exportar Excel] -> llena la plantilla oficial
  *   "uploads/Reporte_Actividades_Adolescentes.xlsx" con los mismos datos
  *   (adolescente_export.php).
+ *   (Opcional) [Exportar Plano] -> deposita los mismos datos en el plano
+ *   consolidado "uploads/Adolescentes_Plano.xlsx" (adolescente_export_plano.php):
+ *   cada dato va a la columna indicada por el numero de destino de
+ *   "Ubicacion_Filas_Adolescentes.xlsx" (ej: espejo C11=4 con dato en C11 ->
+ *   plano D13; fila de datos 13, C13:PK13).
  *
  * El motor de reglas (includes/adolescente_data.php) adapta los 25
  * procedimientos usp_TRAMA_BASE_ADOLESCENTE_2020_RPT_* del archivo
@@ -385,6 +390,13 @@ include 'includes/header.php';
     <div class="card-header bg-white d-flex justify-content-between align-items-center flex-wrap gap-2">
         <h6 class="mb-0 fw-bold"><i class="fas fa-filter me-2 text-primary"></i>Filtros del Reporte</h6>
         <div class="d-flex gap-2">
+            <a href="adolescente_export_plano.php?<?= http_build_query(array_filter([
+                'anio' => $fAnio, 'mes' => $fMes, 'establecimiento' => $fEstablecimiento,
+                'generar' => $ejecutar ? 1 : null,
+                'token' => ($ejecutar && $fToken !== '') ? $fToken : null,
+            ])) ?>" class="btn btn-sm btn-warning" title="Exportar el plano consolidado (Adolescentes_Plano.xlsx): cada dato va a la columna indicada por el numero de destino de 'Ubicacion_Filas_Adolescentes.xlsx' (ej: espejo C11=4 con dato en C11 -> plano D13)">
+                <i class="fas fa-table me-1"></i> Exportar Plano
+            </a>
             <a href="adolescente_export.php?<?= http_build_query(array_filter([
                 'anio' => $fAnio, 'mes' => $fMes, 'establecimiento' => $fEstablecimiento,
                 'generar' => $ejecutar ? 1 : null,
@@ -859,7 +871,7 @@ foreach ($secciones as $sec):
     Postural, Inmunizaciones, Planificaci&oacute;n Familiar, Evaluaci&oacute;n Cl&iacute;nica, Consejer&iacute;as, Pruebas R&aacute;pidas,
     Salud Mental, Tamizajes, Actividades Preventivo Promocionales, Sesiones Educativas por grupo etareo,
     COVID-19, Seguimiento y Medicina Alternativa). Ya no necesita SQL Server ni refrescar la
-    conexi&oacute;n ODBC: <strong>1 click y (opcional) Exportar Excel</strong>.<br>
+    conexi&oacute;n ODBC: <strong>1 click y (opcional) Exportar Excel / Exportar Plano</strong>.<br>
     Si el rango elegido es amplio (varios meses/establecimientos), el sistema lo genera <strong>por partes</strong>
     con el asistente, para respetar los l&iacute;mites del hosting gratuito sin perder exactitud: la suma de las partes
     es id&eacute;ntica al total.<br>
