@@ -15,8 +15,9 @@
  *   Encabezado:
  *     A5:B5 "DIRESA/RED/M.Red/EE.SS :" y C5:D5 "RED DE SALUD CHANCHAMAYO"
  *            ya vienen fijos en la plantilla (no se tocan)
- *     F5 "CODIGO RENIPRESS:" H5 "120308ZS" (fijo de la plantilla)
- *     A6:B6 "PERIODO:"    -> C6 = periodo en texto ("JUNIO 2026" / "2026")
+ *     F5 "CODIGO RENIPRESS:" -> H5 = codigo del establecimiento
+ *            (Codigo_Unico RENAES; vacio si el filtro es "-- Todos --")
+ *     A6:B6 "PERIODO:"    -> C6 = solo el MES ("JUNIO"), D6 = el ANIO ("2026")
  *     F6 "MICRO RED:"     -> H6:I6 = "PERENE"
  *     F7 "EE.SS:"         -> H7:I7 = nombre del establecimiento o "TODOS"
  *   1.-  MORBILIDAD DEL ADOLESCENTE (filas 11-14): B=Total, C=12a-14a,
@@ -175,21 +176,29 @@ if (!is_readable($templatePath)) {
 }
 
 // ==================== MAPA DE CELDAS ====================
-// Cabecera: C6 = PERIODO (texto), H6 = MICRO RED, H7 = nombre del EE.SS
-// (o "TODOS"). La RED (C5) y el RENIPRESS (H5) ya vienen fijos en la
-// plantilla.
+// Cabecera: C6 = solo el MES, D6 = el ANIO, H5 = CODIGO del establecimiento
+// (Codigo_Unico RENAES), H6 = MICRO RED, H7 = nombre del EE.SS (o "TODOS").
+// La RED (C5:D5) ya viene fija en la plantilla.
 //
 // El <select> de reporte_adolescente.php envia el Codigo_Unico (RENAES);
-// por COMPATIBILIDAD, si llegara el NOMBRE del EE.SS se recupera el nombre
-// desde ZSPERENE para escribirlo en H7.
+// por COMPATIBILIDAD, si llegara el NOMBRE del EE.SS se recupera desde
+// ZSPERENE tanto el nombre (H7) como su codigo (H5).
 $nombreEst = 'TODOS';
+$codigoEst = '';
 if ($fEstablecimiento !== '') {
     $est = adoGetEstablecimientosZS(getDBConnection()); // [codigo => nombre]
-    $nombreEst = isset($est[$fEstablecimiento])
-        ? $est[$fEstablecimiento]                        // llego el codigo
-        : $fEstablecimiento;                             // llego el nombre
+    if (isset($est[$fEstablecimiento])) {
+        $codigoEst = $fEstablecimiento;                  // llego el codigo
+        $nombreEst = $est[$fEstablecimiento];
+    } else {
+        $nombreEst = $fEstablecimiento;                  // llego el nombre
+        $codByName = array_search($fEstablecimiento, $est, true);
+        if ($codByName !== false) {
+            $codigoEst = (string)$codByName;             // su codigo RENAES
+        }
+    }
 }
-$cells = adoCeldasExport($reporte, $fAnio, $fMes, $fEstablecimiento !== '' ? $nombreEst : '');
+$cells = adoCeldasExport($reporte, $fAnio, $fMes, $fEstablecimiento !== '' ? $nombreEst : '', $codigoEst);
 
 // ==================== GENERAR DESCARGA ====================
 $filler = new ExcelTemplateFiller($templatePath);
