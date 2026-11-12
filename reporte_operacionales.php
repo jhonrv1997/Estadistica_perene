@@ -145,13 +145,13 @@ include 'includes/header.php';
 <!-- Pagina indice: 18 tarjetas -->
 <div class="row g-3">
     <?php foreach ($estrategias as $key => $est):
-        // ESNI, Cancer, Materno, Zoonosis, No Transmisibles, ITS y Adolescente
-        // ahora tienen su propio reporte completo data-driven
+        // ESNI, Cancer, Materno, Zoonosis, No Transmisibles, ITS, Adolescente y
+        // Adulto ahora tienen su propio reporte completo data-driven
         // (reporte_esni.php / reporte_cancer.php / reporte_materno.php /
         // reporte_zoonosis.php / reporte_no_transmisibles.php /
-        // reporte_its.php / reporte_adolescente.php) - reemplazan el flujo
-        // manual SQL Server + Excel ODBC.
-        $esAvanzado = in_array($key, ['esni', 'cancer', 'materno', 'zoonosis', 'no_transmisibles', 'its', 'adolescente']);
+        // reporte_its.php / reporte_adolescente.php / reporte_adulto.php) -
+        // reemplazan el flujo manual SQL Server + Excel ODBC.
+        $esAvanzado = in_array($key, ['esni', 'cancer', 'materno', 'zoonosis', 'no_transmisibles', 'its', 'adolescente', 'adulto']);
         if ($key === 'esni') {
             $href = 'reporte_esni.php';
             $desc = 'Reporte Operacional completo';
@@ -173,6 +173,9 @@ include 'includes/header.php';
         } elseif ($key === 'adolescente') {
             $href = 'reporte_adolescente.php';
             $desc = 'Reporte de Actividades del Adolescente (27 bloques, 12a-14a / 15a-17a)';
+        } elseif ($key === 'adulto') {
+            $href = 'reporte_adulto.php';
+            $desc = 'Reporte de Actividades de la Etapa de Vida Adulto (17 bloques, 30a-59a)';
         } else {
             $href = 'reporte_operacionales.php?sub=' . $key;
             $desc = 'Atenciones y atendidos por establecimiento';
@@ -199,6 +202,14 @@ include 'includes/header.php';
     // Redirigir al reporte completo de Adolescente (data-driven, 1 click):
     // Reporte de Actividades del Adolescente (25 SP adaptados, 27 bloques)
     header('Location: reporte_adolescente.php');
+    exit;
+?>
+
+<?php elseif ($sub === 'adulto'):
+    // Redirigir al reporte completo de Adulto (data-driven, 1 click):
+    // Reporte de Actividades Mensuales de la Etapa de Vida Adulto
+    // (21 SP adaptados, 17 bloques, grupo etareo 30a-59a)
+    header('Location: reporte_adulto.php');
     exit;
 ?>
 
