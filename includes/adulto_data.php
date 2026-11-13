@@ -79,8 +79,13 @@
  *   11  usp_..._11_SSR                  filas 183-195 (13 prestaciones;
  *                                      #TERMINADA [cita con vl='TA'],
  *                                      #SUPLEMENTACION [cita con Z298 SF6/
- *                                      AF3], #PAP [cita con 88141/Z0141],
- *                                      #TEMPORAL4 [cita con U2601 o Z359])
+ *                                      AF3], #PAP [v1.2.1: cita con 88141
+ *                                      y valor_lab IS NULL], #TEMPORAL4
+ *                                      [cita con U2601 o Z359]; v1.2.1:
+ *                                      fila 193 TOMA DE PAP = Z359 + #PAP
+ *                                      y fila 194 ENTREGA DE RESULTADOS
+ *                                      PAP = Z359/Z349/Z359x/Z349x en
+ *                                      cita con 88141 valor_lab N|A)
  *   12  usp_..._12_VIH                  filas 200-206 (99402.05 vl='PV' / vl
  *                                      null|'' ; Z7172/Z7173 rownum=1; 86706
  *                                      rownum=1; Z115 vl='PRA'. NOTA fiel al
@@ -146,7 +151,7 @@
  * archivo 03): ver la nota de cada seccion en aduSecciones().
  */
 
-define('ADU_DATA_VERSION', '1.2.0-adulto');
+define('ADU_DATA_VERSION', '1.2.1-adulto');
 
 function aduDataVersion(): string {
     return ADU_DATA_VERSION;
@@ -1181,10 +1186,17 @@ function aduSecciones(): array {
             ['key' => 10, 'label' => 'PARTO', 'fila' => 192,
              'cond' => aduY($e3059, $D, $R1, ['codFEntre' => ['O80', 'O84']])],
             ['key' => 11, 'label' => 'TOMA DE PAP', 'fila' => 193,
+             // v1.2.1: #PAP = cita con cod_item 88141 y valor_lab IS NULL
+             // (toma realizada, resultado aun sin registrar)
              'cond' => aduY($e3059, $D, $R1, ['cod' => 'Z359'],
-                            ['citaTiene' => ['cod' => ['88141', 'Z0141']]])],
+                            ['citaTiene' => ['cod' => '88141', 'vl' => 'NULL']])],
             ['key' => 12, 'label' => 'ENTREGA DE RESULTADOS PAP', 'fila' => 194,
-             'cond' => aduY($e3059, $D, $R1, ['cod' => 'U2601'])],
+             // v1.2.1: diagnostico Z359/Z349/Z3591/Z3491/Z3592/Z3492/Z3593/Z3493
+             // en cita con 88141 y valor_lab IN ('N','A') (antes: solo U2601)
+             'cond' => aduY($e3059, $D, $R1,
+                            ['cod' => ['Z359', 'Z349', 'Z3591', 'Z3491',
+                                       'Z3592', 'Z3492', 'Z3593', 'Z3493']],
+                            ['citaTiene' => ['cod' => '88141', 'vl' => ['N', 'A']]])],
             ['key' => 13, 'label' => 'RESULTADO POSITIVO DE PAP (GESTANTES)', 'fila' => 195,
              'cond' => aduY($e3059, $D, $R1,
                             ['cod' => ['D060', 'D061', 'D069', 'N879', 'N870', 'N871', 'N872']],
@@ -1196,7 +1208,12 @@ function aduSecciones(): array {
         ],
         'nota' => 'Prestacion 13 (fila 195): el SP exige que la cita tenga U2601 o Z359 '
                  . '(#TEMPORAL4), una fila U2601 tipitem D, y ademas (valor_lab=\'G\' o '
-                 . 'Z359) — el EXISTS del #TEMPORAL4 del T-SQL.',
+                 . 'Z359) — el EXISTS del #TEMPORAL4 del T-SQL. '
+                 . 'v1.2.1 (correccion operativa PAP): TOMA DE PAP (fila 193) = '
+                 . 'diagnostico Z359 en cita con cod_item 88141 y valor_lab '
+                 . 'IS NULL; ENTREGA DE RESULTADOS PAP (fila 194) = diagnostico '
+                 . 'Z359/Z349/Z3591/Z3491/Z3592/Z3492/Z3593/Z3493 en cita con '
+                 . '88141 y valor_lab IN (\'N\',\'A\') (antes U2601).',
     ];
 
     /* ------------------------------------------------------------
@@ -1427,9 +1444,10 @@ function aduCodigosInteres(): array {
             '96150.01','96150.02','96150.03','96150.04',
             // ---- 10: TBC ----
             'U200','U2142',
-            // ---- 11: SSR ----
-            'Z7172','Z7173','Z359','Z3591','Z3491','Z3592','Z3492','Z3593','Z3493',
-            'Z298','U2601','88141','Z0141',
+            // ---- 11: SSR (v1.2.1: +Z349 para ENTREGA DE RESULTADOS PAP;
+            //      Z0141 sale del #PAP: la toma exige 88141 valor NULL) ----
+            'Z7172','Z7173','Z359','Z349','Z3591','Z3491','Z3592','Z3492','Z3593','Z3493',
+            'Z298','U2601','88141',
             'D060','D061','D069','N879','N870','N871','N872',
             // ---- 12: ITS-VIH ----
             '99402.05','86706','Z115',
