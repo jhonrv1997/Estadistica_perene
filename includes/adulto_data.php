@@ -49,16 +49,21 @@
  *   07  usp_..._07_CANCER               filas 124-125 (99402.08 vl 1/2)
  *   08  usp_..._08_SALUD_BUCAL          filas 130-157 (7 prestaciones x
  *                                      [NO GESTANTES|GESTANTES] x [INICIAN|
- *                                      TRATADO/CONTROLADO]; gestante = cita
- *                                      con valor_lab='G'; #GESTANTES /
- *                                      #RASPAJE_GESTANTES [vl FIN/FIG] para
- *                                      el raspaje E1311; NOTA fiel al SP: la
- *                                      TABLA2 del raspaje gestante escribe
- *                                      Gestacion=0, por eso las filas
- *                                      GESTANTES del raspaje (156/157) quedan
- *                                      en 0 y sus casos se suman en las filas
- *                                      NO GESTANTES [154/155] igual que en el
- *                                      Excel original)
+ *                                      TRATADO/CONTROLADO]. v1.1.0: en
+ *                                      ASESORIA NUTRICIONAL (D1310),
+ *                                      PROFILAXIS DENTAL (D1110), CONSULTA
+ *                                      ESTOMATOLOGICA (D0140), APLICACION
+ *                                      FLUOR BARNIZ (D1206) y RASPAJE
+ *                                      DENTAL (D4355) el gestante se toma
+ *                                      del campo Descripcion_Otra_Condicion
+ *                                      de la propia fila ('GESTANTE' /
+ *                                      <>'GESTANTE'), NO del marcador
+ *                                      valor_lab='G' de la cita; EXAMEN
+ *                                      ESTOMATOLOGICO e INSTRUCCION DE
+ *                                      HIGIENE ORAL conservan el criterio
+ *                                      del SP (#GESTANTES); las filas 156/157
+ *                                      del raspaje gestante ahora cuentan
+ *                                      casos reales)
  *   09  usp_..._09_SALUD_MENTAL         filas 162-172 (fg_tipo='CX': U140
  *                                      VIF/VSX/VS/AD/TD + R456/Z720/Z721/Z722
  *                                      rownum=1; TD/EP con EXISTS #TEMPORAL1
@@ -115,6 +120,9 @@
  *   renaes          -> Codigo_Unico
  *   id_persona      -> Id_Paciente           (NULL/vacio en SP 16: sesiones
  *                      sin paciente)
+ *   otra_condicion  -> Descripcion_Otra_Condicion ('GESTANTE' cuando la
+ *                      atencion registra esa otra condicion; NULL/vacio
+ *                      en el resto) [v1.1.0: seccion 08]
  *   periodo         -> Anio                  (los filtros web usan Anio/Mes)
  *   id_ups          -> Id_Ups
  *
@@ -134,7 +142,7 @@
  * archivo 03): ver la nota de cada seccion en aduSecciones().
  */
 
-define('ADU_DATA_VERSION', '1.0.0-adulto');
+define('ADU_DATA_VERSION', '1.1.0-adulto');
 
 function aduDataVersion(): string {
     return ADU_DATA_VERSION;
@@ -149,6 +157,10 @@ function aduDataVersion(): string {
  *
  * Textos en MAYUSCULAS para replicar la colacion case-insensitive de MySQL
  * en el matching PHP (igual que adolescente_data.php / cancer_data.php).
+ *
+ * Desde v1.1.0 incluye 'otraCond' (Descripcion_Otra_Condicion) para que la
+ * seccion 08 (Atencion en Salud Bucal) clasifique GESTANTES / NO GESTANTES
+ * con dicho campo de la base de datos.
  */
 function aduFila(array $r): array {
     $cod = $r['Codigo_Item'] !== null ? strtoupper(trim((string)$r['Codigo_Item'])) : '';
@@ -157,6 +169,10 @@ function aduFila(array $r): array {
     // empiezan con digito ('99402.05', '58300'...) se usan solo como exactos.
     // (mismo criterio que adoFila/cnrFila de los modulos previos)
     $codF = ($cod !== '' && ctype_alpha($cod[0])) ? substr($cod, 0, 3) : $cod;
+    // Descripcion_Otra_Condicion ('GESTANTE', 'PUERPERA', ...): viene del
+    // maestro HIS_OTRA_CONDICION via Id_Otra_Condicion de cada fila (NULL/vacio
+    // cuando la atencion no registra otra condicion).
+    $otraCondRaw = isset($r['Descripcion_Otra_Condicion']) ? $r['Descripcion_Otra_Condicion'] : null;
     return [
         'cita'    => $r['Id_Cita'] !== null ? trim((string)$r['Id_Cita']) : '',
         'pac'     => $r['Id_Paciente'] !== null ? trim((string)$r['Id_Paciente']) : '',
@@ -174,7 +190,20 @@ function aduFila(array $r): array {
         'ups'     => isset($r['Id_Ups']) && $r['Id_Ups'] !== null ? strtoupper(trim((string)$r['Id_Ups'])) : '',
         'anio'    => $r['Anio'] !== null ? trim((string)$r['Anio']) : '',
         'mes'     => $r['Mes'] !== null ? trim((string)$r['Mes']) : '',
+        'otraCond'=> ($otraCondRaw !== null && $otraCondRaw !== '') ? strtoupper(trim((string)$otraCondRaw)) : null,
     ];
+}
+
+/**
+ * Indica si la fila HIS corresponde a una GESTANTE segun el campo
+ * Descripcion_Otra_Condicion de la tabla consolidada (Id_Otra_Condicion=1,
+ * 'GESTANTE'). Igual que mtrEsGestante() del modulo Materno: admite la
+ * variante con sufijo ('GESTANTE ...') por robustez.
+ */
+function aduEsGestante(array $f): bool {
+    if (!isset($f['otraCond']) || $f['otraCond'] === null || $f['otraCond'] === '') return false;
+    if ($f['otraCond'] === 'GESTANTE') return true;
+    return strpos($f['otraCond'], 'GESTANTE') === 0; // variantes 'GESTANTE ...'
 }
 
 /* ============================================================
@@ -201,6 +230,13 @@ function aduFila(array $r): array {
  *   'edadA'       => [30, 59] | [30, null]              tipEdad A + rango de edad
  *   'fgTipo'      => 'CX'                               fg_tipo
  *   'pacNull'     => true                               id_persona IS NULL/vacio
+ *   'otraCond'    => 'NULL' | 'GESTANTE'          Descripcion_Otra_Condicion de
+ *                                                   la PROPIA fila (v1.1.0: seccion 08
+ *                                                   salud bucal; 'GESTANTE' acepta
+ *                                                   variantes 'GESTANTE ...')
+ *   'otraCondNo'  => 'GESTANTE'                     Descripcion_Otra_Condicion <> valor
+ *                                                   (NULL/vacio/otro valor cuentan:
+ *                                                   "NO GESTANTES" de la seccion 08)
  *   'citaTiene'   => <predicado>                        EXISTS sobre la cita
  *   'citaTieneTodo' => [<pred>, ...]                    AND de EXISTS
  *   'citaSin'     => <predicado>                        NOT EXISTS sobre la cita
@@ -287,6 +323,30 @@ function aduCumple(array $f, array $cond, array $ctx): bool {
     }
     if (!empty($cond['pacNull'])) {
         if ($f['pac'] !== '') return false;   // Id_Paciente NULL o ''
+    }
+    if (isset($cond['otraCond'])) {
+        // Descripcion_Otra_Condicion de la propia fila (seccion 08 v1.1.0)
+        if ($cond['otraCond'] === 'NULL') {
+            if ($f['otraCond'] !== null && $f['otraCond'] !== '') return false;
+        } else {
+            $esperado = strtoupper(trim((string)$cond['otraCond']));
+            if ($esperado === 'GESTANTE') {
+                if (!aduEsGestante($f)) return false;    // = 'GESTANTE' (admite variantes)
+            } else {
+                if ($f['otraCond'] !== $esperado) return false;
+            }
+        }
+    }
+    if (isset($cond['otraCondNo'])) {
+        // Descripcion_Otra_Condicion <> valor: la fila NO es del tipo indicado.
+        // NULL/vacio/otro valor CUMPLEN (en SQL estricto NULL <> 'GESTANTE' es
+        // UNKNOWN, pero esas filas NO son gestantes y deben caer en NO GESTANTES).
+        $esperadoNo = strtoupper(trim((string)$cond['otraCondNo']));
+        if ($esperadoNo === 'GESTANTE') {
+            if (aduEsGestante($f)) return false;
+        } else {
+            if ($f['otraCond'] === $esperadoNo) return false;
+        }
     }
     if (isset($cond['citaTiene'])) {
         if (!aduCitaTiene($ctx, $f['cita'], $cond['citaTiene'])) return false;
@@ -424,6 +484,22 @@ function aduCondicionSQL(array $cond, int $nivel = 0): string {
                 break;
             case 'pacNull':
                 if ($v) $partes[] = "id_persona IS NULL";
+                break;
+            case 'otraCond':
+                if ($v === 'NULL') {
+                    $partes[] = "Descripcion_Otra_Condicion IS NULL";
+                } elseif (strtoupper((string)$v) === 'GESTANTE') {
+                    $partes[] = "Descripcion_Otra_Condicion LIKE 'GESTANTE%'";
+                } else {
+                    $partes[] = "Descripcion_Otra_Condicion = '$v'";
+                }
+                break;
+            case 'otraCondNo':
+                if (strtoupper((string)$v) === 'GESTANTE') {
+                    $partes[] = "(Descripcion_Otra_Condicion IS NULL OR TRIM(Descripcion_Otra_Condicion) = '' OR Descripcion_Otra_Condicion NOT LIKE 'GESTANTE%')";
+                } else {
+                    $partes[] = "(Descripcion_Otra_Condicion IS NULL OR Descripcion_Otra_Condicion <> '$v')";
+                }
                 break;
             case 'citaTiene':
                 $partes[] = "id_cita IN (SELECT id_cita FROM #TEMP WHERE " . aduCondicionSQL($v, $nivel + 1) . ")";
@@ -869,75 +945,91 @@ function aduSecciones(): array {
     /* ------------------------------------------------------------
      * 08 - usp_TRAMA_BASE_ADULTO_RPT_08_SALUD_BUCAL (130-157)
      * 7 prestaciones x (NO GESTANTES|GESTANTES) x (INICIAN|TRATADO).
-     * #GESTANTES = cita con valor_lab='G'. Raspaje (E1311): TABLA1
-     * (NO gestante AND NO FIG) + TABLA2 (mujer AND (gestante OR FIG))
-     * con '0 Gestacion' -> filas 156/157 siempre 0 (fiel al SP).
+     *
+     * v1.1.0 (correccion de reglas): en ASESORIA NUTRICIONAL (D1310),
+     * PROFILAXIS DENTAL (D1110), CONSULTA ESTOMATOLOGICA NO ESPECIALIZADA
+     * (D0140), APLICACION FLUOR BARNIZ (D1206) y RASPAJE DENTAL (D4355) la
+     * clasificacion GESTANTE / NO GESTANTE ya NO usa el marcador valor_lab
+     * 'G' de la cita (#GESTANTES / citaTiene / citaSin del SP): usa el campo
+     * Descripcion_Otra_Condicion DE LA PROPIA FILA de la tabla consolidada:
+     *   GESTANTES    -> Descripcion_Otra_Condicion = 'GESTANTE'
+     *   NO GESTANTES -> Descripcion_Otra_Condicion <> 'GESTANTE'
+     *                   (NULL/vacio/otro valor: la atencion no registra otra
+     *                    condicion y cuenta como NO GESTANTE)
+     * EXAMEN ESTOMATOLOGICO (D0120) e INSTRUCCION DE HIGIENE ORAL (D0130)
+     * conservan el criterio original del SP (#GESTANTES = cita con valor_lab
+     * 'G') porque no fueron parte de la correccion solicitada.
      * ------------------------------------------------------------ */
-    $sb = [ // [Dx, etiqueta, codigo, filaBase]
-        [1, 'EXAMEN ESTOMATOLOGICO', 'D0120', 130],
-        [2, 'INSTRUCCION DE HIGIENE ORAL', 'D0130', 134],
-        [3, 'ASESORIA NUTRICIONAL PARA EL CONTROL DE ENFERMEDADES DENTALES', 'D1310', 138],
-        [4, 'PROFILAXIS DENTAL', 'D1110', 142],
-        [5, 'CONSULTA ESTOMATOLOGICA NO ESPECIALIZADA', 'D0140', 146],
-        [6, 'APLICACION FLUOR BARNIZ', 'D1206', 150],
+    $sb = [ // [Dx, etiqueta, codigo, filaBase, gestPorOtraCond]
+        [1, 'EXAMEN ESTOMATOLOGICO', 'D0120', 130, true],
+        [2, 'INSTRUCCION DE HIGIENE ORAL', 'D1330', 134, true],
+        [3, 'ASESORIA NUTRICIONAL PARA EL CONTROL DE ENFERMEDADES DENTALES', 'D1310', 138, true],
+        [4, 'PROFILAXIS DENTAL', 'D1110', 142, true],
+        [5, 'CONSULTA ESTOMATOLOGICA NO ESPECIALIZADA', 'D0140', 146, true],
+        [6, 'APLICACION FLUOR BARNIZ', 'D1206', 150, true],
     ];
     $filas08 = [];
     $k = 0;
-    foreach ($sb as [$dx, $lbl, $cod, $fb]) {
+    foreach ($sb as [$dx, $lbl, $cod, $fb, $porOtraCond]) {
         foreach ([1 => 'INICIAN', 2 => 'TRATADO/CONTROLADO'] as $cond => $condLbl) {
-            $filas08[] = [
-                'key' => ++$k, 'label' => $lbl, 'label2' => 'NO GESTANTES', 'label3' => $condLbl,
-                'fila' => $fb + ($cond - 1),
-                'cond' => aduY($e3059, $D, ['cod' => $cod], ['vl' => (string)$cond],
-                               ['citaSin' => ['vl' => 'G']]),
-            ];
-            $filas08[] = [
-                'key' => ++$k, 'label' => $lbl, 'label2' => 'GESTANTES', 'label3' => $condLbl,
-                'fila' => $fb + 2 + ($cond - 1),
-                'cond' => aduY($e3059, $D, ['cod' => $cod], ['vl' => (string)$cond],
-                               ['sexo' => 'F'], ['citaTiene' => ['vl' => 'G']]),
-            ];
+            if ($porOtraCond) {
+                // ---- v1.1.0: GESTANTE/NO GESTANTE por Descripcion_Otra_Condicion ----
+                $filas08[] = [
+                    'key' => ++$k, 'label' => $lbl, 'label2' => 'NO GESTANTES', 'label3' => $condLbl,
+                    'fila' => $fb + ($cond - 1),
+                    'cond' => aduY($e3059, $D, ['cod' => $cod], ['vl' => (string)$cond],
+                                   ['otraCondNo' => 'GESTANTE']),
+                ];
+                $filas08[] = [
+                    'key' => ++$k, 'label' => $lbl, 'label2' => 'GESTANTES', 'label3' => $condLbl,
+                    'fila' => $fb + 2 + ($cond - 1),
+                    'cond' => aduY($e3059, $D, ['cod' => $cod], ['vl' => (string)$cond],
+                                   ['sexo' => 'F'], ['otraCond' => 'GESTANTE']),
+                ];
+            } else {
+                // ---- Criterio original del SP: #GESTANTES = cita con valor_lab='G' ----
+                $filas08[] = [
+                    'key' => ++$k, 'label' => $lbl, 'label2' => 'NO GESTANTES', 'label3' => $condLbl,
+                    'fila' => $fb + ($cond - 1),
+                    'cond' => aduY($e3059, $D, ['cod' => $cod], ['vl' => (string)$cond],
+                                   ['citaSin' => ['vl' => 'G']]),
+                ];
+                $filas08[] = [
+                    'key' => ++$k, 'label' => $lbl, 'label2' => 'GESTANTES', 'label3' => $condLbl,
+                    'fila' => $fb + 2 + ($cond - 1),
+                    'cond' => aduY($e3059, $D, ['cod' => $cod], ['vl' => (string)$cond],
+                                   ['sexo' => 'F'], ['citaTiene' => ['vl' => 'G']]),
+                ];
+            }
         }
     }
-    // Raspaje dental (E1311): TABLA1 + TABLA2 del SP (sumadas por el
-    // consolidado bajo Gestacion=0); las filas GESTANTES (156/157) no las
-    // produce el SP (TABLA2 escribe '0 Gestacion') y quedan en 0.
-    $raspajeBase = aduY($e3059, $D, ['cod' => 'E1311']);
+    // Raspaje dental (D4355) v1.1.0: misma logica de la correccion (1 y 2):
+    // GESTANTES -> Descripcion_Otra_Condicion='GESTANTE' (las filas 156/157
+    // ahora cuentan de verdad; antes quedaban en 0 porque el SP escribia la
+    // TABLA2 del raspaje gestante con Gestacion=0), NO GESTANTES ->
+    // Descripcion_Otra_Condicion<>'GESTANTE' (sin las ramas TABLA1/TABLA2
+    // ni los marcadores FIG/FIN de #RASPAJE_GESTANTES: la condicion
+    // gestante ya no depende de otras filas de la cita).
+    $raspajeBase = aduY($e3059, $D, ['cod' => 'D4355']);
     $filas08[] = [
         'key' => ++$k, 'label' => 'RASPAJE DENTAL', 'label2' => 'NO GESTANTES', 'label3' => 'INICIAN',
         'fila' => 154,
-        'ramas' => [
-            // TABLA1: (not in #GESTANTES) or (not in #RASPAJE_GESTANTES-FIG)
-            aduY($raspajeBase, ['vl' => '1'],
-                 ['cualquieraDe' => [['citaSin' => ['vl' => 'G']], ['citaSin' => ['vl' => 'FIG']]]]),
-            // TABLA2: mujer AND (in #GESTANTES or in #RASPAJE_GESTANTES-FIG)
-            aduY($raspajeBase, ['vl' => '1'], ['sexo' => 'F'],
-                 ['cualquieraDe' => [['citaTiene' => ['vl' => 'G']], ['citaTiene' => ['vl' => 'FIG']]]]),
-        ],
+        'cond' => aduY($raspajeBase, ['vl' => '1'], ['otraCondNo' => 'GESTANTE']),
     ];
     $filas08[] = [
         'key' => ++$k, 'label' => 'RASPAJE DENTAL', 'label2' => 'NO GESTANTES', 'label3' => 'TRATADO/CONTROLADO',
         'fila' => 155,
-        'ramas' => [
-            // TABLA1-C2: exists #RASPAJE_GESTANTES con valor_lab='FIN'
-            aduY($raspajeBase, ['vl' => '2'], ['citaTiene' => ['vl' => 'FIN']]),
-            // TABLA2-C2: exists #RASPAJE_GESTANTES con valor_lab='FIG'
-            aduY($raspajeBase, ['vl' => '2'], ['citaTiene' => ['vl' => 'FIG']]),
-        ],
+        'cond' => aduY($raspajeBase, ['vl' => '2'], ['otraCondNo' => 'GESTANTE']),
     ];
     $filas08[] = [
         'key' => ++$k, 'label' => 'RASPAJE DENTAL', 'label2' => 'GESTANTES', 'label3' => 'INICIAN',
-        'fila' => 156, 'cond' => null,
-        'nota' => 'El SP original escribe el raspaje de gestantes (TABLA2) con Gestacion=0, '
-                . 'por lo que esta fila queda en 0 y sus casos se acumulan en la fila 154, '
-                . 'igual que en el Excel generado con ODBC.',
+        'fila' => 156,
+        'cond' => aduY($raspajeBase, ['vl' => '1'], ['sexo' => 'F'], ['otraCond' => 'GESTANTE']),
     ];
     $filas08[] = [
         'key' => ++$k, 'label' => 'RASPAJE DENTAL', 'label2' => 'GESTANTES', 'label3' => 'TRATADO/CONTROLADO',
-        'fila' => 157, 'cond' => null,
-        'nota' => 'El SP original escribe el raspaje de gestantes (TABLA2) con Gestacion=0, '
-                . 'por lo que esta fila queda en 0 y sus casos se acumulan en la fila 155, '
-                . 'igual que en el Excel generado con ODBC.',
+        'fila' => 157,
+        'cond' => aduY($raspajeBase, ['vl' => '2'], ['sexo' => 'F'], ['otraCond' => 'GESTANTE']),
     ];
     $secs[] = [
         'codigo' => 'ADU08_SALUD_BUCAL', 'grupo' => 'ESP',
@@ -945,8 +1037,12 @@ function aduSecciones(): array {
         'titulo' => '8. ATENCION EN SALUD BUCAL', 'sub' => 'Prestación',
         'layout' => 'FMT', 'eje' => 'sexo', 'regla' => 'filas', 'conSexo' => true,
         'filas' => $filas08,
-        'nota' => 'Gestante = cita con alguna fila valor_lab=\'G\' (#GESTANTES del SP); '
-                 . 'FIG/FIN = filas de #RASPAJE_GESTANTES para el raspaje (E1311).',
+        'nota' => 'Gestante (ASESORIA NUTRICIONAL, PROFILAXIS DENTAL, CONSULTA ESTOMATOLOGICA, '
+                 . 'APLICACION FLUOR BARNIZ y RASPAJE DENTAL) = Descripcion_Otra_Condicion=\'GESTANTE\' '
+                 . 'de la propia fila de la base de datos; NO GESTANTES = Descripcion_Otra_Condicion'
+                 . '<>\'GESTANTE\' (incluye NULL/vacio). EXAMEN ESTOMATOLOGICO e INSTRUCCION DE '
+                 . 'HIGIENE ORAL conservan el criterio del SP original (#GESTANTES: cita con alguna '
+                 . 'fila valor_lab=\'G\').',
     ];
 
     /* ------------------------------------------------------------
@@ -1290,7 +1386,7 @@ function aduCodigosInteres(): array {
             // ---- 07: cancer ----
             '99402.08',
             // ---- 08: salud bucal ----
-            'D1310','D0120','D0130','D1206','D1110','D0140','E1311',
+            'D1310','D0120','D1330','D1206','D1110','D0140','D4355',
             // ---- 09: salud mental ----
             'U140','Z133','R456',
             // ---- 10: TBC ----
@@ -1663,10 +1759,14 @@ function aduEjecutarReporte(PDO $pdo, array $filtros): array {
     // ---- 2) Codigos de interes del paquete ADULTO ----
     $whereCod = aduWhereCodigos($params);
 
+    // v1.1.0: Descripcion_Otra_Condicion ('GESTANTE'...) se trae para que la
+    // seccion 08 (salud bucal) clasifique GESTANTES / NO GESTANTES con dicho
+    // campo (aduFila lo normaliza como 'otraCond').
     $sql = "SELECT Id_Cita, Id_Paciente, Id_Genero, Edad_Reg, Tipo_Edad,
                    Codigo_Item, Tipo_Diagnostico, Valor_Lab,
                    Id_Correlativo_Item, Id_Correlativo_Lab,
-                   Fg_Tipo, Id_Ups, Codigo_Unico, Anio, Mes
+                   Fg_Tipo, Id_Ups, Codigo_Unico, Anio, Mes,
+                   Descripcion_Otra_Condicion
             FROM {$tabla}
             WHERE {$whereCod} AND (" . implode(' AND ', $where) . ")";
 
