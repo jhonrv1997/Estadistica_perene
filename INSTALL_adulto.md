@@ -44,7 +44,7 @@ Modulo data-driven de IntelHIS que **reemplaza el flujo manual del Modulo de Adu
 | 06_3 | `ADU06_3_AOE` | `..._06_3_PF_METODOS` | 116-119 | YUZPE/PROGESTAGENO, solo id_genero='F': fila A=count, fila I=sum(LAB, min 1) |
 | 07 | `ADU07_CANCER` | `..._07_CANCER` | 124-125 | 99402.08 vl 1/2 |
 | 08 | `ADU08_SALUD_BUCAL` | `..._08_SALUD_BUCAL` | 130-157 | 7 prestaciones x NO GESTANTES/GESTANTES x INICIAN/TRATADO. v1.1: en ASESORIA NUTRICIONAL (D1310), PROFILAXIS DENTAL (D1110), CONSULTA ESTOMATOLOGICA (D0140), APLICACION FLUOR BARNIZ (D1206) y RASPAJE DENTAL (D4355) el gestante se define con el campo `Descripcion_Otra_Condicion` de la propia fila (`= 'GESTANTE'` / `<> 'GESTANTE'`); EXAMEN ESTOMATOLOGICO e INSTRUCCION DE HIGIENE ORAL conservan el criterio del SP (cita con vl='G') |
-| 09 | `ADU09_SALUD_MENTAL` | `..._09_SALUD_MENTAL` | 162-172 | fg_tipo='CX': U140 VIF/VSX/VS/AD/TD + R456/Z720/Z721/Z722; TD/EP requieren ademas cita con Z133 (tipitem D) |
+| 09 | `ADU09_SALUD_MENTAL` | `..._09_SALUD_MENTAL` | 162-172 | v1.2.0: entrevista = 96150.01+VIF / 96150.02+AD / 96150.03+TD (tipitem D; VSX/VS conservan U140 del SP); tamizaje positivo = fila de entrevista 96150.0X tipitem D en citas que ademas registran R456/Z720/Z721/Z722/Z133 tipitem D |
 | 10 | `ADU10_TBC` | `..._10_TBC` | 177-178 | Dx1 = U200 (D o R) en citas con U2142 vl='1'; Dx2 = U200 tipitem D |
 | 11 | `ADU11_SSR` | `..._11_SSR` | 183-195 | 13 prestaciones (Z7172/Z7173, Z359x, Z298 SF6/AF3, U2601, cod_item_f O80-O84, D060x/N87x) |
 | 12 | `ADU12_VIH` | `..._12_VIH` | 200-206 | 99402.05 PV / vl null-vacio; Z7172/Z7173; 86706; Z115 PRA |
@@ -96,6 +96,19 @@ y en el panel "Ver SQL" del reporte web:
 7. **Sesiones (SP 16)**: el filtro de edad viene comentado en el T-SQL y el nominal no
    exige sexo -> el motor no aplica ni edad ni "sexo is not null" en ese bloque; exige
    `id_persona IS NULL` y que la cita tenga una fila U0041.
+8. **Salud mental (SP 09) — v1.2.0**: se corrigen los criterios de la seccion. Grupo 1
+   (ENTREVISTA DE TAMIZAJE): la fila cuenta por `Codigo_Item + tipitem D + valor_lab`
+   (VIOLENCIA FAMILIAR = 96150.01+VIF, ALCOHOL Y DROGAS = 96150.02+AD, TRASTORNOS
+   DEPRESIVOS = 96150.03+TD); VIOLENCIA SEXUAL y VIOLENCIA SOCIAL conservan el criterio
+   del SP original (fg_tipo='CX' + U140 + VSX/VS). Grupo 2 (TAMIZAJE POSITIVO): cuenta la
+   fila de la entrevista (96150.01/02/03/04 tipitem D) en citas que ademas registran el
+   diagnostico confirmatorio tipitem D en la misma cita — VIOLENCIA: R456, TABACO: Z720,
+   ALCOHOL: Z721, DROGAS: Z722, DEPRESION: 96150.03+Z133, PSICOSIS: 96150.04+Z133.
+   Con la correccion se anaden `96150.01-04`, `Z720`, `Z721` y `Z722` a los codigos de
+   interes de la consulta unica (sin ellos las filas 168-170 no llegaban a leerse de la
+   base) y se retira `fg_tipo='CX'` de las filas corregidas (el criterio queda definido
+   por cod+tip+vl, igual que el modulo Adolescente con 96150.01-05). Validado con un
+   fixture de 18 citas / 26 filas HIS y conteos esperados por sexo para las 11 filas.
 
 ## Instalacion
 
