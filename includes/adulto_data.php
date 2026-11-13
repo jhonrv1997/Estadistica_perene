@@ -64,10 +64,14 @@
  *                                      del SP (#GESTANTES); las filas 156/157
  *                                      del raspaje gestante ahora cuentan
  *                                      casos reales)
- *   09  usp_..._09_SALUD_MENTAL         filas 162-172 (fg_tipo='CX': U140
- *                                      VIF/VSX/VS/AD/TD + R456/Z720/Z721/Z722
- *                                      rownum=1; TD/EP con EXISTS #TEMPORAL1
- *                                      [cita con Z133 tipitem D])
+ *   09  usp_..._09_SALUD_MENTAL         filas 162-172 (v1.2.0: grupo 1
+ *                                      [entrevista]: 96150.01+VIF / 96150.02+
+ *                                      AD / 96150.03+TD tipitem D; U140 VSX/VS
+ *                                      conserva el SP original; grupo 2
+ *                                      [tamizaje positivo]: fila de la
+ *                                      entrevista 96150.0X tipitem D en citas
+ *                                      que ademas registran el diagnostico
+ *                                      R456/Z720/Z721/Z722/Z133 tipitem D)
  *   10  usp_..._10_TBC                  filas 177-178 (#TEMPORAL1 [cita con
  *                                      U2142 vl='1']: Diagnostico 1; y
  *                                      #TEMPORAL2 [U200 tipitem D]:
@@ -142,7 +146,7 @@
  * archivo 03): ver la nota de cada seccion en aduSecciones().
  */
 
-define('ADU_DATA_VERSION', '1.1.0-adulto');
+define('ADU_DATA_VERSION', '1.2.0-adulto');
 
 function aduDataVersion(): string {
     return ADU_DATA_VERSION;
@@ -1047,9 +1051,27 @@ function aduSecciones(): array {
 
     /* ------------------------------------------------------------
      * 09 - usp_TRAMA_BASE_ADULTO_RPT_09_SALUD_MENTAL (162-172)
-     * fg_tipo='CX'. Grupo 1 (entrevista): U140 VIF/VSX/VS/AD/TD.
-     * Grupo 2 (tamizaje positivo): R456/Z720/Z721/Z722 (rownum=1) y
-     * TD/EP con EXISTS #TEMPORAL1 (cita con Z133 tipitem D).
+     * v1.2.0 - correccion de criterios de la seccion:
+     *   GRUPO 1 (ENTREVISTA DE TAMIZAJE, filas 162-166): la fila cuenta con
+     *   Codigo_Item + Tipo_Diagnostico + Valor_Lab:
+     *     VIOLENCIA FAMILIAR        162: 96150.01 + D + VIF
+     *     ALCOHOL Y DROGAS          165: 96150.02 + D + AD
+     *     TRASTORNOS DEPRESIVOS     166: 96150.03 + D + TD
+     *     VIOLENCIA SEXUAL/SOCIAL   163/164: conservan el SP original
+     *     (fg_tipo='CX' + U140 + VSX/VS, tipitem D).
+     *   GRUPO 2 (TAMIZAJE POSITIVO, filas 167-172): cuenta la fila de la
+     *   entrevista (96150.0X tipitem D) de citas que ADEMAS registran el
+     *   diagnostico confirmatorio (tipitem D) en la MISMA cita:
+     *     VIOLENCIA      167: (96150.01 D) + (R456 D)
+     *     TABACO         168: (96150.02 D) + (Z720 D)
+     *     ALCOHOL        169: (96150.02 D) + (Z721 D)
+     *     DROGAS         170: (96150.02 D) + (Z722 D)
+     *     DEPRESION      171: (96150.03 D) + (Z133 D)
+     *     PSICOSIS       172: (96150.04 D) + (Z133 D)
+     *   Mismos codigos 96150.01-04 del modulo Adolescente (seccion 14) y del
+     *   #EMBARAZO del materno; el "+" del usuario = AND de predicados (la
+     *   entrevista es la fila contada y el diagnostico va como EXISTS de la
+     *   cita, igual que hacia el SP original con U140 TD/EP + #TEMPORAL1).
      * ------------------------------------------------------------ */
     $citaZ133 = ['cod' => 'Z133', 'tip' => 'D'];
     $secs[] = [
@@ -1059,33 +1081,45 @@ function aduSecciones(): array {
         'layout' => 'FMT', 'eje' => 'sexo', 'regla' => 'filas', 'conSexo' => true,
         'filas' => [
             ['key' => 1, 'label' => 'ENTREVISTA DE TAMIZAJE', 'label2' => 'VIOLENCIA FAMILIAR', 'fila' => 162,
-             'cond' => aduY($e3059, $D, ['fgTipo' => 'CX'], ['cod' => 'U140'], ['vl' => 'VIF'])],
+             'cond' => aduY($e3059, $D, ['cod' => '96150.01'], ['vl' => 'VIF'])],
             ['key' => 2, 'label' => 'ENTREVISTA DE TAMIZAJE', 'label2' => 'VIOLENCIA SEXUAL', 'fila' => 163,
              'cond' => aduY($e3059, $D, ['fgTipo' => 'CX'], ['cod' => 'U140'], ['vl' => 'VSX'])],
             ['key' => 3, 'label' => 'ENTREVISTA DE TAMIZAJE', 'label2' => 'VIOLENCIA SOCIAL', 'fila' => 164,
              'cond' => aduY($e3059, $D, ['fgTipo' => 'CX'], ['cod' => 'U140'], ['vl' => 'VS'])],
             ['key' => 4, 'label' => 'ENTREVISTA DE TAMIZAJE', 'label2' => 'ALCOHOL Y DROGAS', 'fila' => 165,
-             'cond' => aduY($e3059, $D, ['fgTipo' => 'CX'], ['cod' => 'U140'], ['vl' => 'AD'])],
+             'cond' => aduY($e3059, $D, ['cod' => '96150.02'], ['vl' => 'AD'])],
             ['key' => 5, 'label' => 'ENTREVISTA DE TAMIZAJE', 'label2' => 'TRASTORNOS DEPRESIVOS', 'fila' => 166,
-             'cond' => aduY($e3059, $D, ['fgTipo' => 'CX'], ['cod' => 'U140'], ['vl' => 'TD'])],
+             'cond' => aduY($e3059, $D, ['cod' => '96150.03'], ['vl' => 'TD'])],
             ['key' => 6, 'label' => 'TAMIZAJE POSITIVO', 'label2' => 'PROBLEMAS RELACIONADOS CON VIOLENCIA', 'fila' => 167,
-             'cond' => aduY($e3059, $D, ['fgTipo' => 'CX'], ['cod' => 'R456'], $R1)],
+             'cond' => aduY($e3059, $D, ['cod' => '96150.01'],
+                            ['citaTiene' => ['cod' => 'R456', 'tip' => 'D']])],
             ['key' => 7, 'label' => 'TAMIZAJE POSITIVO', 'label2' => 'PROBLEMAS RELACIONADOS CON EL USO DE TABACO', 'fila' => 168,
-             'cond' => aduY($e3059, $D, ['fgTipo' => 'CX'], ['cod' => 'Z720'])],
+             'cond' => aduY($e3059, $D, ['cod' => '96150.02'],
+                            ['citaTiene' => ['cod' => 'Z720', 'tip' => 'D']])],
             ['key' => 8, 'label' => 'TAMIZAJE POSITIVO', 'label2' => 'PROBLEMAS SOCIALES RELACIONADOS CON EL USO DE ALCOHOL', 'fila' => 169,
-             'cond' => aduY($e3059, $D, ['fgTipo' => 'CX'], ['cod' => 'Z721'])],
+             'cond' => aduY($e3059, $D, ['cod' => '96150.02'],
+                            ['citaTiene' => ['cod' => 'Z721', 'tip' => 'D']])],
             ['key' => 9, 'label' => 'TAMIZAJE POSITIVO', 'label2' => 'PROBLEMAS SOCIALES RELACIONADOS CON EL USO DE DROGAS', 'fila' => 170,
-             'cond' => aduY($e3059, $D, ['fgTipo' => 'CX'], ['cod' => 'Z722'])],
+             'cond' => aduY($e3059, $D, ['cod' => '96150.02'],
+                            ['citaTiene' => ['cod' => 'Z722', 'tip' => 'D']])],
             ['key' => 10, 'label' => 'TAMIZAJE POSITIVO', 'label2' => 'DEPRESIÓN', 'fila' => 171,
-             'cond' => aduY($e3059, $D, ['fgTipo' => 'CX'], ['cod' => 'U140'], ['vl' => 'TD'],
+             'cond' => aduY($e3059, $D, ['cod' => '96150.03'],
                             ['citaTiene' => $citaZ133])],
             ['key' => 11, 'label' => 'TAMIZAJE POSITIVO', 'label2' => 'PSICOSIS', 'fila' => 172,
-             'cond' => aduY($e3059, $D, ['fgTipo' => 'CX'], ['cod' => 'U140'], ['vl' => 'EP'],
+             'cond' => aduY($e3059, $D, ['cod' => '96150.04'],
                             ['citaTiene' => $citaZ133])],
         ],
-        'nota' => 'TD/EP (filas 171/172): el SP exige ademas EXISTS #TEMPORAL1 = la cita '
-                 . 'tiene una fila Z133 (tipitem D) — es lo que diferencia el tamizaje '
-                 . 'positivo (grupo 2) de la entrevista de tamizaje (grupo 1, fila 166).',
+        'nota' => 'v1.2.0 — Grupo 1 (entrevista de tamizaje): la fila cuenta por '
+                 . 'Codigo_Item + tipitem D + valor_lab (96150.01+VIF, 96150.02+AD, '
+                 . '96150.03+TD); violencia sexual/social conservan el criterio del '
+                 . 'SP original (fg_tipo=\'CX\' + U140 + VSX/VS). Grupo 2 (tamizaje '
+                 . 'positivo): se cuenta la fila de la entrevista (96150.01/02/03/04 '
+                 . 'tipitem D) cuando la MISMA cita registra ademas el diagnostico '
+                 . 'confirmatorio tipitem D (R456/Z720/Z721/Z722/Z133) — el EXISTS '
+                 . 'del #TEMPORAL1 del T-SQL, generalizado a todo el grupo 2. '
+                 . 'Se retira el filtro fg_tipo=\'CX\' de las filas corregidas: el '
+                 . 'criterio de cada item queda definido por cod+tip+vl indicados '
+                 . 'para la seccion (igual que el modulo adolescente con 96150.01-05).',
     ];
 
     /* ------------------------------------------------------------
@@ -1387,8 +1421,10 @@ function aduCodigosInteres(): array {
             '99402.08',
             // ---- 08: salud bucal ----
             'D1310','D0120','D1330','D1206','D1110','D0140','D4355',
-            // ---- 09: salud mental ----
-            'U140','Z133','R456',
+            // ---- 09: salud mental (v1.2.0: codigos de la entrevista de
+            //      tamizaje 96150.01-04 + diagnosticos confirmatorios) ----
+            'U140','Z133','R456','Z720','Z721','Z722',
+            '96150.01','96150.02','96150.03','96150.04',
             // ---- 10: TBC ----
             'U200','U2142',
             // ---- 11: SSR ----
