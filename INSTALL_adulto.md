@@ -1,4 +1,4 @@
-# Modulo ADULTO (v1.0) - Reporte de Actividades Mensuales de la Etapa de Vida Adulto
+# Modulo ADULTO (v1.1) - Reporte de Actividades Mensuales de la Etapa de Vida Adulto
 
 Modulo data-driven de IntelHIS que **reemplaza el flujo manual del Modulo de Adulto** por un flujo web de 1 click.
 
@@ -43,7 +43,7 @@ Modulo data-driven de IntelHIS que **reemplaza el flujo manual del Modulo de Adu
 | 06_2 | `ADU06_2_PF_METODOS` | `..._06_2_PF_METODOS` | 88-113 | 13 metodos x fila A (Actividad=count(Usuarias)) / fila I (Insumo=sum(LAB)); Usuarias 1=NUEVO (D), 2=CONTI (R) |
 | 06_3 | `ADU06_3_AOE` | `..._06_3_PF_METODOS` | 116-119 | YUZPE/PROGESTAGENO, solo id_genero='F': fila A=count, fila I=sum(LAB, min 1) |
 | 07 | `ADU07_CANCER` | `..._07_CANCER` | 124-125 | 99402.08 vl 1/2 |
-| 08 | `ADU08_SALUD_BUCAL` | `..._08_SALUD_BUCAL` | 130-157 | 7 prestaciones x NO GESTANTES/GESTANTES x INICIAN/TRATADO; gestante = cita con vl='G' |
+| 08 | `ADU08_SALUD_BUCAL` | `..._08_SALUD_BUCAL` | 130-157 | 7 prestaciones x NO GESTANTES/GESTANTES x INICIAN/TRATADO. v1.1: en ASESORIA NUTRICIONAL (D1310), PROFILAXIS DENTAL (D1110), CONSULTA ESTOMATOLOGICA (D0140), APLICACION FLUOR BARNIZ (D1206) y RASPAJE DENTAL (E1311) el gestante se define con el campo `Descripcion_Otra_Condicion` de la propia fila (`= 'GESTANTE'` / `<> 'GESTANTE'`); EXAMEN ESTOMATOLOGICO e INSTRUCCION DE HIGIENE ORAL conservan el criterio del SP (cita con vl='G') |
 | 09 | `ADU09_SALUD_MENTAL` | `..._09_SALUD_MENTAL` | 162-172 | fg_tipo='CX': U140 VIF/VSX/VS/AD/TD + R456/Z720/Z721/Z722; TD/EP requieren ademas cita con Z133 (tipitem D) |
 | 10 | `ADU10_TBC` | `..._10_TBC` | 177-178 | Dx1 = U200 (D o R) en citas con U2142 vl='1'; Dx2 = U200 tipitem D |
 | 11 | `ADU11_SSR` | `..._11_SSR` | 183-195 | 13 prestaciones (Z7172/Z7173, Z359x, Z298 SF6/AF3, U2601, cod_item_f O80-O84, D060x/N87x) |
@@ -62,11 +62,22 @@ Estos detalles del archivo 03 se replican EXACTAMENTE para que las cifras coinci
 Excel que generaba el flujo ODBC. Estan documentados tambien en los comentarios del motor
 y en el panel "Ver SQL" del reporte web:
 
-1. **Raspaje dental (E1311)**: el SP 08 inserta el raspaje de gestantes (TABLA2) con
-   `Gestacion=0`, por lo que las filas **GESTANTES del raspaje (156/157) siempre quedan en
-   0** y sus casos se acumulan en las filas NO GESTANTES (154/155). Ademas TABLA1
-   (`NOT(gestante AND FIG)`) y TABLA2 (`mujer AND (gestante OR FIG)`) se solapan para
-   gestantes sin FIG: el consolidado suma ambas ramas (el motor las suma con 'ramas').
+1. **Raspaje dental (E1311) — v1.1.0**: la clasificacion gestante ya no usa las
+   TABLA1/TABLA2 del SP (marcadores `valor_lab='G'` y `FIG`/`FIN` de la cita):
+   GESTANTES (filas 156/157) = `Descripcion_Otra_Condicion='GESTANTE'` y
+   NO GESTANTES (154/155) = `Descripcion_Otra_Condicion<>'GESTANTE'`
+   (NULL/vacio cuentan como NO GESTANTE). Por eso las filas 156/157 ahora
+   reportan casos reales (antes quedaban siempre en 0 porque el SP escribia la
+   TABLA2 del raspaje gestante con `Gestacion=0`).
+2. **Salud bucal (v1.1.0)**: en ASESORIA NUTRICIONAL (D1310), PROFILAXIS DENTAL
+   (D1110), CONSULTA ESTOMATOLOGICA NO ESPECIALIZADA (D0140) y APLICACION FLUOR
+   BARNIZ (D1206), INICIAN y TRATADO/CONTROLADO dejan de filtrar por
+   `citaSin`/`citaTiene` con `valor_lab='G'` (#GESTANTES del SP) y usan el campo
+   `Descripcion_Otra_Condicion` de la base de datos: GESTANTES =
+   `Descripcion_Otra_Condicion='GESTANTE'`, NO GESTANTES =
+   `Descripcion_Otra_Condicion<>'GESTANTE'` (NULL/vacio incluidos). EXAMEN
+   ESTOMATOLOGICO (D0120) e INSTRUCCION DE HIGIENE ORAL (D0130) no formaban parte
+   de la correccion y mantienen el criterio del SP.
 2. **VIH (SP 12)**: el CASE nunca produce `Diagnostico 5` -> la fila
    **CONSEJERIA POST-TEST NEGATIVO (204) queda en 0**, y `86706` cae en
    **TAMIZAJE HEPATITIS B REACTIVO (205)** con `Z115 vl='PRA'` en el NO REACTIVO (206).
