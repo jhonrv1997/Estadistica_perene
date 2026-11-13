@@ -17,6 +17,11 @@
  *   (Opcional) [Exportar Excel] -> llena la plantilla oficial
  *   "uploads/Reporte_Actividades_Adulto.xlsx" con los mismos datos
  *   (adulto_export.php).
+ *   (Opcional) [Exportar Plano] -> deposita los mismos datos en el plano
+ *   consolidado "uploads/Adulto_Plano.xlsx" (adulto_export_plano.php):
+ *   cada dato va a la columna indicada por el numero de destino de
+ *   "Ubicacion_Filas_Adulto.xlsx" (ej: espejo D14=4 con dato en D14 ->
+ *   plano D13; fila de datos 13, D13:LG13).
  *
  * El motor de reglas (includes/adulto_data.php) adapta los 21
  * procedimientos usp_TRAMA_BASE_ADULTO_RPT_* del archivo "03 Creacion de
@@ -391,6 +396,13 @@ include 'includes/header.php';
     <div class="card-header bg-white d-flex justify-content-between align-items-center flex-wrap gap-2">
         <h6 class="mb-0 fw-bold"><i class="fas fa-filter me-2 text-primary"></i>Filtros del Reporte</h6>
         <div class="d-flex gap-2">
+            <a href="adulto_export_plano.php?<?= http_build_query(array_filter([
+                'anio' => $fAnio, 'mes' => $fMes, 'establecimiento' => $fEstablecimiento,
+                'generar' => $ejecutar ? 1 : null,
+                'token' => ($ejecutar && $fToken !== '') ? $fToken : null,
+            ])) ?>" class="btn btn-sm btn-warning" title="Exportar el plano consolidado (Adulto_Plano.xlsx): cada dato va a la columna indicada por el numero de destino de 'Ubicacion_Filas_Adulto.xlsx' (ej: espejo D14=4 con dato en D14 -> plano D13; fila de datos 13, D13:LG13)">
+                <i class="fas fa-table me-1"></i> Exportar Plano
+            </a>
             <a href="adulto_export.php?<?= http_build_query(array_filter([
                 'anio' => $fAnio, 'mes' => $fMes, 'establecimiento' => $fEstablecimiento,
                 'generar' => $ejecutar ? 1 : null,
@@ -865,7 +877,7 @@ foreach ($secciones as $sec):
     planificaci&oacute;n familiar, prevenci&oacute;n de c&aacute;ncer, atenci&oacute;n en salud bucal, salud mental, TBC, salud
     sexual y reproductiva, ITS-VIH, salud ocular, actividades preventivo promocionales, inmunizaciones,
     sesiones y otras consejer&iacute;as). Ya no necesita SQL Server ni refrescar la conexi&oacute;n ODBC:
-    <strong>1 click y (opcional) Exportar Excel</strong>.<br>
+    <strong>1 click y (opcional) Exportar Excel / Exportar Plano</strong>.<br>
     Si el rango elegido es amplio (varios meses/establecimientos), el sistema lo genera <strong>por partes</strong>
     con el asistente, para respetar los l&iacute;mites del hosting gratuito sin perder exactitud: la suma de las partes
     es id&eacute;ntica al total.<br>

@@ -1,4 +1,4 @@
-# Modulo ADULTO (v1.1) - Reporte de Actividades Mensuales de la Etapa de Vida Adulto
+# Modulo ADULTO (v1.2) - Reporte de Actividades Mensuales de la Etapa de Vida Adulto
 
 Modulo data-driven de IntelHIS que **reemplaza el flujo manual del Modulo de Adulto** por un flujo web de 1 click.
 
@@ -15,6 +15,9 @@ Modulo data-driven de IntelHIS que **reemplaza el flujo manual del Modulo de Adu
 - (Opcional) **Exportar Excel**: llena la plantilla oficial
   `uploads/Reporte_Actividades_Adulto.xlsx` con el mismo layout (17 bloques, filas 10-256,
   columnas D=F, E=M, F=TOTAL).
+- (Opcional) **Exportar Plano** → deposita los mismos datos en el plano consolidado horizontal
+  `uploads/Adulto_Plano.xlsx` (fila 13, `D13:LG13` + identificación en `B13`/`C13`), usando los
+  numeros de destino de `Ubicacion_Filas_Adulto.xlsx`.
 
 ## Archivos del modulo
 
@@ -24,8 +27,12 @@ Modulo data-driven de IntelHIS que **reemplaza el flujo manual del Modulo de Adu
 | `includes/adulto_render.php` | Funciones de render web (layout tipo Excel: 30a-59a con F/M/TOTAL, metodos A/I con NUEVO/CONTI, sesiones con Nº/Part-Benef) y mapa de celdas para el export (`aduCeldasExport`) |
 | `reporte_adulto.php` | Pagina del reporte (1 click): filtros anio/mes/EE.SS., asistente por partes para rangos amplios, proteccion anti HTTP 500, panel "Ver SQL" (auditoria) |
 | `adulto_export.php` | Exportacion a la plantilla oficial .xlsx (preserva formato: merges, estilos, D5='CHANCHAMAYO' fija) |
+| `adulto_export_plano.php` | NUEVO: exportacion al plano consolidado `Adulto_Plano.xlsx` (boton "Exportar Plano") |
+| `includes/adulto_plano.php` | NUEVO: logica de mapeo del plano (espejo + fila 12 del plano, con cache en disco) |
 | `install_adulto.php` | Asistente de indices de la tabla consolidada + tabla de cache `ADULTO_RPT_CACHE` (eliminar tras usar) |
 | `uploads/Reporte_Actividades_Adulto.xlsx` | Plantilla oficial (base del export) |
+| `uploads/Adulto_Plano.xlsx` | NUEVO: plantilla del plano consolidado (fila 12 = numeros 1..319 en `A12:LG12`; fila 13 = datos) |
+| `uploads/Ubicacion_Filas_Adulto.xlsx` | NUEVO: espejo del reporte con los numeros de destino (316 numeros, 4..319) |
 | `reporte_operacionales.php` | MODIFICADO: la tarjeta Adulto del indice apunta a `reporte_adulto.php` y `?sub=adulto` redirige a ella |
 
 ## Estructura del reporte (21 SP -> 17 bloques, filas 10-256 de la plantilla)
@@ -113,9 +120,11 @@ y en el panel "Ver SQL" del reporte web:
 ## Instalacion
 
 1. Copiar los archivos del modulo a la raiz del sistema (junto a `reporte_adolescente.php`):
-   `reporte_adulto.php`, `adulto_export.php`, `install_adulto.php`,
-   `includes/adulto_data.php`, `includes/adulto_render.php`.
-2. Copiar la plantilla oficial `Reporte_Actividades_Adulto.xlsx` a `uploads/`.
+   `reporte_adulto.php`, `adulto_export.php`, `adulto_export_plano.php`,
+   `install_adulto.php`, `includes/adulto_data.php`, `includes/adulto_render.php`,
+   `includes/adulto_plano.php`.
+2. Copiar la plantilla oficial `Reporte_Actividades_Adulto.xlsx` a `uploads/` y, para el
+   plano, tambien `Adulto_Plano.xlsx` y `Ubicacion_Filas_Adulto.xlsx`.
 3. Reemplazar `reporte_operacionales.php` por la version incluida (o aplicar el mismo
    cambio a mano: agregar `'adulto'` a `$esAvanzado`, la tarjeta con
    `$href = 'reporte_adulto.php'` y el bloque `elseif ($sub === 'adulto')` que redirige).
@@ -162,8 +171,41 @@ plantilla con `includes/ExcelTemplateFiller.php`:
   `E`=NUEVO, `F`=CONTI; AOE: fila A/I con unica cifra en E; sesiones: `D`=Nº, `E`=Part/Benef;
   otras consejerias: `D`=TOTAL.
 
+## Exportar Plano (plano consolidado)
+
+El boton **Exportar Plano** usa el mismo reporte ya calculado (`aduCeldasExport()`, identico a
+*Exportar Excel*) y lo deposita en el plano horizontal `Adulto_Plano.xlsx` (misma mecanica que
+los planos de Zoonosis/ITS/Materno/NoTransmisibles/Adolescente):
+
+| Archivo | Rol |
+|---------|-----|
+| `Ubicacion_Filas_Adulto.xlsx` | Espejo del reporte oficial: cada celda de datos contiene el NUMERO DE DESTINO. Ej: `D14` (A64, mujeres 30a-59a) = 4; `E14` (varones) = 5. 316 numeros consecutivos 4..319. |
+| `Reporte_Actividades_Adulto.xlsx` / `aduCeldasExport` | La celda equivalente (misma fila y columna: el espejo calza fila por fila con la plantilla oficial) contiene el DATO. Ej: `D14` = 2. |
+| `Adulto_Plano.xlsx` | Destino: fila 12 (`A12:LG12`) = numeracion de columnas 1..319; fila 13 = datos (`D13:LG13`). El numero 4 ⇒ columna D ⇒ el dato de `D14` (A64, mujeres 30a-59a) se escribe en `D13`. |
+
+- Identificacion del registro (fila 13): `B13` = Codigo RENAES, `C13` = nombre del EE.SS (o "TODOS LOS ESTABLECIMIENTOS DE LA LISTA"). La columna `A13` (Ubigeo) se deja vacia porque el catalogo `ZSPERENE` no trae ubigeo (mismo criterio que los planos de Zoonosis, NoTransmisibles y Adolescente).
+- Periodo: la plantilla `Adulto_Plano.xlsx` no trae celda "MES:" en su cabecera (igual que los planos de Zoonosis e ITS), por lo que no se escribe el periodo en ninguna celda: el periodo exportado se identifica por el nombre del archivo descargado.
+- Celdas sin numero de destino (por diseno del plano): los numeros 1-3 son las columnas de identificacion (Ubigeo/RENAES/EE.SS); las 123 columnas "Total" (F de los layouts FMT) y la fila TOTAL `E115` del bloque de metodos PF no existen como columnas del plano y se omiten de forma segura.
+- Rendimiento: el mapeo espejo/plano se cachea en `cache/plano/` (JSON invalidado por mtime/size); si la carpeta no es escribible, el sistema sigue leyendo los xlsx directamente.
+- Rangos amplios: igual que *Exportar Excel*, si no hay token del asistente y el rango es amplio, la pagina pide generar primero el reporte (asistente por partes) y exportar desde ahi.
+- Nombre del archivo: `Adulto_Plano_{anio}[_{mes}][_{renaes}].xlsx`.
+
+### Diagnostico de problemas del Plano
+
+| Mensaje | Causa | Solucion |
+|---------|-------|----------|
+| "Plantilla del plano no encontrada" | Falta `uploads/Adulto_Plano.xlsx` | Copiar la plantilla del plano a `uploads/` |
+| "Archivo de ubicacion no encontrado" | Falta `uploads/Ubicacion_Filas_Adulto.xlsx` | Copiar el espejo de ubicaciones a `uploads/` |
+| "El plano quedaria vacio" | El espejo no corresponde a la plantilla actual | Verificar que el espejo es el oficial de Adulto |
+| "Rango demasiado amplio" | Plano sin token y filtros amplios | Generar primero el reporte (asistente) y exportar desde ahi, o acotar filtros |
+
 ## Validacion
 
 El motor se valido con un fixture de 8 citas (70 filas HIS) que activa todos los caminos
 de los 21 SP, con valores esperados derivados a mano del T-SQL: 91 checks (incluidas las
 notas 1-7 de arriba). El export se valido celda por celda contra la plantilla oficial.
+El plano se valido automaticamente contra el motor: las 316 celdas numericas del espejo
+(`D14`..`D256`, `E`, `F`) tienen dato en `aduCeldasExport()` (cobertura 100%, 0 celdas del
+motor sin numero fuera de las columnas Total y `E115`), y los 316 datos caen exactamente
+en `D13:LG13` (columnas 4..319 de la fila 12 del plano), preservando formulas, cabeceras
+y celdas combinadas de la plantilla.
